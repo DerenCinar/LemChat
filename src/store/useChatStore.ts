@@ -192,12 +192,25 @@ function formatTimestamp(iso: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-async function decryptMessageRow(row: DbMessageRow, senderId: string): Promise<string> {
+interface DecryptedMessagePayload {
+  content: string;
+  codeBlock?: CodeBlock;
+  attachments?: Attachment[];
+}
+
+async function decryptMessageRow(
+  row: DbMessageRow,
+  senderId: string
+): Promise<DecryptedMessagePayload> {
   const ciphertext = row.ciphertext?.ciphertext;
   if (!row.encryption_version || !ciphertext || row.ciphertext_type == null) {
-    return row.content;
+    return {
+      content: row.content,
+      codeBlock: row.code_block ?? undefined,
+      attachments: row.attachments ?? undefined,
+    };
   }
-  if (!window.lemchat) return '[Encrypted message — open in the desktop app]';
+  if (!window.lemchat) return { content: '[Encrypted message — open in the desktop app]' };
   try {
     const encryptedEnvelope = row.ciphertext;
     if (row.ciphertext_type === 7 && encryptedEnvelope?.distribution_id) {
@@ -223,10 +236,10 @@ async function decryptMessageRow(row: DbMessageRow, senderId: string): Promise<s
         ciphertext
       );
       try {
-        const payload = JSON.parse(decrypted) as { content?: string };
-        return payload.content ?? decrypted;
+        const payload = JSON.parse(decrypted) as DecryptedMessagePayload;
+        return { ...payload, content: payload.content ?? decrypted };
       } catch {
-        return decrypted;
+        return { content: decrypted };
       }
     }
     const decrypted = await window.lemchat.signalDecryptDirect(
@@ -235,14 +248,14 @@ async function decryptMessageRow(row: DbMessageRow, senderId: string): Promise<s
       row.ciphertext_type
     );
     try {
-      const payload = JSON.parse(decrypted) as { content?: string };
-      return payload.content ?? decrypted;
+      const payload = JSON.parse(decrypted) as DecryptedMessagePayload;
+      return { ...payload, content: payload.content ?? decrypted };
     } catch {
-      return decrypted;
+      return { content: decrypted };
     }
   } catch (error) {
     console.error('[LemChat] Failed to decrypt message:', error);
-    return '[Unable to decrypt message]';
+    return { content: '[Unable to decrypt message]' };
   }
 }
 
@@ -642,7 +655,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         reactionsByMsg.get(msg.id) ?? [],
         user.id
       );
-      const decryptedContent = await decryptMessageRow(msg, msg.sender_id);
+      const decrypted = await decryptMessageRow(msg, msg.sender_id);
 
       const formatted: Message = {
         id: msg.id,
@@ -651,14 +664,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         senderName: sender?.displayName ?? 'Member',
         senderAvatar: sender?.avatarText ?? 'LM',
         senderRole: sender?.role,
-        content: decryptedContent,
+        content: decrypted.content,
         timestamp: formatTimestamp(msg.created_at),
         createdAt: msg.created_at,
         isMe: msg.sender_id === user.id,
         status: 'read',
         reactions: msgReactions,
-        codeBlock: msg.code_block ?? undefined,
-        attachments: msg.attachments ?? undefined,
+        codeBlock: decrypted.codeBlock,
+        attachments: decrypted.attachments,
         isMention: selfProfile
           ? msg.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
             msg.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
@@ -792,7 +805,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           const state = get();
           const sender = state.profiles[row.sender_id];
           const isMe = row.sender_id === user.id;
-          const decryptedContent = await decryptMessageRow(row, row.sender_id);
+          const decrypted = await decryptMessageRow(row, row.sender_id);
 
           const existingConv = state.conversations.find(
             (c) => c.id === row.conversation_id
@@ -812,14 +825,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             senderName: sender?.displayName ?? 'Member',
             senderAvatar: sender?.avatarText ?? 'LM',
             senderRole: sender?.role,
-            content: decryptedContent,
+            content: decrypted.content,
             timestamp: formatTimestamp(row.created_at),
             createdAt: row.created_at,
             isMe,
             status: 'read',
             reactions: [],
-            codeBlock: row.code_block ?? undefined,
-            attachments: row.attachments ?? undefined,
+            codeBlock: decrypted.codeBlock,
+            attachments: decrypted.attachments,
             isMention: state.self
               ? row.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
                 row.content.toLowerCase().includes(state.self.handle.toLowerCase())
@@ -903,7 +916,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         { event: 'UPDATE', schema: 'public', table: 'messages' },
         async (payload) => {
           const row = payload.new as DbMessageRow;
-          const decryptedContent = await decryptMessageRow(row, row.sender_id);
+          const decrypted = await decryptMessageRow(row, row.sender_id);
           set((state) => ({
             conversations: state.conversations.map((conv) =>
               conv.id !== row.conversation_id
@@ -911,7 +924,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 : {
                     ...conv,
                     messages: conv.messages.map((m) =>
-                      m.id === row.id ? { ...m, content: decryptedContent } : m
+                      m.id === row.id
+                        ? {
+                            ...m,
+                            content: decrypted.content,
+                            codeBlock: decrypted.codeBlock,
+                            attachments: decrypted.attachments,
+                          }
+                        : m
                     ),
                   }
             ),
@@ -1309,20 +1329,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           .from('lemchat-attachments')
           .upload(storagePath, item.file, { upsert: false });
 
-        if (!uploadErr) {
-          const { data: pub } = supabase.storage
-            .from('lemchat-attachments')
-            .getPublicUrl(storagePath);
-
-          attachments.push({
-            id: item.id,
-            name: item.name,
-            type: item.type,
-            size: item.size,
-            previewUrl: pub.publicUrl,
-            mimeLabel: item.mimeLabel,
-          });
+        if (uploadErr) {
+          throw new Error(`Attachment upload failed for ${item.name}: ${uploadErr.message}`);
         }
+
+        const { data: pub } = supabase.storage
+          .from('lemchat-attachments')
+          .getPublicUrl(storagePath);
+
+        attachments.push({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          size: item.size,
+          previewUrl: pub.publicUrl,
+          mimeLabel: item.mimeLabel,
+        });
       }
     }
 
@@ -1495,7 +1517,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })),
     }));
 
-    await supabase.from('messages').update({
+    const { error: updateError } = await supabase.from('messages').update({
       content: '',
       ciphertext,
       encryption_version: encryptionVersion,
@@ -1503,6 +1525,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       code_block: null,
       attachments: null,
     }).eq('id', messageId);
+    if (updateError) {
+      await get().fetchWorkspaceData();
+      throw new Error(`Message update failed: ${updateError.message}`);
+    }
   },
 
   deleteMessage: async (messageId) => {
@@ -1516,7 +1542,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })),
     }));
 
-    await supabase.from('messages').delete().eq('id', messageId);
+    const { error: deleteError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+    if (deleteError) {
+      await get().fetchWorkspaceData();
+      throw new Error(`Message deletion failed: ${deleteError.message}`);
+    }
   },
 
   toggleReaction: async (conversationId, messageId, emoji) => {

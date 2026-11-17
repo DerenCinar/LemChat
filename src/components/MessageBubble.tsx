@@ -36,6 +36,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
 
+  const openAttachment = (url: string | undefined) => {
+    if (!url) return;
+    if (window.lemchat) {
+      void window.lemchat.openAttachment(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const handleCopyCode = () => {
     if (!message.codeBlock) return;
     navigator.clipboard.writeText(message.codeBlock.code).catch(() => {});
@@ -279,8 +288,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <div className="mt-2.5 space-y-2">
                 {message.attachments.map((att) =>
                   att.type === 'image' && att.previewUrl ? (
-                    <div
+                    <button
+                      type="button"
                       key={att.id}
+                      onClick={() => openAttachment(att.previewUrl)}
+                      title={`Open ${att.name}`}
                       className="overflow-hidden rounded-xl border border-white/20 bg-black/20"
                     >
                       <img
@@ -292,13 +304,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                         <span className="truncate font-medium">{att.name}</span>
                         <span className="shrink-0 opacity-75">{att.size}</span>
                       </div>
-                    </div>
+                      </button>
                   ) : (
-                    <a
+                    <button
                       key={att.id}
-                      href={att.previewUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
+                      onClick={() => openAttachment(att.previewUrl)}
+                      disabled={!att.previewUrl}
+                      title={`Open ${att.name}`}
                       className="flex items-center gap-2.5 rounded-xl border border-white/20 bg-black/15 px-3 py-2 text-xs transition hover:bg-black/25"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/25 text-emerald-200">
@@ -310,7 +323,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                           {att.mimeLabel ?? 'File'} · {att.size}
                         </p>
                       </div>
-                    </a>
+                    </button>
                   )
                 )}
               </div>

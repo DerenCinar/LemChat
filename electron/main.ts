@@ -9,6 +9,8 @@ import {
   session,
   Tray,
   nativeImage,
+  nativeTheme,
+  shell,
 } from 'electron';
 import fs from 'fs';
 import path from 'path';
@@ -47,6 +49,17 @@ if (process.platform === 'win32') {
 }
 
 function getAppIcon() {
+  const filename = nativeTheme.shouldUseDarkColors
+    ? 'skellytalk-dark-mode.png'
+    : 'skellytalk-light-mode.png';
+  const assetPaths = [
+    path.join(app.getAppPath(), 'dist', 'assets', filename),
+    path.join(app.getAppPath(), 'public', 'assets', filename),
+  ];
+  const assetPath = assetPaths.find((candidate) => fs.existsSync(candidate));
+  if (assetPath) {
+    return nativeImage.createFromPath(assetPath);
+  }
   return createLemChatIcon(64);
 }
 
@@ -109,12 +122,22 @@ function rebuildTrayMenu() {
 }
 
 function createTray() {
-  const trayIcon = createLemChatIcon(32);
+  const trayIcon = getAppIcon().resize({ width: 32, height: 32 });
   tray = new Tray(trayIcon);
   tray.setToolTip('SkellyTalk — Liquid Glass Messaging');
   tray.on('click', () => focusWindow(mainWindow));
   tray.on('double-click', () => focusWindow(mainWindow));
   rebuildTrayMenu();
+}
+
+function refreshPlatformIcons() {
+  const icon = getAppIcon();
+  for (const win of allWindows) {
+    if (!win.isDestroyed()) {
+      win.setIcon(icon);
+    }
+  }
+  tray?.setImage(icon.resize({ width: 32, height: 32 }));
 }
 
 function createWindow(profileId = 'default'): BrowserWindow {
@@ -349,6 +372,12 @@ function registerIpcHandlers() {
       return true;
     }
   );
+  ipcMain.handle('lemchat:open-attachment', async (_event, url: string) => {
+    if (!/^https?:\/\//i.test(url)) {
+      throw new Error('Only web attachments can be opened.');
+    }
+    await shell.openExternal(url);
+  });
 
   ipcMain.handle('lemchat:open-peer-window', () => {
     peerWindowCounter += 1;
@@ -431,6 +460,7 @@ function setupAutoUpdater() {
 }
 
 app.whenReady().then(async () => {
+  nativeTheme.on('updated', refreshPlatformIcons);
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
       const allowed = ['media', 'mediaKeySystem', 'notifications', 'display-capture'];

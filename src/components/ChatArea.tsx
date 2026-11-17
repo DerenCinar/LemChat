@@ -385,16 +385,24 @@ export const ChatArea: React.FC = () => {
                   activeConv.messages
                     .flatMap((m) => m.attachments ?? [])
                     .map((att) => (
-                      <a
+                      <button
+                        type="button"
                         key={att.id}
-                        href={att.previewUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                        onClick={() => {
+                          if (att.previewUrl) {
+                            if (window.lemchat) {
+                              void window.lemchat.openAttachment(att.previewUrl);
+                            } else {
+                              window.open(att.previewUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          }
+                        }}
+                        disabled={!att.previewUrl}
                         className="glass-pill block rounded-xl px-3 py-2 text-xs text-emerald-950 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
                       >
                         <p className="truncate font-medium">{att.name}</p>
                         <p className="text-[10px] opacity-65">{att.size}</p>
-                      </a>
+                      </button>
                     ))
                 ) : (
                   <p className="text-xs text-emerald-800/55 dark:text-emerald-200/45">

@@ -145,6 +145,7 @@ export interface LemChatAPI {
   signalEncryptGroup: (distributionId: string, plaintext: string) => Promise<unknown>;
   signalDecryptGroup: (senderId: string, distributionId: string, ciphertext: string) => Promise<string>;
   sendNotification: (payload: NotificationPayload) => Promise<boolean>;
+  openAttachment: (url: string) => Promise<void>;
   updateBadgeCount: (count: number) => void;
   updateUserStatus: (status: SelfPresence) => void;
   windowMinimize: () => void;

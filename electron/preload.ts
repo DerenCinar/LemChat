@@ -52,6 +52,7 @@ export interface LemChatAPI {
   clearState: (profileId: string) => Promise<boolean>;
   getServerInfo: () => Promise<ServerInfo>;
   saveAttachment: (filename: string, dataUrl: string) => Promise<boolean>;
+  openAttachment: (url: string) => Promise<void>;
   openNewPeerWindow: () => Promise<void>;
   checkForUpdates: () => Promise<void>;
   installUpdate: () => void;
@@ -94,6 +95,7 @@ const api: LemChatAPI = {
   getServerInfo: () => ipcRenderer.invoke('lemchat:server-info'),
   saveAttachment: (filename, dataUrl) =>
     ipcRenderer.invoke('lemchat:save-attachment', filename, dataUrl),
+  openAttachment: (url) => ipcRenderer.invoke('lemchat:open-attachment', url),
   openNewPeerWindow: () => ipcRenderer.invoke('lemchat:open-peer-window'),
   checkForUpdates: () => ipcRenderer.invoke('lemchat:check-updates'),
   installUpdate: () => ipcRenderer.send('lemchat:install-update'),
