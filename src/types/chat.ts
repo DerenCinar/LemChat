@@ -137,6 +137,13 @@ export interface NotificationPayload {
 
 export interface LemChatAPI {
   platform: NodeJS.Platform;
+  signalInitialize: () => Promise<unknown>;
+  signalEncryptDirect: (recipientId: string, recipientBundle: unknown, plaintext: string) => Promise<unknown>;
+  signalDecryptDirect: (senderId: string, ciphertext: string, ciphertextType: number) => Promise<string>;
+  signalCreateSenderKeyDistribution: (distributionId: string) => Promise<unknown>;
+  signalProcessSenderKeyDistribution: (senderId: string, distributionId: string, ciphertext: string) => Promise<void>;
+  signalEncryptGroup: (distributionId: string, plaintext: string) => Promise<unknown>;
+  signalDecryptGroup: (senderId: string, distributionId: string, ciphertext: string) => Promise<string>;
   sendNotification: (payload: NotificationPayload) => Promise<boolean>;
   updateBadgeCount: (count: number) => void;
   updateUserStatus: (status: SelfPresence) => void;

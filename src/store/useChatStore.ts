@@ -68,6 +68,9 @@ interface DbMessageRow {
   conversation_id: string;
   sender_id: string;
   content: string;
+  ciphertext: { ciphertext?: string; encryption_version?: string; distribution_id?: string } | null;
+  encryption_version: string | null;
+  ciphertext_type: number | null;
   code_block: CodeBlock | null;
   attachments: Attachment[] | null;
   created_at: string;
@@ -187,6 +190,60 @@ function formatTimestamp(iso: string): string {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+async function decryptMessageRow(row: DbMessageRow, senderId: string): Promise<string> {
+  const ciphertext = row.ciphertext?.ciphertext;
+  if (!row.encryption_version || !ciphertext || row.ciphertext_type == null) {
+    return row.content;
+  }
+  if (!window.lemchat) return '[Encrypted message — open in the desktop app]';
+  try {
+    const encryptedEnvelope = row.ciphertext;
+    if (row.ciphertext_type === 7 && encryptedEnvelope?.distribution_id) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { data } = await supabase
+          .from('signal_sender_key_distributions')
+          .select('sender_id,distribution_message')
+          .eq('conversation_id', row.conversation_id)
+          .eq('distribution_id', encryptedEnvelope.distribution_id)
+          .maybeSingle();
+        if (data) {
+          await window.lemchat.signalProcessSenderKeyDistribution(
+            data.sender_id,
+            encryptedEnvelope.distribution_id,
+            data.distribution_message
+          );
+        }
+      }
+      const decrypted = await window.lemchat.signalDecryptGroup(
+        senderId,
+        encryptedEnvelope.distribution_id,
+        ciphertext
+      );
+      try {
+        const payload = JSON.parse(decrypted) as { content?: string };
+        return payload.content ?? decrypted;
+      } catch {
+        return decrypted;
+      }
+    }
+    const decrypted = await window.lemchat.signalDecryptDirect(
+      senderId,
+      ciphertext,
+      row.ciphertext_type
+    );
+    try {
+      const payload = JSON.parse(decrypted) as { content?: string };
+      return payload.content ?? decrypted;
+    } catch {
+      return decrypted;
+    }
+  } catch (error) {
+    console.error('[LemChat] Failed to decrypt message:', error);
+    return '[Unable to decrypt message]';
+  }
 }
 
 function computeTotalUnread(conversations: Conversation[]): number {
@@ -585,6 +642,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         reactionsByMsg.get(msg.id) ?? [],
         user.id
       );
+      const decryptedContent = await decryptMessageRow(msg, msg.sender_id);
 
       const formatted: Message = {
         id: msg.id,
@@ -593,7 +651,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         senderName: sender?.displayName ?? 'Member',
         senderAvatar: sender?.avatarText ?? 'LM',
         senderRole: sender?.role,
-        content: msg.content,
+        content: decryptedContent,
         timestamp: formatTimestamp(msg.created_at),
         createdAt: msg.created_at,
         isMe: msg.sender_id === user.id,
@@ -682,6 +740,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     if (selfProfile) {
       window.lemchat?.updateUserStatus(selfProfile.status);
+      if (window.lemchat?.signalInitialize) {
+        void window.lemchat.signalInitialize().then(async (result) => {
+          const initialized = result as {
+            publicBundle: {
+              identityKey: string;
+              registrationId: number;
+              signedPreKeyId: number;
+              signedPreKey: string;
+              signedPreKeySignature: string;
+              kyberPreKeyId: number;
+              kyberPreKey: string;
+              kyberPreKeySignature: string;
+              oneTimePreKeys: Array<{ id: number; publicKey: string }>;
+            };
+          };
+          await supabase.from('signal_key_bundles').upsert({
+            user_id: user.id,
+            identity_key: initialized.publicBundle.identityKey,
+            registration_id: initialized.publicBundle.registrationId,
+            signed_pre_key_id: initialized.publicBundle.signedPreKeyId,
+            signed_pre_key: initialized.publicBundle.signedPreKey,
+            signed_pre_key_signature: initialized.publicBundle.signedPreKeySignature,
+            kyber_pre_key_id: initialized.publicBundle.kyberPreKeyId,
+            kyber_pre_key: initialized.publicBundle.kyberPreKey,
+            kyber_pre_key_signature: initialized.publicBundle.kyberPreKeySignature,
+            one_time_pre_keys: initialized.publicBundle.oneTimePreKeys,
+            updated_at: new Date().toISOString(),
+          });
+        });
+      }
     }
     window.lemchat?.updateBadgeCount(computeTotalUnread(conversations));
   },
@@ -699,11 +787,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
+        async (payload) => {
           const row = payload.new as DbMessageRow;
           const state = get();
           const sender = state.profiles[row.sender_id];
           const isMe = row.sender_id === user.id;
+          const decryptedContent = await decryptMessageRow(row, row.sender_id);
 
           const existingConv = state.conversations.find(
             (c) => c.id === row.conversation_id
@@ -723,7 +812,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             senderName: sender?.displayName ?? 'Member',
             senderAvatar: sender?.avatarText ?? 'LM',
             senderRole: sender?.role,
-            content: row.content,
+            content: decryptedContent,
             timestamp: formatTimestamp(row.created_at),
             createdAt: row.created_at,
             isMe,
@@ -812,8 +901,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages' },
-        (payload) => {
+        async (payload) => {
           const row = payload.new as DbMessageRow;
+          const decryptedContent = await decryptMessageRow(row, row.sender_id);
           set((state) => ({
             conversations: state.conversations.map((conv) =>
               conv.id !== row.conversation_id
@@ -821,7 +911,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 : {
                     ...conv,
                     messages: conv.messages.map((m) =>
-                      m.id === row.id ? { ...m, content: row.content } : m
+                      m.id === row.id ? { ...m, content: decryptedContent } : m
                     ),
                   }
             ),
@@ -1254,14 +1344,89 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const finalContent = replyingTo
       ? `> ${replyingTo.senderName}: ${replyingTo.content.slice(0, 120)}\n\n${trimmed}`
       : trimmed;
+    const conv = get().conversations.find((conversation) => conversation.id === convId);
+    if (!window.lemchat) {
+      throw new Error('Encrypted messaging requires the LemChat desktop app.');
+    }
 
-    await supabase.from('messages').insert({
-      conversation_id: convId,
-      sender_id: user.id,
+    const plaintextPayload = JSON.stringify({
       content: finalContent,
-      code_block: codeBlock ?? null,
+      codeBlock: codeBlock ?? null,
       attachments: attachments.length > 0 ? attachments : null,
     });
+
+    if (conv?.type === 'dm') {
+      if (!conv.peerUserId) throw new Error('Direct-message recipient is unavailable.');
+      const { data: bundleRow, error: bundleError } = await supabase
+        .from('signal_key_bundles')
+        .select('*')
+        .eq('user_id', conv.peerUserId)
+        .single();
+      if (bundleError || !bundleRow) throw new Error('Recipient encryption keys are unavailable.');
+      const recipientBundle = {
+        identityKey: bundleRow.identity_key,
+        registrationId: bundleRow.registration_id,
+        signedPreKeyId: bundleRow.signed_pre_key_id,
+        signedPreKey: bundleRow.signed_pre_key,
+        signedPreKeySignature: bundleRow.signed_pre_key_signature,
+        kyberPreKeyId: bundleRow.kyber_pre_key_id,
+        kyberPreKey: bundleRow.kyber_pre_key,
+        kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
+        oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
+      };
+      const encrypted = await window.lemchat.signalEncryptDirect(
+        conv.peerUserId,
+        recipientBundle,
+        plaintextPayload
+      ) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
+      await supabase.from('messages').insert({
+        conversation_id: convId,
+        sender_id: user.id,
+        content: '',
+        ciphertext: { ciphertext: encrypted.ciphertext },
+        encryption_version: encrypted.encryptionVersion,
+        ciphertext_type: encrypted.ciphertextType,
+        code_block: null,
+        attachments: null,
+      });
+    } else {
+      const distributionId = convId;
+      const existingDistribution = await supabase
+        .from('signal_sender_key_distributions')
+        .select('distribution_id')
+        .eq('conversation_id', convId)
+        .eq('sender_id', user.id)
+        .eq('distribution_id', distributionId)
+        .maybeSingle();
+      if (!existingDistribution.data) {
+        const distribution = await window.lemchat.signalCreateSenderKeyDistribution(
+          distributionId
+        ) as { ciphertext: string };
+        await supabase.from('signal_sender_key_distributions').insert({
+          conversation_id: convId,
+          sender_id: user.id,
+          distribution_id: distributionId,
+          distribution_message: distribution.ciphertext,
+        });
+      }
+      const encrypted = await window.lemchat.signalEncryptGroup(
+        distributionId,
+        plaintextPayload
+      ) as { ciphertext: string; ciphertextType: number };
+      await supabase.from('messages').insert({
+        conversation_id: convId,
+        sender_id: user.id,
+        content: '',
+        ciphertext: {
+          ciphertext: encrypted.ciphertext,
+          distribution_id: distributionId,
+        },
+        encryption_version: 'libsignal-sender-key-v1',
+        ciphertext_type: encrypted.ciphertextType,
+        code_block: null,
+        attachments: null,
+      });
+    }
 
     set({ replyingTo: null });
   },
@@ -1270,6 +1435,56 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const supabase = getSupabaseClient();
     const trimmed = content.trim();
     if (!supabase || !trimmed) return;
+    if (!window.lemchat) throw new Error('Encrypted messaging requires the LemChat desktop app.');
+
+    const conv = get().conversations.find((conversation) =>
+      conversation.messages.some((message) => message.id === messageId)
+    );
+    if (!conv) return;
+    const existing = conv.messages.find((message) => message.id === messageId);
+    if (!existing) return;
+
+    let ciphertext: { ciphertext: string; distribution_id?: string };
+    let encryptionVersion: string;
+    let ciphertextType: number;
+
+    if (conv.type === 'dm') {
+      if (!conv.peerUserId) throw new Error('Direct-message recipient is unavailable.');
+      const { data: bundleRow, error: bundleError } = await supabase
+        .from('signal_key_bundles')
+        .select('*')
+        .eq('user_id', conv.peerUserId)
+        .single();
+      if (bundleError || !bundleRow) throw new Error('Recipient encryption keys are unavailable.');
+      const recipientBundle = {
+        identityKey: bundleRow.identity_key,
+        registrationId: bundleRow.registration_id,
+        signedPreKeyId: bundleRow.signed_pre_key_id,
+        signedPreKey: bundleRow.signed_pre_key,
+        signedPreKeySignature: bundleRow.signed_pre_key_signature,
+        kyberPreKeyId: bundleRow.kyber_pre_key_id,
+        kyberPreKey: bundleRow.kyber_pre_key,
+        kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
+        oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
+      };
+      const encrypted = await window.lemchat.signalEncryptDirect(
+        conv.peerUserId,
+        recipientBundle,
+        JSON.stringify({ content: trimmed, codeBlock: existing.codeBlock ?? null, attachments: existing.attachments ?? null })
+      ) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
+      ciphertext = { ciphertext: encrypted.ciphertext };
+      encryptionVersion = encrypted.encryptionVersion;
+      ciphertextType = encrypted.ciphertextType;
+    } else {
+      const distributionId = conv.id;
+      const encrypted = await window.lemchat.signalEncryptGroup(
+        distributionId,
+        JSON.stringify({ content: trimmed, codeBlock: existing.codeBlock ?? null, attachments: existing.attachments ?? null })
+      ) as { ciphertext: string; ciphertextType: number };
+      ciphertext = { ciphertext: encrypted.ciphertext, distribution_id: distributionId };
+      encryptionVersion = 'libsignal-sender-key-v1';
+      ciphertextType = encrypted.ciphertextType;
+    }
 
     set((state) => ({
       conversations: state.conversations.map((conv) => ({
@@ -1280,7 +1495,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })),
     }));
 
-    await supabase.from('messages').update({ content: trimmed }).eq('id', messageId);
+    await supabase.from('messages').update({
+      content: '',
+      ciphertext,
+      encryption_version: encryptionVersion,
+      ciphertext_type: ciphertextType,
+      code_block: null,
+      attachments: null,
+    }).eq('id', messageId);
   },
 
   deleteMessage: async (messageId) => {

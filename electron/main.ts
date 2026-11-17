@@ -20,6 +20,16 @@ import {
   loadPersistedState,
   savePersistedState,
 } from './storage';
+import {
+  createSenderKeyDistribution,
+  decryptDirectMessage,
+  decryptGroupMessage,
+  encryptGroupMessage,
+  encryptDirectMessage,
+  initializeIdentity,
+  processSenderKeyDistribution,
+  type PublicKeyBundle,
+} from './libsignal';
 import type { NotificationPayload, UpdateStatusPayload, UserPresence } from './preload';
 
 let mainWindow: BrowserWindow | null = null;
@@ -183,6 +193,39 @@ function createWindow(profileId = 'default'): BrowserWindow {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle('lemchat:signal-init', (_event, profileId: string) =>
+    initializeIdentity(profileId)
+  );
+  ipcMain.handle(
+    'lemchat:signal-encrypt-direct',
+    (_event, profileId: string, recipientId: string, bundle: PublicKeyBundle, plaintext: string) =>
+      encryptDirectMessage(profileId, recipientId, bundle, plaintext)
+  );
+  ipcMain.handle(
+    'lemchat:signal-decrypt-direct',
+    (_event, profileId: string, senderId: string, ciphertext: string, ciphertextType: number) =>
+      decryptDirectMessage(profileId, senderId, ciphertext, ciphertextType)
+  );
+  ipcMain.handle(
+    'lemchat:signal-create-sender-key',
+    (_event, profileId: string, distributionId: string) =>
+      createSenderKeyDistribution(profileId, distributionId)
+  );
+  ipcMain.handle(
+    'lemchat:signal-process-sender-key',
+    (_event, profileId: string, senderId: string, distributionId: string, ciphertext: string) =>
+      processSenderKeyDistribution(profileId, senderId, distributionId, ciphertext)
+  );
+  ipcMain.handle(
+    'lemchat:signal-encrypt-group',
+    (_event, profileId: string, distributionId: string, plaintext: string) =>
+      encryptGroupMessage(profileId, distributionId, plaintext)
+  );
+  ipcMain.handle(
+    'lemchat:signal-decrypt-group',
+    (_event, profileId: string, senderId: string, distributionId: string, ciphertext: string) =>
+      decryptGroupMessage(profileId, senderId, distributionId, ciphertext)
+  );
   ipcMain.handle('lemchat:notify', (event, payload: NotificationPayload) => {
     if (!Notification.isSupported()) {
       return false;

@@ -33,6 +33,13 @@ export interface UpdateStatusPayload {
 export interface LemChatAPI {
   platform: NodeJS.Platform;
   profileId: string;
+  signalInitialize: () => Promise<unknown>;
+  signalEncryptDirect: (recipientId: string, recipientBundle: unknown, plaintext: string) => Promise<unknown>;
+  signalDecryptDirect: (senderId: string, ciphertext: string, ciphertextType: number) => Promise<string>;
+  signalCreateSenderKeyDistribution: (distributionId: string) => Promise<unknown>;
+  signalProcessSenderKeyDistribution: (senderId: string, distributionId: string, ciphertext: string) => Promise<void>;
+  signalEncryptGroup: (distributionId: string, plaintext: string) => Promise<unknown>;
+  signalDecryptGroup: (senderId: string, distributionId: string, ciphertext: string) => Promise<string>;
   sendNotification: (payload: NotificationPayload) => Promise<boolean>;
   updateBadgeCount: (count: number) => void;
   updateUserStatus: (status: UserPresence) => void;
@@ -61,6 +68,19 @@ const profileId = profileArg ? profileArg.split('=')[1] : 'default';
 const api: LemChatAPI = {
   platform: process.platform,
   profileId,
+  signalInitialize: () => ipcRenderer.invoke('lemchat:signal-init', profileId),
+  signalEncryptDirect: (recipientId, recipientBundle, plaintext) =>
+    ipcRenderer.invoke('lemchat:signal-encrypt-direct', profileId, recipientId, recipientBundle, plaintext),
+  signalDecryptDirect: (senderId, ciphertext, ciphertextType) =>
+    ipcRenderer.invoke('lemchat:signal-decrypt-direct', profileId, senderId, ciphertext, ciphertextType),
+  signalCreateSenderKeyDistribution: (distributionId) =>
+    ipcRenderer.invoke('lemchat:signal-create-sender-key', profileId, distributionId),
+  signalProcessSenderKeyDistribution: (senderId, distributionId, ciphertext) =>
+    ipcRenderer.invoke('lemchat:signal-process-sender-key', profileId, senderId, distributionId, ciphertext),
+  signalEncryptGroup: (distributionId, plaintext) =>
+    ipcRenderer.invoke('lemchat:signal-encrypt-group', profileId, distributionId, plaintext),
+  signalDecryptGroup: (senderId, distributionId, ciphertext) =>
+    ipcRenderer.invoke('lemchat:signal-decrypt-group', profileId, senderId, distributionId, ciphertext),
   sendNotification: (payload) => ipcRenderer.invoke('lemchat:notify', payload),
   updateBadgeCount: (count) => ipcRenderer.send('lemchat:badge-count', count),
   updateUserStatus: (status) => ipcRenderer.send('lemchat:user-status', status),

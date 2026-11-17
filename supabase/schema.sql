@@ -116,10 +116,18 @@ create table if not exists public.messages (
   conversation_id uuid not null references public.conversations (id) on delete cascade,
   sender_id uuid not null references public.profiles (id) on delete cascade,
   content text not null default '',
+  ciphertext jsonb,
+  encryption_version text,
+  ciphertext_type integer,
   code_block jsonb,
   attachments jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Upgrade existing LemChat databases in place.
+alter table public.messages add column if not exists ciphertext jsonb;
+alter table public.messages add column if not exists encryption_version text;
+alter table public.messages add column if not exists ciphertext_type integer;
 
 create index if not exists idx_messages_conv_created
   on public.messages (conversation_id, created_at asc);
@@ -160,6 +168,65 @@ create policy "Users can delete their own messages"
   on public.messages for delete
   to authenticated
   using (sender_id = auth.uid());
+
+-- 4a. Public Signal key directory (private key material is never stored here)
+create table if not exists public.signal_key_bundles (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  identity_key text not null,
+  registration_id integer not null,
+  signed_pre_key_id integer not null,
+  signed_pre_key text not null,
+  signed_pre_key_signature text not null,
+  kyber_pre_key_id integer not null,
+  kyber_pre_key text not null,
+  kyber_pre_key_signature text not null,
+  one_time_pre_keys jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.signal_key_bundles enable row level security;
+
+create policy "Authenticated users can read public key bundles"
+  on public.signal_key_bundles for select
+  to authenticated
+  using (true);
+
+create policy "Users can publish their own public key bundle"
+  on public.signal_key_bundles for insert
+  to authenticated
+  with check (user_id = auth.uid());
+
+create policy "Users can rotate their own public key bundle"
+  on public.signal_key_bundles for update
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Sender-key distributions for group chats. These records contain only public
+-- group-ratchet distribution messages, never sender private state.
+create table if not exists public.signal_sender_key_distributions (
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  sender_id uuid not null references public.profiles (id) on delete cascade,
+  distribution_id uuid not null,
+  distribution_message text not null,
+  created_at timestamptz not null default now(),
+  primary key (conversation_id, sender_id, distribution_id)
+);
+
+alter table public.signal_sender_key_distributions enable row level security;
+
+create policy "Conversation members can read sender-key distributions"
+  on public.signal_sender_key_distributions for select
+  to authenticated
+  using (public.is_conversation_member(conversation_id));
+
+create policy "Conversation members can publish sender-key distributions"
+  on public.signal_sender_key_distributions for insert
+  to authenticated
+  with check (
+    sender_id = auth.uid()
+    and public.is_conversation_member(conversation_id)
+  );
 
 -- 5. Message Reactions
 create table if not exists public.message_reactions (
