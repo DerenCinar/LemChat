@@ -4,6 +4,30 @@ import { useChatStore } from '../store/useChatStore';
 export const MeshBackground: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
 
+  if (theme === 'mono') {
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 overflow-hidden bg-[#050507]/95 transition-colors duration-500"
+      >
+        <div
+          className="animate-mesh-slow absolute -left-24 -top-24 h-[520px] w-[520px] rounded-full opacity-40 blur-[120px]"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(161, 161, 170, 0.10) 45%, transparent 75%)',
+          }}
+        />
+        <div
+          className="animate-mesh-slow-rev absolute -bottom-32 right-[-60px] h-[560px] w-[560px] rounded-full opacity-35 blur-[130px]"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(212, 212, 216, 0.20) 0%, rgba(113, 113, 122, 0.10) 50%, transparent 75%)',
+          }}
+        />
+      </div>
+    );
+  }
+
   if (theme === 'dark') {
     return (
       <div
@@ -26,7 +50,7 @@ export const MeshBackground: React.FC = () => {
               'radial-gradient(circle, rgba(20, 83, 45, 0.95) 0%, rgba(34, 197, 94, 0.22) 50%, transparent 75%)',
           }}
         />
-        {/* Subtle center-right LemHand glow */}
+        {/* Subtle center-right glow */}
         <div
           className="animate-mesh-slow absolute left-1/2 top-1/3 h-[380px] w-[380px] -translate-x-1/2 rounded-full opacity-25 blur-[120px]"
           style={{

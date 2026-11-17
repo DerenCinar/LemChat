@@ -211,8 +211,20 @@ function buildReactionsList(
   }));
 }
 
+const savedTheme = (localStorage.getItem('skellytalk_theme') as ThemeMode | null) ?? 'dark';
+if (savedTheme === 'dark' || savedTheme === 'mono') {
+  document.documentElement.classList.add('dark');
+} else {
+  document.documentElement.classList.remove('dark');
+}
+if (savedTheme === 'mono') {
+  document.documentElement.classList.add('mono');
+} else {
+  document.documentElement.classList.remove('mono');
+}
+
 export const useChatStore = create<ChatStore>((set, get) => ({
-  theme: 'dark',
+  theme: savedTheme,
   activeTab: 'chats',
   configured: isSupabaseConfigured(),
   session: null,
@@ -246,16 +258,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   updateStatus: { status: 'idle' },
 
   setTheme: (theme) => {
-    if (theme === 'dark') {
+    localStorage.setItem('skellytalk_theme', theme);
+    if (theme === 'dark' || theme === 'mono') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+    if (theme === 'mono') {
+      document.documentElement.classList.add('mono');
+    } else {
+      document.documentElement.classList.remove('mono');
     }
     set({ theme });
   },
 
   toggleTheme: () => {
-    const next = get().theme === 'dark' ? 'light' : 'dark';
+    const cur = get().theme;
+    const next: ThemeMode =
+      cur === 'dark' ? 'light' : cur === 'light' ? 'mono' : 'dark';
     get().setTheme(next);
   },
 

@@ -157,3 +157,61 @@ html:not(.dark) .lem-scrollbar::-webkit-scrollbar-thumb {
 html:not(.dark) .lem-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.45);
 }
+
+/* Monochrome Black & White Liquid Glass Theme */
+.mono .glass-surface {
+  background: linear-gradient(
+    145deg,
+    rgba(24, 24, 27, 0.72) 0%,
+    rgba(8, 8, 10, 0.84) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 12px 38px -6px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+}
+
+.mono .glass-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(20, 20, 23, 0.78) 0%,
+    rgba(8, 8, 10, 0.88) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.mono .glass-pill {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.mono .glass-bubble-sent {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(228, 228, 231, 0.88) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 8px 24px -6px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 0 rgba(255, 255, 255, 1);
+  color: #09090b !important;
+}
+
+.mono .glass-bubble-sent * {
+  color: #09090b;
+}
+
+.mono .glass-bubble-received {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/* Monochrome accent overrides (convert emerald/lime accents to crisp white/silver) */
+.mono {
+  filter: grayscale(100%) contrast(1.04);
+}

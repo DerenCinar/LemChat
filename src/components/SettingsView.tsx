@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Moon, Sun, LogOut, Database, Wifi, Check, Bell, Volume2, Sparkles, RefreshCw } from 'lucide-react';
+import { Moon, Sun, Contrast, LogOut, Database, Wifi, Check, Bell, Volume2, Sparkles, RefreshCw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { getSupabaseConfig } from '../lib/supabase';
 
@@ -125,7 +125,7 @@ export const SettingsView: React.FC = () => {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
             Liquid Glass Theme
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <motion.button
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
@@ -136,13 +136,13 @@ export const SettingsView: React.FC = () => {
                   : 'hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <Moon className="h-5 w-5 text-[#22C55E]" />
+              <Moon className="h-5 w-5 shrink-0 text-[#22C55E]" />
               <div>
                 <p className="text-xs font-bold text-emerald-950 dark:text-white">
                   Forest-Slate Dark
                 </p>
                 <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
-                  #090F0C · Deep emerald mesh
+                  #090F0C · Emerald mesh
                 </p>
               </div>
             </motion.button>
@@ -157,13 +157,34 @@ export const SettingsView: React.FC = () => {
                   : 'hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <Sun className="h-5 w-5 text-[#10B981]" />
+              <Sun className="h-5 w-5 shrink-0 text-[#10B981]" />
               <div>
                 <p className="text-xs font-bold text-emerald-950 dark:text-white">
                   Frosted Mint Light
                 </p>
                 <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
-                  #F0FDF4 · Translucent mint glass
+                  #F0FDF4 · Mint glass
+                </p>
+              </div>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setTheme('mono')}
+              className={`glass-pill flex items-center gap-3 rounded-2xl p-4 text-left transition ${
+                theme === 'mono'
+                  ? 'border-white/70 bg-white/15 ring-1 ring-white/60'
+                  : 'hover:bg-black/5 dark:hover:bg-white/5'
+              }`}
+            >
+              <Contrast className="h-5 w-5 shrink-0 text-white" />
+              <div>
+                <p className="text-xs font-bold text-emerald-950 dark:text-white">
+                  Black &amp; White
+                </p>
+                <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+                  #050507 · Monochrome glass
                 </p>
               </div>
             </motion.button>
