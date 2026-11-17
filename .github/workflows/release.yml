@@ -25,15 +25,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Read version from package.json
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set unique release version from run number
         id: pkg
         shell: pwsh
         run: |
           $pkg = Get-Content package.json | ConvertFrom-Json
-          echo "version=$($pkg.version)" >> $env:GITHUB_OUTPUT
-
-      - name: Install dependencies
-        run: npm ci
+          $parts = $pkg.version.Split('.')
+          $newVersion = "$($parts[0]).$($parts[1]).${{ github.run_number }}"
+          npm version $newVersion --no-git-tag-version
+          echo "version=$newVersion" >> $env:GITHUB_OUTPUT
 
       - name: Build Windows Installer & Portable EXE
         env:
