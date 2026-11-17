@@ -1,0 +1,72 @@
+{
+  "name": "skellytalk",
+  "version": "1.0.0",
+  "description": "SkellyTalk — Liquid Glass desktop & web messaging client",
+  "main": "dist-electron/main.js",
+  "author": "SkellyTalk",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"green,emerald\" \"vite\" \"npm run build:electron && wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "tsc --noEmit && npm run build:electron && vite build",
+    "dist:win": "npm run build && electron-builder --win",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "build": {
+    "appId": "com.skellytalk.app",
+    "productName": "SkellyTalk",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "DerenCinar",
+        "repo": "LemChat"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "electron-updater": "^6.8.11",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.23.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  }
+}

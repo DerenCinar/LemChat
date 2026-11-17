@@ -1,0 +1,117 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
+export type UserPresence = 'online' | 'away' | 'busy';
+
+export interface NotificationPayload {
+  id: string;
+  conversationId: string;
+  senderName: string;
+  body: string;
+  forceShow?: boolean;
+}
+
+export interface ServerInfo {
+  hosting: boolean;
+  port: number;
+  lanIps: string[];
+}
+
+export interface UpdateStatusPayload {
+  status:
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error';
+  version?: string;
+  progress?: number;
+  message?: string;
+}
+
+export interface LemChatAPI {
+  platform: NodeJS.Platform;
+  profileId: string;
+  sendNotification: (payload: NotificationPayload) => Promise<boolean>;
+  updateBadgeCount: (count: number) => void;
+  updateUserStatus: (status: UserPresence) => void;
+  windowMinimize: () => void;
+  windowMaximize: () => void;
+  windowClose: () => void;
+  isWindowMaximized: () => Promise<boolean>;
+  loadState: (profileId: string) => Promise<unknown | null>;
+  saveState: (profileId: string, state: unknown) => Promise<boolean>;
+  clearState: (profileId: string) => Promise<boolean>;
+  getServerInfo: () => Promise<ServerInfo>;
+  saveAttachment: (filename: string, dataUrl: string) => Promise<boolean>;
+  openNewPeerWindow: () => Promise<void>;
+  checkForUpdates: () => Promise<void>;
+  installUpdate: () => void;
+  onUpdateStatus: (callback: (payload: UpdateStatusPayload) => void) => () => void;
+  onNotificationClicked: (callback: (conversationId: string) => void) => () => void;
+  onStatusChangedFromTray: (callback: (status: UserPresence) => void) => () => void;
+  onWindowFocusChange: (callback: (isFocused: boolean) => void) => () => void;
+  onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
+}
+
+const profileArg = process.argv.find((a) => a.startsWith('--lemchat-profile='));
+const profileId = profileArg ? profileArg.split('=')[1] : 'default';
+
+const api: LemChatAPI = {
+  platform: process.platform,
+  profileId,
+  sendNotification: (payload) => ipcRenderer.invoke('lemchat:notify', payload),
+  updateBadgeCount: (count) => ipcRenderer.send('lemchat:badge-count', count),
+  updateUserStatus: (status) => ipcRenderer.send('lemchat:user-status', status),
+  windowMinimize: () => ipcRenderer.send('lemchat:window-minimize'),
+  windowMaximize: () => ipcRenderer.send('lemchat:window-maximize'),
+  windowClose: () => ipcRenderer.send('lemchat:window-close'),
+  isWindowMaximized: () => ipcRenderer.invoke('lemchat:window-is-maximized'),
+  loadState: (pid) => ipcRenderer.invoke('lemchat:load-state', pid),
+  saveState: (pid, state) => ipcRenderer.invoke('lemchat:save-state', pid, state),
+  clearState: (pid) => ipcRenderer.invoke('lemchat:clear-state', pid),
+  getServerInfo: () => ipcRenderer.invoke('lemchat:server-info'),
+  saveAttachment: (filename, dataUrl) =>
+    ipcRenderer.invoke('lemchat:save-attachment', filename, dataUrl),
+  openNewPeerWindow: () => ipcRenderer.invoke('lemchat:open-peer-window'),
+  checkForUpdates: () => ipcRenderer.invoke('lemchat:check-updates'),
+  installUpdate: () => ipcRenderer.send('lemchat:install-update'),
+  onUpdateStatus: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: UpdateStatusPayload) => {
+      callback(payload);
+    };
+    ipcRenderer.on('lemchat:update-status', handler);
+    return () => ipcRenderer.removeListener('lemchat:update-status', handler);
+  },
+  onNotificationClicked: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, conversationId: string) => {
+      callback(conversationId);
+    };
+    ipcRenderer.on('lemchat:notification-clicked', handler);
+    return () => ipcRenderer.removeListener('lemchat:notification-clicked', handler);
+  },
+  onStatusChangedFromTray: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: UserPresence) => {
+      callback(status);
+    };
+    ipcRenderer.on('lemchat:tray-status-changed', handler);
+    return () => ipcRenderer.removeListener('lemchat:tray-status-changed', handler);
+  },
+  onWindowFocusChange: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, isFocused: boolean) => {
+      callback(isFocused);
+    };
+    ipcRenderer.on('lemchat:window-focus', handler);
+    return () => ipcRenderer.removeListener('lemchat:window-focus', handler);
+  },
+  onMaximizeChange: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean) => {
+      callback(isMaximized);
+    };
+    ipcRenderer.on('lemchat:window-maximized', handler);
+    return () => ipcRenderer.removeListener('lemchat:window-maximized', handler);
+  },
+};
+
+contextBridge.exposeInMainWorld('lemchat', api);

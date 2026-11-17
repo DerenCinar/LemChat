@@ -1,0 +1,371 @@
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Check,
+  CheckCheck,
+  Copy,
+  FileText,
+  SmilePlus,
+  Reply,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import { useChatStore } from '../store/useChatStore';
+import type { Message } from '../types/chat';
+
+const QUICK_REACTIONS = ['💚', '🔥', '🚀', '✨', '👍', '👀'];
+
+interface MessageBubbleProps {
+  message: Message;
+  showHeader: boolean;
+  highlightQuery?: string;
+}
+
+export const MessageBubble: React.FC<MessageBubbleProps> = ({
+  message,
+  showHeader,
+  highlightQuery,
+}) => {
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message.content);
+
+  const toggleReaction = useChatStore((s) => s.toggleReaction);
+  const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const editMessage = useChatStore((s) => s.editMessage);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
+
+  const handleCopyCode = () => {
+    if (!message.codeBlock) return;
+    navigator.clipboard.writeText(message.codeBlock.code).catch(() => {});
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 1600);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim()) return;
+    await editMessage(message.id, editText);
+    setIsEditing(false);
+  };
+
+  const renderHighlightedContent = (text: string) => {
+    if (!highlightQuery?.trim()) return text;
+    const escaped = highlightQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    return parts.map((part, idx) =>
+      part.toLowerCase() === highlightQuery.toLowerCase() ? (
+        <mark
+          key={idx}
+          className="rounded bg-amber-300/80 px-0.5 text-emerald-950"
+        >
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
+
+  // Parse quoted reply prefix (`> Author: quote\n\nBody`)
+  let quoteLine: string | null = null;
+  let bodyContent = message.content;
+  if (message.content.startsWith('> ')) {
+    const splitIdx = message.content.indexOf('\n\n');
+    if (splitIdx !== -1) {
+      quoteLine = message.content.slice(2, splitIdx);
+      bodyContent = message.content.slice(splitIdx + 2);
+    }
+  }
+
+  const actionToolbar = (
+    <div className="relative flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <button
+        onClick={() => setReplyingTo(message)}
+        className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
+        title="Reply"
+      >
+        <Reply className="h-3.5 w-3.5" />
+      </button>
+
+      <button
+        onClick={() => setShowPicker((v) => !v)}
+        className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
+        title="Add reaction"
+      >
+        <SmilePlus className="h-3.5 w-3.5" />
+      </button>
+
+      {message.isMe && (
+        <>
+          <button
+            onClick={() => {
+              setEditText(message.content);
+              setIsEditing((v) => !v);
+            }}
+            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
+            title="Edit message"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            onClick={() => void deleteMessage(message.id)}
+            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-rose-500 hover:scale-105"
+            title="Delete message"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </>
+      )}
+
+      {showPicker && (
+        <div
+          className={`glass-panel glass-surface absolute bottom-8 z-30 flex items-center gap-1 rounded-full px-2 py-1 ${
+            message.isMe ? 'right-0' : 'left-0'
+          }`}
+        >
+          {QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => {
+                void toggleReaction(message.conversationId, message.id, emoji);
+                setShowPicker(false);
+              }}
+              className="rounded-full p-1 text-sm transition hover:scale-125"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <motion.div
+      layout
+      initial={{
+        opacity: 0,
+        y: 18,
+        scale: 0.84,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: 1,
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 460,
+        damping: 25,
+        mass: 0.78,
+      }}
+      style={{
+        transformOrigin: message.isMe ? 'bottom right' : 'bottom left',
+      }}
+      className={`group flex gap-2.5 ${message.isMe ? 'flex-row-reverse' : 'flex-row'}`}
+      onMouseLeave={() => setShowPicker(false)}
+    >
+      {!message.isMe && (
+        <div className="w-8 shrink-0 pt-0.5">
+          {showHeader ? (
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-700/45 text-[11px] font-bold text-emerald-950 ring-1 ring-white/25 dark:text-white">
+              {message.senderAvatar}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div
+        className={`relative flex max-w-[74%] flex-col ${
+          message.isMe ? 'items-end' : 'items-start'
+        }`}
+      >
+        {showHeader && !message.isMe && (
+          <div className="mb-1 flex items-center gap-2 px-1">
+            <span className="text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+              {message.senderName}
+            </span>
+            {message.senderRole && (
+              <span className="text-[10px] text-emerald-800/60 dark:text-emerald-200/45">
+                {message.senderRole}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="relative flex items-center gap-2">
+          {message.isMe && actionToolbar}
+
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+            className={`glass-panel relative overflow-hidden rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text ${
+              message.isMe
+                ? 'glass-bubble-sent rounded-tr-md text-white'
+                : 'glass-bubble-received rounded-tl-md text-emerald-950 dark:text-emerald-50/95'
+            }`}
+          >
+            <motion.span
+              aria-hidden
+              initial={{ x: '-130%', opacity: 0.85 }}
+              animate={{ x: '220%', opacity: 0 }}
+              transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
+              className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+            />
+
+            {quoteLine && (
+              <div
+                className={`mb-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11.5px] ${
+                  message.isMe
+                    ? 'border-white/60 bg-black/15 text-white/90'
+                    : 'border-[#22C55E] bg-black/5 text-emerald-900/80 dark:bg-white/5 dark:text-emerald-100/80'
+                }`}
+              >
+                {quoteLine}
+              </div>
+            )}
+
+            {isEditing ? (
+              <div className="space-y-2">
+                <textarea
+                  rows={2}
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="w-full min-w-[220px] resize-none rounded-xl bg-black/20 p-2 text-xs text-white outline-none"
+                />
+                <div className="flex justify-end gap-1.5 text-[11px]">
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="rounded-lg bg-white/15 px-2.5 py-1 hover:bg-white/25"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleSaveEdit()}
+                    className="rounded-lg bg-white px-2.5 py-1 font-semibold text-emerald-900"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              bodyContent && (
+                <p className="whitespace-pre-wrap break-words">
+                  {renderHighlightedContent(bodyContent)}
+                </p>
+              )
+            )}
+
+            {message.codeBlock && (
+              <div className="mt-2.5 overflow-hidden rounded-xl border border-white/15 bg-[#060C09]/85 text-xs text-emerald-100">
+                <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5 text-[10px] text-emerald-300/80">
+                  <span className="font-mono uppercase">{message.codeBlock.language}</span>
+                  <button
+                    onClick={handleCopyCode}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 transition hover:bg-white/10"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <pre className="lem-scrollbar overflow-x-auto p-3 font-mono text-[11.5px] leading-relaxed text-emerald-200">
+                  <code>{message.codeBlock.code}</code>
+                </pre>
+              </div>
+            )}
+
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="mt-2.5 space-y-2">
+                {message.attachments.map((att) =>
+                  att.type === 'image' && att.previewUrl ? (
+                    <div
+                      key={att.id}
+                      className="overflow-hidden rounded-xl border border-white/20 bg-black/20"
+                    >
+                      <img
+                        src={att.previewUrl}
+                        alt={att.name}
+                        className="max-h-56 w-full object-cover"
+                      />
+                      <div className="flex items-center justify-between px-2.5 py-1.5 text-[11px] opacity-85">
+                        <span className="truncate font-medium">{att.name}</span>
+                        <span className="shrink-0 opacity-75">{att.size}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <a
+                      key={att.id}
+                      href={att.previewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 rounded-xl border border-white/20 bg-black/15 px-3 py-2 text-xs transition hover:bg-black/25"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/25 text-emerald-200">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{att.name}</p>
+                        <p className="text-[10px] opacity-70">
+                          {att.mimeLabel ?? 'File'} · {att.size}
+                        </p>
+                      </div>
+                    </a>
+                  )
+                )}
+              </div>
+            )}
+
+            <div
+              className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                message.isMe
+                  ? 'text-white/80'
+                  : 'text-emerald-900/50 dark:text-emerald-200/45'
+              }`}
+            >
+              <span>{message.timestamp}</span>
+              {message.isMe && (
+                <span className="inline-flex items-center">
+                  {message.status === 'read' ? (
+                    <CheckCheck className="h-3.5 w-3.5 text-emerald-100" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 text-white/75" />
+                  )}
+                </span>
+              )}
+            </div>
+          </motion.div>
+
+          {!message.isMe && actionToolbar}
+        </div>
+
+        {message.reactions.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1 px-1">
+            {message.reactions.map((reaction) => (
+              <motion.button
+                key={reaction.emoji}
+                layout
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                whileHover={{ scale: 1.12 }}
+                whileTap={{ scale: 0.86 }}
+                transition={{ type: 'spring', stiffness: 480, damping: 24 }}
+                onClick={() =>
+                  void toggleReaction(message.conversationId, message.id, reaction.emoji)
+                }
+                className={`glass-pill flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition-colors ${
+                  reaction.reactedByMe
+                    ? 'border-[#22C55E]/60 bg-[#22C55E]/20 font-semibold text-emerald-900 dark:text-emerald-200'
+                    : 'text-emerald-900/75 dark:text-emerald-100/75'
+                }`}
+              >
+                <span>{reaction.emoji}</span>
+                <span>{reaction.count}</span>
+              </motion.button>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
