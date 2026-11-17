@@ -25,14 +25,35 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Read version from package.json
+        id: pkg
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          echo "version=$($pkg.version)" >> $env:GITHUB_OUTPUT
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build & Publish Windows Release
+      - name: Build Windows Installer & Portable EXE
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           npm run build
-          npx electron-builder --win --publish always
+          npx electron-builder --win --publish never
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.version }}
+          name: SkellyTalk v${{ steps.pkg.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

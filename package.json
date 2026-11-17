@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.skellytalk.app",
     "productName": "SkellyTalk",
+    "generateUpdatesFilesForAllChannels": true,
     "directories": {
       "output": "release"
     },
@@ -28,7 +29,8 @@
       {
         "provider": "github",
         "owner": "DerenCinar",
-        "repo": "LemChat"
+        "repo": "LemChat",
+        "releaseType": "release"
       }
     ],
     "win": {
