@@ -1,6 +1,6 @@
 {
   "name": "skellytalk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SkellyTalk — Liquid Glass desktop & web messaging client",
   "main": "dist-electron/main.js",
   "author": "SkellyTalk",
@@ -42,7 +42,11 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
     }
   },
   "dependencies": {
