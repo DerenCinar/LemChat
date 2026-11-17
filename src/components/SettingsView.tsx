@@ -283,20 +283,20 @@ export const SettingsView: React.FC = () => {
             Software Updates
           </h2>
           <div className="glass-pill flex items-center justify-between gap-4 rounded-2xl p-4 text-xs">
-            <div className="flex items-start gap-2.5">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
               <RefreshCw
-                className={`mt-0.5 h-4 w-4 text-[#22C55E] ${
+                className={`mt-0.5 h-4 w-4 shrink-0 text-[#22C55E] ${
                   updateStatus.status === 'checking' ||
                   updateStatus.status === 'downloading'
                     ? 'animate-spin'
                     : ''
                 }`}
               />
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold text-emerald-950 dark:text-white">
                   Automatic Updates
                 </p>
-                <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+                <p className="line-clamp-2 break-words text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
                   {updateStatus.status === 'checking'
                     ? 'Checking for updates...'
                     : updateStatus.status === 'downloading'

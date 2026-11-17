@@ -372,9 +372,13 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('error', (err) => {
+    const raw = err?.message ?? 'Auto-update error';
+    const friendly = raw.includes('404')
+      ? 'Update feed returned 404 — ensure the GitHub repo is Public and has a published release.'
+      : raw.split('\n')[0].slice(0, 140);
     broadcastUpdateStatus({
       status: 'error',
-      message: err?.message ?? 'Auto-update error',
+      message: friendly,
     });
   });
 
