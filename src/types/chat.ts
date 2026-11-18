@@ -56,6 +56,7 @@ export interface Message {
   editedAt?: string;
   deletedAt?: string;
   isMention?: boolean;
+  isEdited?: boolean;
 }
 
 export interface Conversation {

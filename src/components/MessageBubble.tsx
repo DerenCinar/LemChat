@@ -349,8 +349,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               }`}
             >
               <span>{message.timestamp}</span>
-              {message.editedAt && !message.deletedAt && (
-                <span className="opacity-75">(edited)</span>
+              {(message.isEdited || message.editedAt) && !message.deletedAt && (
+                <span className="opacity-75">edited</span>
               )}
               {message.isMe && (
                 <span className="inline-flex items-center">

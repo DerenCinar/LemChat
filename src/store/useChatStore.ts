@@ -218,9 +218,12 @@ interface DecryptedMessagePayload {
   content: string;
   codeBlock?: CodeBlock;
   attachments?: Attachment[];
+  editedAt?: string;
+  isEdited?: boolean;
 }
 
 const DELETED_MESSAGE_MARKER = '[skellytalk:deleted]';
+const EDITED_MESSAGE_MARKER = '[skellytalk:edited]';
 
 function getSentCacheKey(userId: string): string {
   return `skellytalk_sent_cache_${userId}`;
@@ -303,7 +306,11 @@ async function decryptMessageRow(
   senderId: string,
   selfId?: string
 ): Promise<DecryptedMessagePayload> {
-  if (row.deleted_at || row.content === DELETED_MESSAGE_MARKER) {
+  if (
+    row.deleted_at ||
+    row.content === DELETED_MESSAGE_MARKER ||
+    (selfId && Boolean(readDeletedCache(selfId)[row.id]))
+  ) {
     return { content: '' };
   }
   if (selfId && senderId === selfId) {
@@ -312,6 +319,14 @@ async function decryptMessageRow(
   }
   const ciphertext = row.ciphertext?.ciphertext;
   if (!row.encryption_version || !ciphertext || row.ciphertext_type == null) {
+    if (row.content.startsWith(EDITED_MESSAGE_MARKER)) {
+      return {
+        content: row.content.slice(EDITED_MESSAGE_MARKER.length).replace(/^\n/, ''),
+        codeBlock: row.code_block ?? undefined,
+        attachments: row.attachments ?? undefined,
+        isEdited: true,
+      };
+    }
     return {
       content: row.content,
       codeBlock: row.code_block ?? undefined,
@@ -815,6 +830,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       const messagesByConv = new Map<string, Message[]>();
       for (const msg of (messagesRes.data ?? []) as DbMessageRow[]) {
+        const deletedCache = readDeletedCache(user.id);
+        const deletedEntry = deletedCache[msg.id];
+        if (deletedEntry) {
+          const tombstone: Message = {
+            id: msg.id,
+            conversationId: msg.conversation_id,
+            senderId: msg.sender_id,
+            senderName: profileMap[msg.sender_id]?.displayName ?? 'Member',
+            senderAvatar: profileMap[msg.sender_id]?.avatarText ?? 'ST',
+            senderRole: profileMap[msg.sender_id]?.role,
+            content: '',
+            timestamp: formatTimestamp(deletedEntry.deletedAt),
+            createdAt: deletedEntry.createdAt,
+            isMe: msg.sender_id === user.id,
+            status: 'read',
+            reactions: buildReactionsList(reactionsByMsg.get(msg.id) ?? [], user.id),
+            deletedAt: deletedEntry.deletedAt,
+          };
+          const arr = messagesByConv.get(msg.conversation_id) ?? [];
+          arr.push(tombstone);
+          messagesByConv.set(msg.conversation_id, arr);
+          continue;
+        }
         const sender = profileMap[msg.sender_id];
         const msgReactions = buildReactionsList(
           reactionsByMsg.get(msg.id) ?? [],
@@ -832,13 +870,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           content: decrypted.content,
           timestamp: formatTimestamp(msg.created_at),
           createdAt: msg.created_at,
-          editedAt: msg.edited_at ?? undefined,
+          editedAt: msg.edited_at ?? decrypted.editedAt,
           deletedAt:
             msg.deleted_at ??
             (msg.content === DELETED_MESSAGE_MARKER ? msg.created_at : undefined),
           isMe: msg.sender_id === user.id,
           status: 'read',
           reactions: msgReactions,
+          isEdited: Boolean(msg.edited_at) || Boolean(decrypted.isEdited) || Boolean(decrypted.editedAt),
           codeBlock: decrypted.codeBlock,
           attachments: decrypted.attachments,
           isMention: selfProfile
@@ -1067,10 +1106,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             content: decrypted.content,
             timestamp: formatTimestamp(row.created_at),
             createdAt: row.created_at,
-            editedAt: row.edited_at ?? undefined,
+            editedAt: row.edited_at ?? decrypted.editedAt,
             deletedAt:
               row.deleted_at ??
-              (row.content === DELETED_MESSAGE_MARKER ? row.created_at : undefined),
+              (row.content === DELETED_MESSAGE_MARKER
+                ? row.created_at
+                : readDeletedCache(user.id)[row.id]?.deletedAt),
             isMe,
             status: 'read',
             reactions: [],
@@ -1173,12 +1214,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                             content: decrypted.content,
                             codeBlock: decrypted.codeBlock,
                             attachments: decrypted.attachments,
-                            editedAt: row.edited_at ?? undefined,
+                            editedAt: row.edited_at ?? decrypted.editedAt,
+                            isEdited:
+                              Boolean(row.edited_at) || Boolean(decrypted.isEdited),
                             deletedAt:
                               row.deleted_at ??
                               (row.content === DELETED_MESSAGE_MARKER
                                 ? row.created_at
-                                : undefined),
+                                : readDeletedCache(user.id)[row.id]?.deletedAt),
                           }
                         : m
                     ),
@@ -1194,6 +1237,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           const oldRow = payload.old as { id?: string; conversation_id?: string };
           if (!oldRow.id) return;
           const deletedAt = new Date().toISOString();
+          const existing = get().conversations
+            .find((conv) => conv.messages.some((message) => message.id === oldRow.id))
+            ?.messages.find((message) => message.id === oldRow.id);
+          const conversationId =
+            oldRow.conversation_id ??
+            get().conversations.find((conv) =>
+              conv.messages.some((message) => message.id === oldRow.id)
+            )?.id;
+          removeSentCacheEntry(user.id, oldRow.id);
+          if (conversationId) {
+            saveDeletedCacheEntry(
+              user.id,
+              oldRow.id,
+              conversationId,
+              deletedAt,
+              existing?.createdAt ?? deletedAt
+            );
+          }
           set((state) => ({
             conversations: state.conversations.map((conv) => ({
               ...conv,
@@ -1888,7 +1949,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       conversations: state.conversations.map((c) => ({
         ...c,
         messages: c.messages.map((m) =>
-          m.id === messageId ? { ...m, content: trimmed, editedAt } : m
+          m.id === messageId
+            ? { ...m, content: trimmed, editedAt, isEdited: true }
+            : m
         ),
       })),
     }));
@@ -1905,6 +1968,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           content: trimmed,
           codeBlock: existing.codeBlock ?? null,
           attachments: existing.attachments ?? null,
+          isEdited: true,
         });
         if (conv.type === 'dm' && conv.peerUserId) {
           const { data: bundleRow } = await supabase
@@ -1957,6 +2021,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         content: trimmed,
         codeBlock: existing.codeBlock,
         attachments: existing.attachments,
+        editedAt,
+        isEdited: true,
       });
       const { error: updateError } = await supabase
         .from('messages')
@@ -1965,13 +2031,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ...encryptedPayload,
           code_block: null,
           attachments: null,
-          edited_at: editedAt,
         })
         .eq('id', messageId);
       if (updateError) {
         const { error: encryptedFallbackError } = await supabase
           .from('messages')
-          .update({ content: trimmed })
+          .update({ content: `${EDITED_MESSAGE_MARKER}\n${trimmed}` })
           .eq('id', messageId);
         if (encryptedFallbackError) {
           await get().fetchWorkspaceData();
@@ -1979,14 +2044,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       }
     } else {
+      saveSentCacheEntry(user.id, messageId, {
+        content: trimmed,
+        codeBlock: existing.codeBlock,
+        attachments: existing.attachments,
+        editedAt,
+        isEdited: true,
+      });
       const { error: updateError } = await supabase
         .from('messages')
-        .update({ content: trimmed, edited_at: editedAt })
+        .update({ content: `${EDITED_MESSAGE_MARKER}\n${trimmed}` })
         .eq('id', messageId);
       if (updateError) {
         const { error: fallbackError } = await supabase
           .from('messages')
-          .update({ content: trimmed })
+          .update({ content: `${EDITED_MESSAGE_MARKER}\n${trimmed}` })
           .eq('id', messageId);
         if (fallbackError) {
           await get().fetchWorkspaceData();
@@ -2030,22 +2102,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       saveDeletedCacheEntry(user.id, messageId, conversationId, deletedAt, createdAt);
     }
 
-    const { error: softDeleteError } = await supabase
+    const { data: deletedRows, error: hardDeleteError } = await supabase
       .from('messages')
-      .update({
-        content: '',
-        ciphertext: null,
-        encryption_version: null,
-        ciphertext_type: null,
-        code_block: null,
-        attachments: null,
-        deleted_at: deletedAt,
-      })
-      .eq('id', messageId);
-    if (!softDeleteError) return;
+      .delete()
+      .eq('id', messageId)
+      .select('id');
 
-    // Existing databases may not have the deleted_at column yet. Persist a
-    // deletion marker using columns every message row already has.
+    if (!hardDeleteError && deletedRows && deletedRows.length > 0) return;
+
+    // Some RLS setups return no deleted row in data. Persist a tombstone using
+    // the existing message columns so the original text cannot be reloaded.
     const { error: markerDeleteError } = await supabase
       .from('messages')
       .update({
@@ -2056,17 +2122,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         code_block: null,
         attachments: null,
       })
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .select('id');
+
     if (!markerDeleteError) return;
 
-    const { error: hardDeleteError } = await supabase
-      .from('messages')
-      .delete()
-      .eq('id', messageId);
-    if (hardDeleteError) {
+    if (hardDeleteError || markerDeleteError) {
       await get().fetchWorkspaceData();
       throw new Error(
-        `Message deletion failed: ${softDeleteError.message || hardDeleteError.message}`
+        `Message deletion failed: ${hardDeleteError?.message || markerDeleteError?.message || 'The database did not confirm deletion'}`
       );
     }
   },
