@@ -270,7 +270,7 @@ begin
     nullif(trim(new.raw_user_meta_data ->> 'handle'), ''),
     '@' || regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9_]', '', 'g') || '_' || substr(new.id::text, 1, 4)
   );
-  v_avatar := upper(substr(v_name, 1, 2));
+  v_avatar := upper(substr(v_name, 1, 1));
 
   insert into public.profiles (id, display_name, handle, avatar_text, role, status)
   values (new.id, v_name, v_handle, v_avatar, 'Member', 'online')

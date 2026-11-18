@@ -16,7 +16,13 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { getSupabaseConfig } from '../lib/supabase';
-import { UserAvatar } from './UserAvatar';
+import {
+  UserAvatar,
+  AVATAR_BG_PRESETS,
+  parseAvatarSpec,
+  serializeAvatarSpec,
+  type AvatarMode,
+} from './UserAvatar';
 
 export const SettingsView: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
@@ -59,6 +65,30 @@ export const SettingsView: React.FC = () => {
     await uploadAvatar(file);
     setUploadingAvatar(false);
     e.target.value = '';
+  };
+
+  const currentAvatarSpec = self ? parseAvatarSpec(self.avatar, self.name) : null;
+
+  const updateAvatarStyle = async (mode: AvatarMode) => {
+    if (!self || !currentAvatarSpec) return;
+    if (mode === 'image' && !currentAvatarSpec.url) {
+      avatarInputRef.current?.click();
+      return;
+    }
+    const nextSpec = serializeAvatarSpec({
+      ...currentAvatarSpec,
+      mode,
+    });
+    await updateSelfProfile(displayName || self.name, role || self.role, nextSpec);
+  };
+
+  const updateAvatarBg = async (bg: string) => {
+    if (!self || !currentAvatarSpec) return;
+    const nextSpec = serializeAvatarSpec({
+      ...currentAvatarSpec,
+      bg,
+    });
+    await updateSelfProfile(displayName || self.name, role || self.role, nextSpec);
   };
 
   return (
@@ -135,6 +165,119 @@ export const SettingsView: React.FC = () => {
                 <span>Sign Out</span>
               </button>
             </div>
+
+            {/* Profile Picture Style & Independent Background Color */}
+            {currentAvatarSpec && (
+              <div className="space-y-3 border-t border-black/5 pt-3 dark:border-white/10">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">
+                    Profile Picture Style
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void updateAvatarStyle('letter')}
+                      className={`glass-pill flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        currentAvatarSpec.mode === 'letter'
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 ring-1 ring-[#22C55E]/40 dark:text-white'
+                          : 'text-emerald-900/75 hover:bg-black/5 dark:text-emerald-100/75 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-black/15 text-[11px] font-bold dark:bg-white/15">
+                        {currentAvatarSpec.letter}
+                      </span>
+                      <span>First Letter</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void updateAvatarStyle('icon')}
+                      className={`glass-pill flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        currentAvatarSpec.mode === 'icon'
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 ring-1 ring-[#22C55E]/40 dark:text-white'
+                          : 'text-emerald-900/75 hover:bg-black/5 dark:text-emerald-100/75 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <UserAvatar
+                        avatar={serializeAvatarSpec({ mode: 'icon', bg: currentAvatarSpec.bg })}
+                        name={self.name}
+                        className="h-5 w-5 rounded-md bg-gradient-to-br from-[#22C55E] to-[#10B981]"
+                      />
+                      <span>Default Icon</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void updateAvatarStyle('image')}
+                      className={`glass-pill flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        currentAvatarSpec.mode === 'image'
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 ring-1 ring-[#22C55E]/40 dark:text-white'
+                          : 'text-emerald-900/75 hover:bg-black/5 dark:text-emerald-100/75 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <Camera className="h-3.5 w-3.5 text-[#22C55E]" />
+                      <span>Custom Image</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">
+                    Avatar Background Color
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {AVATAR_BG_PRESETS.map((preset) => {
+                      const isSelected = currentAvatarSpec.bg === preset.value;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => void updateAvatarBg(preset.value)}
+                          title={preset.label}
+                          style={
+                            preset.value === 'theme'
+                              ? undefined
+                              : { backgroundColor: preset.value }
+                          }
+                          className={`flex h-7 w-7 items-center justify-center rounded-full border transition hover:scale-110 ${
+                            preset.value === 'theme'
+                              ? 'bg-gradient-to-br from-[#22C55E] to-[#10B981] text-[9px] font-bold text-white'
+                              : ''
+                          } ${
+                            isSelected
+                              ? 'border-white ring-2 ring-[#22C55E] ring-offset-2 ring-offset-transparent'
+                              : 'border-white/30'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <Check className="h-3.5 w-3.5 text-white drop-shadow" />
+                          ) : preset.value === 'theme' ? (
+                            'T'
+                          ) : null}
+                        </button>
+                      );
+                    })}
+
+                    <label
+                      title="Custom color"
+                      className="glass-pill flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold text-emerald-900 dark:text-emerald-100"
+                    >
+                      <input
+                        type="color"
+                        value={
+                          currentAvatarSpec.bg !== 'theme'
+                            ? currentAvatarSpec.bg
+                            : '#2563EB'
+                        }
+                        onChange={(e) => void updateAvatarBg(e.target.value)}
+                        className="h-4 w-4 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                      />
+                      <span>Custom</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 border-t border-black/5 pt-3 dark:border-white/10">
               <div>

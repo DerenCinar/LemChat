@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
+import { parseAvatarSpec, serializeAvatarSpec } from '../components/UserAvatar';
 import {
   playNotificationChime,
   startIncomingRingtone,
@@ -688,7 +689,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             id: user.id,
             display_name: fallbackName,
             handle: fallbackHandle,
-            avatar_text: fallbackName.slice(0, 2).toUpperCase(),
+            avatar_text: fallbackName.trim().charAt(0).toUpperCase() || 'U',
             role: 'Member',
             status: 'online',
           })
@@ -1374,19 +1375,37 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  updateSelfProfile: async (displayName, role, avatarUrl) => {
+  updateSelfProfile: async (displayName, role, avatarSpecOrUrl) => {
     const supabase = getSupabaseClient();
     const self = get().self;
     if (!supabase || !self) return;
 
     const cleanName = displayName.trim() || self.name;
     const cleanRole = role.trim() || self.role;
-    const isImageAvatar =
-      self.avatar.startsWith('http://') ||
-      self.avatar.startsWith('https://') ||
-      self.avatar.startsWith('data:image/');
-    const nextAvatar =
-      avatarUrl ?? (isImageAvatar ? self.avatar : cleanName.slice(0, 2).toUpperCase());
+    const currentSpec = parseAvatarSpec(self.avatar, cleanName);
+
+    let nextAvatar: string;
+    if (avatarSpecOrUrl) {
+      if (avatarSpecOrUrl.trim().startsWith('{')) {
+        const parsed = parseAvatarSpec(avatarSpecOrUrl, cleanName);
+        nextAvatar = serializeAvatarSpec({
+          ...parsed,
+          letter: cleanName.charAt(0).toUpperCase(),
+        });
+      } else {
+        nextAvatar = serializeAvatarSpec({
+          mode: 'image',
+          bg: currentSpec.bg,
+          url: avatarSpecOrUrl,
+          letter: cleanName.charAt(0).toUpperCase(),
+        });
+      }
+    } else {
+      nextAvatar = serializeAvatarSpec({
+        ...currentSpec,
+        letter: cleanName.charAt(0).toUpperCase(),
+      });
+    }
 
     set((state) => ({
       self: {
@@ -1440,7 +1459,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .from('lemchat-attachments')
         .getPublicUrl(storagePath);
 
-      await get().updateSelfProfile(self.name, self.role, pub.publicUrl);
+      const currentSpec = parseAvatarSpec(self.avatar, self.name);
+      const nextSerialized = serializeAvatarSpec({
+        mode: 'image',
+        bg: currentSpec.bg,
+        url: pub.publicUrl,
+        letter: self.name.trim().charAt(0).toUpperCase() || 'U',
+      });
+
+      await get().updateSelfProfile(self.name, self.role, nextSerialized);
       return pub.publicUrl;
     } catch (err) {
       console.error('[SkellyTalk] Avatar upload error:', err);
@@ -2040,7 +2067,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           id: convId,
           name: peer?.displayName ?? 'Direct Message',
           type: 'dm',
-          avatar: peer?.avatarText ?? (peer?.displayName?.slice(0, 2).toUpperCase() || 'DM'),
+          avatar: peer?.avatarText ?? (peer?.displayName?.trim().charAt(0).toUpperCase() || 'U'),
           status: peer?.status ?? 'offline',
           peerUserId: targetUserId,
           roleOrTopic: peer?.role ?? 'Direct Message',
