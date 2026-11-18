@@ -72,7 +72,7 @@ export const NavRail: React.FC = () => {
   const statusMeta = STATUS_CONFIG[currentStatus];
 
   return (
-    <aside className="glass-panel glass-rail relative z-20 flex w-[68px] shrink-0 flex-col items-center justify-between rounded-2xl py-3.5">
+    <aside className="glass-panel glass-rail relative z-20 flex w-full shrink-0 flex-row items-center justify-around rounded-2xl px-3 py-2 md:w-[68px] md:flex-col md:justify-between md:px-0 md:py-3.5">
       {/* Top: User Avatar + Live Status Dot */}
       <div className="relative flex flex-col items-center">
         <button
@@ -98,7 +98,7 @@ export const NavRail: React.FC = () => {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -8, scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-              className="glass-panel glass-surface absolute left-14 top-0 z-50 w-48 rounded-2xl p-2"
+              className="glass-panel glass-surface absolute bottom-14 left-0 z-50 w-48 rounded-2xl p-2 md:bottom-auto md:left-14 md:top-0"
             >
               <button
                 onClick={() => {
@@ -144,7 +144,7 @@ export const NavRail: React.FC = () => {
       </div>
 
       {/* Middle: Navigation Tabs with Morphing Active Indicator */}
-      <nav className="flex flex-col items-center gap-2">
+      <nav className="flex flex-row items-center gap-2 md:flex-col">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

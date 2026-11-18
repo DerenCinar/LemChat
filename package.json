@@ -10,6 +10,8 @@
     "build:electron": "tsc -p tsconfig.electron.json",
     "build": "tsc --noEmit && npm run build:electron && vite build",
     "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit"
   },
@@ -51,6 +53,26 @@
         "portable"
         ]
     },
+    "mac": {
+      "icon": "public/assets/icon-512.png",
+      "category": "public.app-category.social-networking",
+      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-Mac-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "public/assets/icon-512.png",
+      "maintainer": "SkellyTalk <support@skellytalk.app>",
+      "category": "Network;InstantMessaging;",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "artifactName": "${productName}-Linux-${version}-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -61,6 +83,8 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
     "@signalapp/libsignal-client": "^0.108.0",
     "@supabase/supabase-js": "^2.119.0",
     "electron-updater": "^6.8.11",
@@ -72,6 +96,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

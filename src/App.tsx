@@ -17,6 +17,7 @@ import { useChatStore } from './store/useChatStore';
 
 export const App: React.FC = () => {
   const activeTab = useChatStore((s) => s.activeTab);
+  const mobileChatOpen = useChatStore((s) => s.mobileChatOpen);
   const session = useChatStore((s) => s.session);
   const initializeApp = useChatStore((s) => s.initializeApp);
   const selectConversation = useChatStore((s) => s.selectConversation);
@@ -54,7 +55,7 @@ export const App: React.FC = () => {
   }, [initializeApp, selectConversation, setSelfStatus, setWindowFocused, setUpdateStatus]);
 
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-white/15">
+    <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden md:rounded-[14px] md:border md:border-white/15">
       <MeshBackground />
       <TitleBar />
       <NotificationToast />
@@ -88,10 +89,32 @@ export const App: React.FC = () => {
       {!session ? (
         <AuthScreen />
       ) : (
-        <main className="relative z-10 flex min-h-0 flex-1 gap-3 px-3 pb-3">
-          <NavRail />
-          {activeTab !== 'settings' && <ConversationSidebar />}
-          {activeTab === 'settings' ? <SettingsView /> : <ChatArea />}
+        <main className="relative z-10 flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 md:flex-row md:gap-3 md:px-3 md:pb-3">
+          <div
+            className={`order-last shrink-0 md:order-first ${
+              mobileChatOpen && activeTab !== 'settings' ? 'hidden md:flex' : 'flex'
+            }`}
+          >
+            <NavRail />
+          </div>
+
+          {activeTab !== 'settings' && (
+            <div
+              className={`min-h-0 ${
+                !mobileChatOpen ? 'flex flex-1 md:flex-initial' : 'hidden md:flex'
+              }`}
+            >
+              <ConversationSidebar />
+            </div>
+          )}
+
+          <div
+            className={`min-h-0 flex-1 ${
+              activeTab === 'settings' || mobileChatOpen ? 'flex' : 'hidden md:flex'
+            }`}
+          >
+            {activeTab === 'settings' ? <SettingsView /> : <ChatArea />}
+          </div>
         </main>
       )}
     </div>

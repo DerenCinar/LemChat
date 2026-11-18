@@ -1,0 +1,6 @@
+{
+  "appId": "com.skellytalk.app",
+  "appName": "SkellyTalk",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

@@ -190,8 +190,8 @@ export const ConversationSidebar: React.FC = () => {
 
   return (
     <aside
-      style={{ width }}
-      className="glass-panel glass-surface relative z-10 flex shrink-0 flex-col rounded-2xl transition-[box-shadow] duration-200"
+      style={{ '--sidebar-w': `${width}px` } as React.CSSProperties}
+      className="glass-panel glass-surface relative z-10 flex w-full flex-1 shrink-0 flex-col rounded-2xl transition-[box-shadow] duration-200 md:w-[var(--sidebar-w)] md:flex-initial"
     >
       <div className="px-3.5 pb-2 pt-3.5">
         <div className="mb-3 flex items-center justify-between">
@@ -262,7 +262,7 @@ export const ConversationSidebar: React.FC = () => {
       <div
         onMouseDown={startResize}
         title="Drag to resize sidebar"
-        className="absolute -right-1.5 top-4 bottom-4 z-20 w-3 cursor-col-resize rounded-full transition-colors hover:bg-[#22C55E]/30"
+        className="absolute -right-1.5 top-4 bottom-4 z-20 hidden w-3 cursor-col-resize rounded-full transition-colors hover:bg-[#22C55E]/30 md:block"
       />
     </aside>
   );

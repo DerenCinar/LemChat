@@ -108,6 +108,7 @@ interface ChatStore {
   isInChatSearchOpen: boolean;
   isInfoPanelOpen: boolean;
   isNewConvModalOpen: boolean;
+  mobileChatOpen: boolean;
   isWindowFocused: boolean;
   selectedProfileId: string | null;
   selectedAttachment: Attachment | null;
@@ -131,6 +132,7 @@ interface ChatStore {
   toggleInChatSearch: () => void;
   toggleInfoPanel: () => void;
   setNewConvModalOpen: (open: boolean) => void;
+  setMobileChatOpen: (open: boolean) => void;
   setWindowFocused: (focused: boolean) => void;
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
@@ -403,6 +405,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isInChatSearchOpen: false,
   isInfoPanelOpen: false,
   isNewConvModalOpen: false,
+  mobileChatOpen: false,
   isWindowFocused: true,
   selectedProfileId: null,
   selectedAttachment: null,
@@ -451,7 +454,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     get().setTheme(next);
   },
 
-  setActiveTab: (activeTab) => set({ activeTab }),
+  setActiveTab: (activeTab) => set({ activeTab, mobileChatOpen: false }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setInChatSearchQuery: (inChatSearchQuery) => set({ inChatSearchQuery }),
   toggleInChatSearch: () =>
@@ -462,6 +465,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   toggleInfoPanel: () =>
     set((state) => ({ isInfoPanelOpen: !state.isInfoPanelOpen })),
   setNewConvModalOpen: (isNewConvModalOpen) => set({ isNewConvModalOpen }),
+  setMobileChatOpen: (mobileChatOpen) => set({ mobileChatOpen }),
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
   setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
@@ -1534,6 +1538,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         conversations: updated,
         activeConversationId: conversationId,
         activeTab: state.activeTab === 'settings' ? 'chats' : state.activeTab,
+        mobileChatOpen: true,
         inChatSearchQuery: '',
         isInChatSearchOpen: false,
       };
@@ -1980,6 +1985,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // Optimistically close modal and open the new group immediately
     set((state) => ({
       isNewConvModalOpen: false,
+      mobileChatOpen: true,
       activeTab: state.activeTab === 'settings' ? 'chats' : state.activeTab,
       activeConversationId: convId,
       conversations: [
@@ -2136,6 +2142,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // Optimistically close modal and select the new DM immediately
     set((state) => ({
       isNewConvModalOpen: false,
+      mobileChatOpen: true,
       activeTab: state.activeTab === 'settings' ? 'chats' : state.activeTab,
       activeConversationId: convId,
       conversations: [

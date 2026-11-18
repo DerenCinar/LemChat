@@ -1,0 +1,17 @@
+{
+  "name": "SkellyTalk",
+  "short_name": "SkellyTalk",
+  "description": "Liquid Glass desktop, mobile, and ChromeOS messaging client",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#090F0C",
+  "theme_color": "#22C55E",
+  "icons": [
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
