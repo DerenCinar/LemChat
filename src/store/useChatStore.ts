@@ -220,6 +220,8 @@ interface DecryptedMessagePayload {
   attachments?: Attachment[];
 }
 
+const DELETED_MESSAGE_MARKER = '[skellytalk:deleted]';
+
 function getSentCacheKey(userId: string): string {
   return `skellytalk_sent_cache_${userId}`;
 }
@@ -253,12 +255,55 @@ function saveSentCacheEntry(
   }
 }
 
+function getDeletedCacheKey(userId: string): string {
+  return `skellytalk_deleted_cache_${userId}`;
+}
+
+function readDeletedCache(
+  userId: string
+): Record<string, { conversationId: string; deletedAt: string; createdAt: string }> {
+  try {
+    const raw = localStorage.getItem(getDeletedCacheKey(userId));
+    return raw
+      ? (JSON.parse(raw) as Record<string, { conversationId: string; deletedAt: string; createdAt: string }>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDeletedCacheEntry(
+  userId: string,
+  messageId: string,
+  conversationId: string,
+  deletedAt: string,
+  createdAt: string
+): void {
+  try {
+    const cache = readDeletedCache(userId);
+    cache[messageId] = { conversationId, deletedAt, createdAt };
+    localStorage.setItem(getDeletedCacheKey(userId), JSON.stringify(cache));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function removeSentCacheEntry(userId: string, messageId: string): void {
+  try {
+    const cache = readSentCache(userId);
+    delete cache[messageId];
+    localStorage.setItem(getSentCacheKey(userId), JSON.stringify(cache));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 async function decryptMessageRow(
   row: DbMessageRow,
   senderId: string,
   selfId?: string
 ): Promise<DecryptedMessagePayload> {
-  if (row.deleted_at) {
+  if (row.deleted_at || row.content === DELETED_MESSAGE_MARKER) {
     return { content: '' };
   }
   if (selfId && senderId === selfId) {
@@ -788,7 +833,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           timestamp: formatTimestamp(msg.created_at),
           createdAt: msg.created_at,
           editedAt: msg.edited_at ?? undefined,
-          deletedAt: msg.deleted_at ?? undefined,
+          deletedAt:
+            msg.deleted_at ??
+            (msg.content === DELETED_MESSAGE_MARKER ? msg.created_at : undefined),
           isMe: msg.sender_id === user.id,
           status: 'read',
           reactions: msgReactions,
@@ -827,7 +874,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .map((c) => {
           const memberRows = membersByConv.get(c.id) ?? [];
           const myMem = memberRows.find((m) => m.user_id === user.id);
-          const msgs = messagesByConv.get(c.id) ?? [];
+          const msgs = [...(messagesByConv.get(c.id) ?? [])];
+          const deletedCache = readDeletedCache(user.id);
+          for (const [messageId, deleted] of Object.entries(deletedCache)) {
+            if (
+              deleted.conversationId === c.id &&
+              !msgs.some((message) => message.id === messageId)
+            ) {
+              msgs.push({
+                id: messageId,
+                conversationId: c.id,
+                senderId: user.id,
+                senderName: selfProfile?.displayName ?? 'You',
+                senderAvatar: selfProfile?.avatarText ?? 'ST',
+                senderRole: selfProfile?.role,
+                content: '',
+                timestamp: formatTimestamp(deleted.deletedAt),
+                createdAt: deleted.createdAt,
+                isMe: true,
+                status: 'read',
+                reactions: [],
+                deletedAt: deleted.deletedAt,
+              });
+            }
+          }
           const lastReadMs = myMem ? new Date(myMem.last_read_at).getTime() : 0;
 
           const unreadCount = myMem
@@ -998,7 +1068,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             timestamp: formatTimestamp(row.created_at),
             createdAt: row.created_at,
             editedAt: row.edited_at ?? undefined,
-            deletedAt: row.deleted_at ?? undefined,
+            deletedAt:
+              row.deleted_at ??
+              (row.content === DELETED_MESSAGE_MARKER ? row.created_at : undefined),
             isMe,
             status: 'read',
             reactions: [],
@@ -1102,7 +1174,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                             codeBlock: decrypted.codeBlock,
                             attachments: decrypted.attachments,
                             editedAt: row.edited_at ?? undefined,
-                            deletedAt: row.deleted_at ?? undefined,
+                            deletedAt:
+                              row.deleted_at ??
+                              (row.content === DELETED_MESSAGE_MARKER
+                                ? row.created_at
+                                : undefined),
                           }
                         : m
                     ),
@@ -1117,10 +1193,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         (payload) => {
           const oldRow = payload.old as { id?: string; conversation_id?: string };
           if (!oldRow.id) return;
+          const deletedAt = new Date().toISOString();
           set((state) => ({
             conversations: state.conversations.map((conv) => ({
               ...conv,
-              messages: conv.messages.filter((m) => m.id !== oldRow.id),
+              messages: conv.messages.map((m) =>
+                m.id === oldRow.id
+                  ? {
+                      ...m,
+                      content: '',
+                      codeBlock: undefined,
+                      attachments: undefined,
+                      deletedAt,
+                    }
+                  : m
+              ),
             })),
           }));
         }
@@ -1882,7 +1969,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         })
         .eq('id', messageId);
       if (updateError) {
-        await get().fetchWorkspaceData();
+        const { error: encryptedFallbackError } = await supabase
+          .from('messages')
+          .update({ content: trimmed })
+          .eq('id', messageId);
+        if (encryptedFallbackError) {
+          await get().fetchWorkspaceData();
+          throw new Error(`Message edit failed: ${encryptedFallbackError.message}`);
+        }
       }
     } else {
       const { error: updateError } = await supabase
@@ -1890,15 +1984,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .update({ content: trimmed, edited_at: editedAt })
         .eq('id', messageId);
       if (updateError) {
-        await get().fetchWorkspaceData();
+        const { error: fallbackError } = await supabase
+          .from('messages')
+          .update({ content: trimmed })
+          .eq('id', messageId);
+        if (fallbackError) {
+          await get().fetchWorkspaceData();
+          throw new Error(`Message edit failed: ${fallbackError.message}`);
+        }
       }
     }
   },
 
   deleteMessage: async (messageId) => {
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    const user = get().session?.user;
+    if (!supabase || !user) return;
     const deletedAt = new Date().toISOString();
+    const existingConv = get().conversations.find((conv) =>
+      conv.messages.some((message) => message.id === messageId)
+    );
+    const existingMessage = existingConv?.messages.find((message) => message.id === messageId);
+    const conversationId = existingConv?.id;
+    const createdAt = existingMessage?.createdAt ?? deletedAt;
 
     set((state) => ({
       conversations: state.conversations.map((conv) => ({
@@ -1917,7 +2025,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })),
     }));
 
-    const { error: deleteError } = await supabase
+    removeSentCacheEntry(user.id, messageId);
+    if (conversationId) {
+      saveDeletedCacheEntry(user.id, messageId, conversationId, deletedAt, createdAt);
+    }
+
+    const { error: softDeleteError } = await supabase
       .from('messages')
       .update({
         content: '',
@@ -1929,9 +2042,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         deleted_at: deletedAt,
       })
       .eq('id', messageId);
-    if (deleteError) {
+    if (!softDeleteError) return;
+
+    // Existing databases may not have the deleted_at column yet. Persist a
+    // deletion marker using columns every message row already has.
+    const { error: markerDeleteError } = await supabase
+      .from('messages')
+      .update({
+        content: DELETED_MESSAGE_MARKER,
+        ciphertext: null,
+        encryption_version: null,
+        ciphertext_type: null,
+        code_block: null,
+        attachments: null,
+      })
+      .eq('id', messageId);
+    if (!markerDeleteError) return;
+
+    const { error: hardDeleteError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+    if (hardDeleteError) {
       await get().fetchWorkspaceData();
-      throw new Error(`Message deletion failed: ${deleteError.message}`);
+      throw new Error(
+        `Message deletion failed: ${softDeleteError.message || hardDeleteError.message}`
+      );
     }
   },
 
