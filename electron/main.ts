@@ -199,7 +199,7 @@ function createWindow(profileId = 'default'): BrowserWindow {
   });
 
   win.on('close', (event) => {
-    if (!isQuitting && process.platform === 'darwin' && win === mainWindow) {
+    if (!isQuitting && win === mainWindow) {
       event.preventDefault();
       win.hide();
     }
@@ -324,7 +324,13 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on('lemchat:window-close', (event) => {
-    BrowserWindow.fromWebContents(event.sender)?.close();
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (!isQuitting && win === mainWindow) {
+      win.hide();
+    } else {
+      win.close();
+    }
   });
 
   ipcMain.handle('lemchat:window-is-maximized', (event) => {

@@ -114,13 +114,16 @@ export const ChatArea: React.FC = () => {
         : 'offline'
       : 'offline';
 
+  const convMembers = activeConv.members ?? [];
+  const convMessages = activeConv.messages ?? [];
+
   const visibleMessages = inChatSearchQuery.trim()
-    ? activeConv.messages.filter((m) =>
+    ? convMessages.filter((m) =>
         m.content.toLowerCase().includes(inChatSearchQuery.toLowerCase())
       )
-    : activeConv.messages;
+    : convMessages;
 
-  const existingMemberIds = new Set(activeConv.members.map((m) => m.id));
+  const existingMemberIds = new Set(convMembers.map((m) => m.id));
   const invitableUsers = Object.values(profiles).filter(
     (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
   );
@@ -393,43 +396,34 @@ export const ChatArea: React.FC = () => {
         </AnimatePresence>
 
         <div className="lem-scrollbar flex-1 overflow-y-auto px-5 py-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeConv.id}
-              initial={{ opacity: 0, y: 8, scale: 0.99 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -6, scale: 0.99 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              className="space-y-3"
-            >
-              {visibleMessages.length === 0 ? (
-                <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
-                  <span className="glass-pill rounded-full px-3.5 py-1.5 text-xs text-emerald-800/70 dark:text-emerald-200/65">
-                    {inChatSearchQuery
-                      ? 'No messages match your search.'
-                      : `This is the start of ${
-                          activeConv.type === 'channel'
-                            ? `#${activeConv.name}`
-                            : activeConv.name
-                        }. Say hello!`}
-                  </span>
-                </div>
-              ) : (
-                visibleMessages.map((msg, index) => {
-                  const prev = visibleMessages[index - 1];
-                  const showHeader = !prev || prev.senderId !== msg.senderId;
-                  return (
-                    <MessageBubble
-                      key={msg.id}
-                      message={msg}
-                      showHeader={showHeader}
-                      highlightQuery={inChatSearchQuery}
-                    />
-                  );
-                })
-              )}
-            </motion.div>
-          </AnimatePresence>
+          <div className="space-y-3">
+            {visibleMessages.length === 0 ? (
+              <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+                <span className="glass-pill rounded-full px-3.5 py-1.5 text-xs text-emerald-800/70 dark:text-emerald-200/65">
+                  {inChatSearchQuery
+                    ? 'No messages match your search.'
+                    : `This is the start of ${
+                        activeConv.type === 'channel'
+                          ? `#${activeConv.name}`
+                          : activeConv.name
+                      }. Say hello!`}
+                </span>
+              </div>
+            ) : (
+              visibleMessages.map((msg, index) => {
+                const prev = visibleMessages[index - 1];
+                const showHeader = !prev || prev.senderId !== msg.senderId;
+                return (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    showHeader={showHeader}
+                    highlightQuery={inChatSearchQuery}
+                  />
+                );
+              })
+            )}
+          </div>
 
           <AnimatePresence>
             {typingState && (
@@ -546,7 +540,7 @@ export const ChatArea: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
-                      Members ({activeConv.members.length})
+                      Members ({convMembers.length})
                     </p>
                     <button
                       onClick={() => setInviteOpen(true)}
@@ -558,7 +552,7 @@ export const ChatArea: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    {activeConv.members.map((member) => {
+                    {convMembers.map((member) => {
                       const isOnline =
                         member.id === self?.id || onlineUserIds.has(member.id);
                       return (
@@ -599,8 +593,8 @@ export const ChatArea: React.FC = () => {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
                   Shared Media &amp; Files
                 </p>
-                {activeConv.messages.some((m) => m.attachments?.length) ? (
-                  activeConv.messages
+                {convMessages.some((m) => m.attachments?.length) ? (
+                  convMessages
                     .flatMap((m) => m.attachments ?? [])
                     .map((att) => (
                       <button

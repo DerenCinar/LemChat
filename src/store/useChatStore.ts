@@ -176,6 +176,9 @@ let dbChannel: RealtimeChannel | null = null;
 let presenceChannel: RealtimeChannel | null = null;
 let callsChannel: RealtimeChannel | null = null;
 let peerConnection: RTCPeerConnection | null = null;
+let fetchInFlight = false;
+let fetchQueued = false;
+let initializedSignalUserId: string | null = null;
 const pendingIceByCall = new Map<string, RTCIceCandidateInit[]>();
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -615,6 +618,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   signOut: async () => {
     const supabase = getSupabaseClient();
     get().cleanupRealtime();
+    initializedSignalUserId = null;
     if (supabase) {
       await supabase.auth.signOut();
     }
@@ -634,254 +638,275 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const user = get().session?.user;
     if (!supabase || !user) return;
 
-    set({ workspaceLoading: true });
-
-    const [profilesRes, convsRes, membersRes, messagesRes, reactionsRes] =
-      await Promise.all([
-        supabase.from('profiles').select('*'),
-        supabase.from('conversations').select('*').order('created_at', { ascending: true }),
-        supabase.from('conversation_members').select('*'),
-        supabase.from('messages').select('*').order('created_at', { ascending: true }),
-        supabase.from('message_reactions').select('*'),
-      ]);
-
-    const profileMap: Record<string, Profile> = {};
-    for (const row of (profilesRes.data ?? []) as DbProfileRow[]) {
-      profileMap[row.id] = {
-        id: row.id,
-        displayName: row.display_name,
-        handle: row.handle,
-        avatarText: row.avatar_text,
-        role: row.role,
-        status: row.status,
-      };
+    if (fetchInFlight) {
+      fetchQueued = true;
+      return;
     }
+    fetchInFlight = true;
 
-    // Ensure self profile exists even if trigger was delayed
-    let selfProfile = profileMap[user.id];
-    if (!selfProfile) {
-      const fallbackName =
-        (user.user_metadata?.display_name as string | undefined) ||
-        user.email?.split('@')[0] ||
-        'SkellyTalk User';
-      const fallbackHandle =
-        (user.user_metadata?.handle as string | undefined) ||
-        `@${fallbackName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${user.id.slice(0, 4)}`;
-
-      const { data: inserted } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          display_name: fallbackName,
-          handle: fallbackHandle,
-          avatar_text: fallbackName.slice(0, 2).toUpperCase(),
-          role: 'Member',
-          status: 'online',
-        })
-        .select()
-        .single();
-
-      if (inserted) {
-        const r = inserted as DbProfileRow;
-        selfProfile = {
-          id: r.id,
-          displayName: r.display_name,
-          handle: r.handle,
-          avatarText: r.avatar_text,
-          role: r.role,
-          status: r.status,
-        };
-        profileMap[r.id] = selfProfile;
+    try {
+      const isInitialLoad = get().self === null && get().conversations.length === 0;
+      if (isInitialLoad) {
+        set({ workspaceLoading: true });
       }
-    }
 
-    const reactionsByMsg = new Map<string, DbReactionRow[]>();
-    for (const rx of (reactionsRes.data ?? []) as DbReactionRow[]) {
-      const arr = reactionsByMsg.get(rx.message_id) ?? [];
-      arr.push(rx);
-      reactionsByMsg.set(rx.message_id, arr);
-    }
+      const [profilesRes, convsRes, membersRes, messagesRes, reactionsRes] =
+        await Promise.all([
+          supabase.from('profiles').select('*'),
+          supabase.from('conversations').select('*').order('created_at', { ascending: true }),
+          supabase.from('conversation_members').select('*'),
+          supabase.from('messages').select('*').order('created_at', { ascending: true }),
+          supabase.from('message_reactions').select('*'),
+        ]);
 
-    const membersByConv = new Map<string, DbMemberRow[]>();
-    for (const mem of (membersRes.data ?? []) as DbMemberRow[]) {
-      const arr = membersByConv.get(mem.conversation_id) ?? [];
-      arr.push(mem);
-      membersByConv.set(mem.conversation_id, arr);
-    }
-
-    const messagesByConv = new Map<string, Message[]>();
-    for (const msg of (messagesRes.data ?? []) as DbMessageRow[]) {
-      const sender = profileMap[msg.sender_id];
-      const msgReactions = buildReactionsList(
-        reactionsByMsg.get(msg.id) ?? [],
-        user.id
-      );
-      const decrypted = await decryptMessageRow(msg, msg.sender_id, user.id);
-
-      const formatted: Message = {
-        id: msg.id,
-        conversationId: msg.conversation_id,
-        senderId: msg.sender_id,
-        senderName: sender?.displayName ?? 'Member',
-        senderAvatar: sender?.avatarText ?? 'ST',
-        senderRole: sender?.role,
-        content: decrypted.content,
-        timestamp: formatTimestamp(msg.created_at),
-        createdAt: msg.created_at,
-        isMe: msg.sender_id === user.id,
-        status: 'read',
-        reactions: msgReactions,
-        codeBlock: decrypted.codeBlock,
-        attachments: decrypted.attachments,
-        isMention: selfProfile
-          ? decrypted.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
-            decrypted.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
-          : false,
-      };
-
-      const arr = messagesByConv.get(msg.conversation_id) ?? [];
-      arr.push(formatted);
-      messagesByConv.set(msg.conversation_id, arr);
-    }
-
-    const convRows = (convsRes.data ?? []) as DbConversationRow[];
-    const legacyGeneralIds: string[] = [];
-
-    const conversations: Conversation[] = convRows
-      .filter((c) => {
-        const members = membersByConv.get(c.id) ?? [];
-        const myMem = members.find((m) => m.user_id === user.id);
-        if (!myMem) return false;
-        // Remove legacy auto-joined #general channel
-        if (
-          c.type === 'channel' &&
-          c.name === 'general' &&
-          c.topic.toLowerCase().includes('lemhand')
-        ) {
-          legacyGeneralIds.push(c.id);
-          return false;
-        }
-        return true;
-      })
-      .map((c) => {
-        const memberRows = membersByConv.get(c.id) ?? [];
-        const myMem = memberRows.find((m) => m.user_id === user.id);
-        const msgs = messagesByConv.get(c.id) ?? [];
-        const lastReadMs = myMem ? new Date(myMem.last_read_at).getTime() : 0;
-
-        const unreadCount = myMem
-          ? msgs.filter(
-              (m) => !m.isMe && new Date(m.createdAt).getTime() > lastReadMs
-            ).length
-          : 0;
-
-        const memberProfiles: Profile[] = memberRows
-          .map((m) => profileMap[m.user_id])
-          .filter((p): p is Profile => Boolean(p));
-
-        let displayName = c.name;
-        let avatar = '#';
-        let peerUserId: string | undefined;
-        let status: Conversation['status'];
-        let roleOrTopic = c.topic;
-
-        if (c.type === 'dm') {
-          const peerMem = memberRows.find((m) => m.user_id !== user.id);
-          const peer = peerMem ? profileMap[peerMem.user_id] : undefined;
-          displayName = peer?.displayName ?? c.name;
-          avatar = peer?.avatarText ?? displayName.slice(0, 2).toUpperCase();
-          peerUserId = peer?.id;
-          status = peer?.status ?? 'offline';
-          roleOrTopic = peer?.role ?? 'Direct Message';
-        }
-
-        return {
-          id: c.id,
-          name: displayName,
-          type: c.type,
-          avatar,
-          status,
-          peerUserId,
-          roleOrTopic,
-          pinned: myMem?.pinned ?? false,
-          unreadCount,
-          membersCount: c.type === 'channel' ? Math.max(memberRows.length, 1) : undefined,
-          members: memberProfiles,
-          lastReadAt: myMem?.last_read_at,
-          messages: msgs,
+      const profileMap: Record<string, Profile> = {};
+      for (const row of (profilesRes.data ?? []) as DbProfileRow[]) {
+        profileMap[row.id] = {
+          id: row.id,
+          displayName: row.display_name,
+          handle: row.handle,
+          avatarText: row.avatar_text,
+          role: row.role,
+          status: row.status,
         };
+      }
+
+      // Ensure self profile exists even if trigger was delayed
+      let selfProfile = profileMap[user.id];
+      if (!selfProfile) {
+        const fallbackName =
+          (user.user_metadata?.display_name as string | undefined) ||
+          user.email?.split('@')[0] ||
+          'SkellyTalk User';
+        const fallbackHandle =
+          (user.user_metadata?.handle as string | undefined) ||
+          `@${fallbackName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${user.id.slice(0, 4)}`;
+
+        const { data: inserted } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            display_name: fallbackName,
+            handle: fallbackHandle,
+            avatar_text: fallbackName.slice(0, 2).toUpperCase(),
+            role: 'Member',
+            status: 'online',
+          })
+          .select()
+          .single();
+
+        if (inserted) {
+          const r = inserted as DbProfileRow;
+          selfProfile = {
+            id: r.id,
+            displayName: r.display_name,
+            handle: r.handle,
+            avatarText: r.avatar_text,
+            role: r.role,
+            status: r.status,
+          };
+          profileMap[r.id] = selfProfile;
+        }
+      }
+
+      const reactionsByMsg = new Map<string, DbReactionRow[]>();
+      for (const rx of (reactionsRes.data ?? []) as DbReactionRow[]) {
+        const arr = reactionsByMsg.get(rx.message_id) ?? [];
+        arr.push(rx);
+        reactionsByMsg.set(rx.message_id, arr);
+      }
+
+      const membersByConv = new Map<string, DbMemberRow[]>();
+      for (const mem of (membersRes.data ?? []) as DbMemberRow[]) {
+        const arr = membersByConv.get(mem.conversation_id) ?? [];
+        arr.push(mem);
+        membersByConv.set(mem.conversation_id, arr);
+      }
+
+      const messagesByConv = new Map<string, Message[]>();
+      for (const msg of (messagesRes.data ?? []) as DbMessageRow[]) {
+        const sender = profileMap[msg.sender_id];
+        const msgReactions = buildReactionsList(
+          reactionsByMsg.get(msg.id) ?? [],
+          user.id
+        );
+        const decrypted = await decryptMessageRow(msg, msg.sender_id, user.id);
+
+        const formatted: Message = {
+          id: msg.id,
+          conversationId: msg.conversation_id,
+          senderId: msg.sender_id,
+          senderName: sender?.displayName ?? 'Member',
+          senderAvatar: sender?.avatarText ?? 'ST',
+          senderRole: sender?.role,
+          content: decrypted.content,
+          timestamp: formatTimestamp(msg.created_at),
+          createdAt: msg.created_at,
+          isMe: msg.sender_id === user.id,
+          status: 'read',
+          reactions: msgReactions,
+          codeBlock: decrypted.codeBlock,
+          attachments: decrypted.attachments,
+          isMention: selfProfile
+            ? decrypted.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
+              decrypted.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
+            : false,
+        };
+
+        const arr = messagesByConv.get(msg.conversation_id) ?? [];
+        arr.push(formatted);
+        messagesByConv.set(msg.conversation_id, arr);
+      }
+
+      const convRows = (convsRes.data ?? []) as DbConversationRow[];
+      const legacyGeneralIds: string[] = [];
+
+      const conversations: Conversation[] = convRows
+        .filter((c) => {
+          const members = membersByConv.get(c.id) ?? [];
+          const myMem = members.find((m) => m.user_id === user.id);
+          if (!myMem) return false;
+          // Remove legacy auto-joined #general channel
+          if (
+            c.type === 'channel' &&
+            c.name === 'general' &&
+            c.topic.toLowerCase().includes('lemhand')
+          ) {
+            legacyGeneralIds.push(c.id);
+            return false;
+          }
+          return true;
+        })
+        .map((c) => {
+          const memberRows = membersByConv.get(c.id) ?? [];
+          const myMem = memberRows.find((m) => m.user_id === user.id);
+          const msgs = messagesByConv.get(c.id) ?? [];
+          const lastReadMs = myMem ? new Date(myMem.last_read_at).getTime() : 0;
+
+          const unreadCount = myMem
+            ? msgs.filter(
+                (m) => !m.isMe && new Date(m.createdAt).getTime() > lastReadMs
+              ).length
+            : 0;
+
+          const memberProfiles: Profile[] = memberRows
+            .map((m) => profileMap[m.user_id])
+            .filter((p): p is Profile => Boolean(p));
+
+          let displayName = c.name;
+          let avatar = '#';
+          let peerUserId: string | undefined;
+          let status: Conversation['status'];
+          let roleOrTopic = c.topic;
+
+          if (c.type === 'dm') {
+            const peerMem = memberRows.find((m) => m.user_id !== user.id);
+            const peer = peerMem ? profileMap[peerMem.user_id] : undefined;
+            displayName = peer?.displayName ?? c.name;
+            avatar = peer?.avatarText ?? displayName.slice(0, 2).toUpperCase();
+            peerUserId = peer?.id;
+            status = peer?.status ?? 'offline';
+            roleOrTopic = peer?.role ?? 'Direct Message';
+          }
+
+          return {
+            id: c.id,
+            name: displayName,
+            type: c.type,
+            avatar,
+            status,
+            peerUserId,
+            roleOrTopic,
+            pinned: myMem?.pinned ?? false,
+            unreadCount,
+            membersCount: c.type === 'channel' ? Math.max(memberRows.length, 1) : undefined,
+            members: memberProfiles,
+            lastReadAt: myMem?.last_read_at,
+            messages: msgs,
+          };
+        });
+
+      if (legacyGeneralIds.length > 0) {
+        void supabase
+          .from('conversation_members')
+          .delete()
+          .in('conversation_id', legacyGeneralIds)
+          .eq('user_id', user.id);
+      }
+
+      const currentActive = get().activeConversationId;
+      const nextActiveId =
+        currentActive && conversations.some((c) => c.id === currentActive)
+          ? currentActive
+          : conversations[0]?.id ?? null;
+
+      set({
+        workspaceLoading: false,
+        profiles: profileMap,
+        conversations,
+        activeConversationId: nextActiveId,
+        self: selfProfile
+          ? {
+              id: selfProfile.id,
+              name: selfProfile.displayName,
+              handle: selfProfile.handle,
+              role: selfProfile.role,
+              avatar: selfProfile.avatarText,
+              status: selfProfile.status,
+            }
+          : null,
       });
 
-    if (legacyGeneralIds.length > 0) {
-      void supabase
-        .from('conversation_members')
-        .delete()
-        .in('conversation_id', legacyGeneralIds)
-        .eq('user_id', user.id);
-    }
-
-    const currentActive = get().activeConversationId;
-    const nextActiveId =
-      currentActive && conversations.some((c) => c.id === currentActive)
-        ? currentActive
-        : conversations[0]?.id ?? null;
-
-    set({
-      workspaceLoading: false,
-      profiles: profileMap,
-      conversations,
-      activeConversationId: nextActiveId,
-      self: selfProfile
-        ? {
-            id: selfProfile.id,
-            name: selfProfile.displayName,
-            handle: selfProfile.handle,
-            role: selfProfile.role,
-            avatar: selfProfile.avatarText,
-            status: selfProfile.status,
-          }
-        : null,
-    });
-
-    if (selfProfile) {
-      window.lemchat?.updateUserStatus(selfProfile.status);
-      if (window.lemchat?.signalInitialize) {
-        void window.lemchat
-          .signalInitialize()
-          .then(async (result) => {
-            const initialized = result as {
-              publicBundle: {
-                identityKey: string;
-                registrationId: number;
-                signedPreKeyId: number;
-                signedPreKey: string;
-                signedPreKeySignature: string;
-                kyberPreKeyId: number;
-                kyberPreKey: string;
-                kyberPreKeySignature: string;
-                oneTimePreKeys: Array<{ id: number; publicKey: string }>;
+      if (selfProfile) {
+        window.lemchat?.updateUserStatus(selfProfile.status);
+        if (window.lemchat?.signalInitialize && initializedSignalUserId !== user.id) {
+          initializedSignalUserId = user.id;
+          void window.lemchat
+            .signalInitialize()
+            .then(async (result) => {
+              const initialized = result as {
+                publicBundle: {
+                  identityKey: string;
+                  registrationId: number;
+                  signedPreKeyId: number;
+                  signedPreKey: string;
+                  signedPreKeySignature: string;
+                  kyberPreKeyId: number;
+                  kyberPreKey: string;
+                  kyberPreKeySignature: string;
+                  oneTimePreKeys: Array<{ id: number; publicKey: string }>;
+                };
               };
-            };
-            await supabase.from('signal_key_bundles').upsert({
-              user_id: user.id,
-              identity_key: initialized.publicBundle.identityKey,
-              registration_id: initialized.publicBundle.registrationId,
-              signed_pre_key_id: initialized.publicBundle.signedPreKeyId,
-              signed_pre_key: initialized.publicBundle.signedPreKey,
-              signed_pre_key_signature: initialized.publicBundle.signedPreKeySignature,
-              kyber_pre_key_id: initialized.publicBundle.kyberPreKeyId,
-              kyber_pre_key: initialized.publicBundle.kyberPreKey,
-              kyber_pre_key_signature: initialized.publicBundle.kyberPreKeySignature,
-              one_time_pre_keys: initialized.publicBundle.oneTimePreKeys,
-              updated_at: new Date().toISOString(),
+              await supabase.from('signal_key_bundles').upsert({
+                user_id: user.id,
+                identity_key: initialized.publicBundle.identityKey,
+                registration_id: initialized.publicBundle.registrationId,
+                signed_pre_key_id: initialized.publicBundle.signedPreKeyId,
+                signed_pre_key: initialized.publicBundle.signedPreKey,
+                signed_pre_key_signature: initialized.publicBundle.signedPreKeySignature,
+                kyber_pre_key_id: initialized.publicBundle.kyberPreKeyId,
+                kyber_pre_key: initialized.publicBundle.kyberPreKey,
+                kyber_pre_key_signature: initialized.publicBundle.kyberPreKeySignature,
+                one_time_pre_keys: initialized.publicBundle.oneTimePreKeys,
+                updated_at: new Date().toISOString(),
+              });
+            })
+            .catch((err) => {
+              console.warn('[SkellyTalk] Signal key bundle sync skipped:', err);
             });
-          })
-          .catch((err) => {
-            console.warn('[SkellyTalk] Signal key bundle sync skipped:', err);
-          });
+        }
+      }
+      window.lemchat?.updateBadgeCount(computeTotalUnread(conversations));
+    } catch (err) {
+      console.error('[SkellyTalk] fetchWorkspaceData error:', err);
+      set({ workspaceLoading: false });
+    } finally {
+      fetchInFlight = false;
+      if (fetchQueued) {
+        fetchQueued = false;
+        void get().fetchWorkspaceData();
       }
     }
-    window.lemchat?.updateBadgeCount(computeTotalUnread(conversations));
   },
 
   subscribeRealtime: () => {
@@ -1105,7 +1130,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversation_members' },
+        { event: 'INSERT', schema: 'public', table: 'conversation_members' },
+        () => {
+          void get().fetchWorkspaceData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'conversation_members' },
         () => {
           void get().fetchWorkspaceData();
         }
@@ -1833,6 +1865,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!cleanName) return null;
 
     const convId = crypto.randomUUID();
+    const uniqueInvites = Array.from(
+      new Set(invitedUserIds.filter((id) => id && id !== userId))
+    );
+    const profilesMap = get().profiles;
+    const memberProfiles: Profile[] = [userId, ...uniqueInvites]
+      .map((id) => profilesMap[id])
+      .filter((p): p is Profile => Boolean(p));
+
+    // Optimistically close modal and open the new group immediately
+    set((state) => ({
+      isNewConvModalOpen: false,
+      activeTab: state.activeTab === 'settings' ? 'chats' : state.activeTab,
+      activeConversationId: convId,
+      conversations: [
+        ...state.conversations,
+        {
+          id: convId,
+          name: cleanName,
+          type: 'channel',
+          avatar: '#',
+          roleOrTopic: topic.trim() || 'Group chat',
+          pinned: false,
+          unreadCount: 0,
+          membersCount: Math.max(memberProfiles.length, 1),
+          members: memberProfiles,
+          messages: [],
+        },
+      ],
+    }));
+
     try {
       const { error } = await supabase.from('conversations').insert({
         id: convId,
@@ -1863,10 +1925,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         return null;
       }
 
-      const uniqueInvites = Array.from(
-        new Set(invitedUserIds.filter((id) => id && id !== userId))
-      );
-
       if (uniqueInvites.length > 0) {
         await supabase.from('conversation_members').upsert(
           uniqueInvites.map((uid) => ({
@@ -1884,8 +1942,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
       }
 
-      await get().fetchWorkspaceData();
-      await get().selectConversation(convId);
       return convId;
     } catch (err) {
       console.error('[SkellyTalk] createChannel error:', err);
@@ -1967,7 +2023,34 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     const peer = get().profiles[targetUserId];
+    const selfProfile = get().profiles[userId];
     const convId = crypto.randomUUID();
+    const memberProfiles: Profile[] = [selfProfile, peer].filter(
+      (p): p is Profile => Boolean(p)
+    );
+
+    // Optimistically close modal and select the new DM immediately
+    set((state) => ({
+      isNewConvModalOpen: false,
+      activeTab: state.activeTab === 'settings' ? 'chats' : state.activeTab,
+      activeConversationId: convId,
+      conversations: [
+        ...state.conversations,
+        {
+          id: convId,
+          name: peer?.displayName ?? 'Direct Message',
+          type: 'dm',
+          avatar: peer?.avatarText ?? (peer?.displayName?.slice(0, 2).toUpperCase() || 'DM'),
+          status: peer?.status ?? 'offline',
+          peerUserId: targetUserId,
+          roleOrTopic: peer?.role ?? 'Direct Message',
+          pinned: false,
+          unreadCount: 0,
+          members: memberProfiles,
+          messages: [],
+        },
+      ],
+    }));
 
     try {
       // Insert conversation without chaining .select().single() so RLS doesn't reject before membership exists
@@ -2013,8 +2096,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         payload: { conversationId: convId, userIds: [targetUserId] },
       });
 
-      await get().fetchWorkspaceData();
-      await get().selectConversation(convId);
       return convId;
     } catch (err) {
       console.error('[SkellyTalk] startDirectMessage error:', err);

@@ -146,8 +146,8 @@ export const AuthScreen: React.FC = () => {
       >
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-base font-bold text-white shadow-lem-glow">
-              S
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-xl leading-none text-white shadow-lem-glow">
+              💀
             </div>
             <div>
               <h1 className="text-lg font-bold text-emerald-950 dark:text-white">

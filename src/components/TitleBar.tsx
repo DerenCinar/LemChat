@@ -52,8 +52,8 @@ export const TitleBar: React.FC = () => {
         )}
 
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#22C55E] to-[#10B981] text-xs font-bold text-white shadow-lem-glow-sm">
-            S
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#22C55E] to-[#10B981] text-sm leading-none text-white shadow-lem-glow-sm">
+            💀
           </div>
           <span className="text-xs font-semibold tracking-wide text-emerald-950/90 dark:text-emerald-50/95">
             SkellyTalk

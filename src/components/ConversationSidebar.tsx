@@ -76,7 +76,8 @@ export const ConversationSidebar: React.FC = () => {
 
   const renderItem = (conv: Conversation) => {
     const isActive = conv.id === activeConversationId && activeTab !== 'settings';
-    const lastMessage = conv.messages[conv.messages.length - 1];
+    const msgs = conv.messages ?? [];
+    const lastMessage = msgs[msgs.length - 1];
     const typing = typingConversations[conv.id];
     const peerPresence: UserPresence =
       conv.type === 'dm' && conv.peerUserId
