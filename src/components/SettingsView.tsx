@@ -12,6 +12,8 @@ import {
   Sparkles,
   RefreshCw,
   Camera,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import {
@@ -46,6 +48,10 @@ export const SettingsView: React.FC = () => {
   const updateStatus = useChatStore((s) => s.updateStatus);
   const checkForUpdates = useChatStore((s) => s.checkForUpdates);
   const installUpdate = useChatStore((s) => s.installUpdate);
+  const liquidGlass = useChatStore((s) => s.liquidGlass);
+  const setLiquidGlass = useChatStore((s) => s.setLiquidGlass);
+  const resetLiquidGlass = useChatStore((s) => s.resetLiquidGlass);
+  const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
   const updateSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [displayName, setDisplayName] = useState(self?.name ?? '');
@@ -53,10 +59,32 @@ export const SettingsView: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [themeCode, setThemeCode] = useState('');
+  const identityKey = self ? `skellytalk_identity_${self.id}` : 'skellytalk_identity';
+  const [pronouns, setPronouns] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem(identityKey) || '{}') as { pronouns?: string }).pronouns || ''; } catch { return ''; }
+  });
+  const [bio, setBio] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem(identityKey) || '{}') as { bio?: string }).bio || ''; } catch { return ''; }
+  });
+  const [activity, setActivity] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem(identityKey) || '{}') as { activity?: string }).activity || ''; } catch { return ''; }
+  });
+  const [statusText, setStatusText] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem(identityKey) || '{}') as { statusText?: string }).statusText || ''; } catch { return ''; }
+  });
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     await updateSelfProfile(displayName, role);
+    if (self) {
+      localStorage.setItem(`skellytalk_identity_${self.id}`, JSON.stringify({
+        pronouns,
+        bio,
+        activity,
+        statusText,
+      }));
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
   };
@@ -92,6 +120,42 @@ export const SettingsView: React.FC = () => {
       bg,
     });
     await updateSelfProfile(displayName || self.name, role || self.role, nextSpec);
+  };
+
+  const handleWallpaper = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      setThemeCode('Wallpaper must be smaller than 4 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLiquidGlass({ wallpaper: String(reader.result ?? '') });
+    reader.readAsDataURL(file);
+  };
+
+  const exportTheme = () => {
+    const payload = JSON.stringify({
+      theme,
+      chatFont,
+      chatFontSize,
+      liquidGlass,
+    });
+    const code = btoa(unescape(encodeURIComponent(payload)));
+    setThemeCode(code);
+  };
+
+  const importTheme = () => {
+    try {
+      const payload = JSON.parse(decodeURIComponent(escape(atob(themeCode.trim()))));
+      if (!payload.liquidGlass) throw new Error('Invalid theme code');
+      setTheme(payload.theme);
+      setChatFont(payload.chatFont);
+      setChatFontSize(payload.chatFontSize);
+      importLiquidGlass(payload.liquidGlass);
+      setThemeCode('Theme imported.');
+    } catch {
+      setThemeCode('Invalid theme code.');
+    }
   };
 
   return (
@@ -336,6 +400,25 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Pronouns</span>
+                <input value={pronouns} onChange={(e) => setPronouns(e.target.value)} placeholder="they/them" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Listening / Playing</span>
+                <input value={activity} onChange={(e) => setActivity(e.target.value)} placeholder="Listening to Midnight FM" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+              </label>
+              <label className="space-y-1 sm:col-span-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Short bio</span>
+                <input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="A short profile bio" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+              </label>
+              <label className="space-y-1 sm:col-span-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Custom status</span>
+                <input value={statusText} onChange={(e) => setStatusText(e.target.value)} placeholder="🎮 Grinding ranked" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+              </label>
+            </div>
+
             <div className="flex justify-end">
               <motion.button
                 whileTap={{ scale: 0.96 }}
@@ -465,6 +548,159 @@ export const SettingsView: React.FC = () => {
                 </div>
               </motion.button>
             ))}
+          </div>
+        </div>
+
+        <div className="glass-pill space-y-4 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Live Liquid Glass
+            </h2>
+            <button
+              type="button"
+              onClick={resetLiquidGlass}
+              className="text-[10px] font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
+            >
+              Reset
+            </button>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {([
+              ['blur', 'Blur intensity', 0, 48, 'px'],
+              ['opacity', 'Glass opacity', 35, 95, '%'],
+              ['borderGlow', 'Border glow', 0, 50, '%'],
+              ['roundness', 'Corner roundness', 4, 36, 'px'],
+            ] as const).map(([key, label, min, max, unit]) => (
+              <label key={key} className="space-y-1.5">
+                <span className="flex justify-between text-[11px] font-semibold text-emerald-950 dark:text-white">
+                  {label}
+                  <span className="text-[#22C55E]">{liquidGlass[key]}{unit}</span>
+                </span>
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  value={liquidGlass[key]}
+                  onChange={(e) => setLiquidGlass({ [key]: Number(e.target.value) })}
+                  className="accent-[#22C55E] w-full"
+                />
+              </label>
+            ))}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] text-emerald-950 dark:text-white">
+              <input
+                type="color"
+                value={liquidGlass.accent}
+                onChange={(e) => setLiquidGlass({ accent: e.target.value })}
+                className="h-7 w-7 cursor-pointer rounded-lg border-0 bg-transparent"
+              />
+              Accent
+            </label>
+            <label className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] text-emerald-950 dark:text-white">
+              <input
+                type="color"
+                value={liquidGlass.bubbleColor}
+                onChange={(e) => setLiquidGlass({ bubbleColor: e.target.value })}
+                className="h-7 w-7 cursor-pointer rounded-lg border-0 bg-transparent"
+              />
+              Bubble
+            </label>
+            <label className="glass-pill flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] text-emerald-950 dark:text-white">
+              Ambient motion
+              <input
+                type="checkbox"
+                checked={liquidGlass.ambientMotion}
+                onChange={(e) => setLiquidGlass({ ambientMotion: e.target.checked })}
+                className="accent-[#22C55E]"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {(['cozy', 'compact', 'minimal'] as const).map((density) => (
+              <button
+                key={density}
+                type="button"
+                onClick={() => setLiquidGlass({ density })}
+                className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize ${
+                  liquidGlass.density === density
+                    ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 dark:text-white'
+                    : 'text-emerald-900/70 dark:text-emerald-100/70'
+                }`}
+              >
+                {density}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="glass-pill flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-emerald-900 dark:text-emerald-100">
+              <Upload className="h-3.5 w-3.5" />
+              Upload wallpaper
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleWallpaper(e.target.files?.[0])}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setLiquidGlass({ wallpaper: '' })}
+              disabled={!liquidGlass.wallpaper}
+              className="glass-pill rounded-xl px-3 py-2 text-[11px] font-semibold text-emerald-900 disabled:opacity-50 dark:text-emerald-100"
+            >
+              Use mesh gradient
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">
+              Quick reaction bar
+            </p>
+            <div className="grid grid-cols-6 gap-1.5">
+              {liquidGlass.quickReactions.map((emoji, index) => (
+                <input
+                  key={index}
+                  value={emoji}
+                  maxLength={8}
+                  onChange={(e) => {
+                    const next = [...liquidGlass.quickReactions];
+                    next[index] = e.target.value;
+                    setLiquidGlass({ quickReactions: next });
+                  }}
+                  className="glass-pill w-full rounded-xl py-2 text-center text-sm outline-none"
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input
+              value={themeCode}
+              onChange={(e) => setThemeCode(e.target.value)}
+              placeholder="Theme code"
+              className="glass-pill min-w-0 rounded-xl px-3 py-2 text-[11px] outline-none"
+            />
+            <button
+              type="button"
+              onClick={exportTheme}
+              className="glass-pill flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={importTheme}
+              className="glass-pill flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Import
+            </button>
           </div>
         </div>
 

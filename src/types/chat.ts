@@ -16,6 +16,20 @@ export type ChatFont = 'system' | 'inter' | 'rounded' | 'mono';
 export type ChatFontSize = 'small' | 'medium' | 'large';
 export type ProfanityFilter = 'off' | 'mild' | 'strict';
 export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member';
+export type BubbleDensity = 'cozy' | 'compact' | 'minimal';
+
+export interface LiquidGlassTheme {
+  blur: number;
+  opacity: number;
+  borderGlow: number;
+  roundness: number;
+  accent: string;
+  bubbleColor: string;
+  density: BubbleDensity;
+  ambientMotion: boolean;
+  wallpaper: string;
+  quickReactions: string[];
+}
 
 export interface Reaction {
   emoji: string;
@@ -100,6 +114,12 @@ export interface Profile {
   avatarText: string;
   role: string;
   status: SelfPresence;
+  pronouns?: string;
+  bio?: string;
+  activity?: string;
+  statusText?: string;
+  banner?: string;
+  nameplate?: string;
 }
 
 export interface SelfProfile {
@@ -109,6 +129,13 @@ export interface SelfProfile {
   role: string;
   avatar: string;
   status: SelfPresence;
+  pronouns?: string;
+  bio?: string;
+  activity?: string;
+  statusText?: string;
+  statusExpiresAt?: number;
+  banner?: string;
+  nameplate?: string;
 }
 
 export type CallMode = 'audio' | 'video';

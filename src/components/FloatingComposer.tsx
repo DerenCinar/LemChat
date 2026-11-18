@@ -148,15 +148,28 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 
   const handleSend = async () => {
     if (sending) return;
+    if (text.trim() === '/clear') {
+      setText('');
+      setStagedUploads([]);
+      setCodeText('');
+      setShowCodeEditor(false);
+      setSelectedGif(null);
+      return;
+    }
     const hasCode = showCodeEditor && codeText.trim().length > 0;
     if (!text.trim() && stagedUploads.length === 0 && !hasCode && !selectedGif) return;
+    const outgoingText = text.trim() === '/shrug'
+      ? '¯\\_(ツ)_/¯'
+      : text.trim().startsWith('/shrug ')
+        ? `¯\\_(ツ)_/¯ ${text.trim().slice(7)}`
+        : text;
 
     setSending(true);
     setSendError(null);
     setSendPulseKey((k) => k + 1);
     try {
       await sendMessage(
-        text,
+        outgoingText,
         stagedUploads.length > 0 ? stagedUploads : undefined,
         hasCode ? { language: codeLang, code: codeText } : undefined,
         selectedGif ?? undefined

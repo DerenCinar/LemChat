@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --glass-blur: 24px;
+  --glass-opacity: 0.72;
+  --glass-border-glow: 0.14;
+  --glass-radius: 24px;
+  --glass-accent: #22C55E;
+  --glass-bubble: #10B981;
+}
+
+html[data-ambient-motion="false"] .animate-mesh-slow,
+html[data-ambient-motion="false"] .animate-mesh-slow-rev {
+  animation: none !important;
+}
+
 @media (max-width: 767px) {
   body {
     overscroll-behavior: none;
@@ -70,17 +84,18 @@ html[data-chat-font-size="large"] { font-size: 18px !important; }
 
 /* Liquid Glass Design System */
 .glass-panel {
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border-radius: var(--glass-radius);
 }
 
 .dark .glass-surface {
   background: linear-gradient(
     145deg,
-    rgba(16, 32, 24, 0.62) 0%,
-    rgba(9, 15, 12, 0.72) 100%
+    rgba(16, 32, 24, var(--glass-opacity)) 0%,
+    rgba(9, 15, 12, calc(var(--glass-opacity) + 0.08)) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-glow) + 0.08));
   box-shadow:
     0 10px 36px -6px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
@@ -140,8 +155,8 @@ html:not(.dark) .glass-pill {
 .glass-bubble-sent {
   background: linear-gradient(
     135deg,
-    rgba(34, 197, 94, 0.88) 0%,
-    rgba(16, 185, 129, 0.84) 100%
+    color-mix(in srgb, var(--glass-accent) 88%, transparent) 0%,
+    color-mix(in srgb, var(--glass-bubble) 84%, transparent) 100%
   );
   border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow:
@@ -171,6 +186,24 @@ html:not(.dark) .glass-bubble-received {
   box-shadow:
     0 6px 18px -6px rgba(6, 78, 59, 0.1),
     inset 0 1px 0 0 rgba(255, 255, 255, 1);
+}
+
+html[data-bubble-density="compact"] [data-message-row] {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+
+html[data-bubble-density="minimal"] [data-message-row] {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+html[data-bubble-density="minimal"] [data-message-bubble] {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  border-radius: var(--glass-radius);
 }
 
 /* Custom sleek scrollbar */

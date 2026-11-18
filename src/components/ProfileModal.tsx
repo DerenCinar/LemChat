@@ -27,6 +27,14 @@ export const ProfileModal: React.FC = () => {
 
   const profile = selectedProfileId ? profiles[selectedProfileId] : null;
   const isSelf = Boolean(self && selectedProfileId === self.id);
+  let identity: { pronouns?: string; bio?: string; activity?: string; statusText?: string } = {};
+  if (profile) {
+    try {
+      identity = JSON.parse(localStorage.getItem(`skellytalk_identity_${profile.id}`) || '{}');
+    } catch {
+      identity = {};
+    }
+  }
 
   const presence: UserPresence = profile
     ? isSelf
@@ -108,6 +116,14 @@ export const ProfileModal: React.FC = () => {
               <p className="text-xs font-medium text-emerald-800/70 dark:text-emerald-200/65">
                 {profile.handle}
               </p>
+              {(identity.pronouns || identity.statusText || identity.bio || identity.activity) && (
+                <div className="mt-2 space-y-1 text-[11px] text-emerald-800/70 dark:text-emerald-200/65">
+                  {identity.pronouns && <p>{identity.pronouns}</p>}
+                  {identity.statusText && <p className="font-semibold text-emerald-900 dark:text-emerald-100">{identity.statusText}</p>}
+                  {identity.bio && <p>{identity.bio}</p>}
+                  {identity.activity && <p className="text-[#22C55E]">{identity.activity}</p>}
+                </div>
+              )}
               <span className="glass-pill mt-2 rounded-full px-3 py-1 text-[11px] font-medium text-emerald-900 dark:text-emerald-100">
                 {profile.role ? `${profile.role} · ` : ''}{statusMeta.label}
               </span>

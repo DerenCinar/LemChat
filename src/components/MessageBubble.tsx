@@ -15,7 +15,22 @@ import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
 import type { Message } from '../types/chat';
 
-const QUICK_REACTIONS = ['💚', '🔥', '🚀', '✨', '👍', '👀'];
+const SpoilerText: React.FC<{ text: string }> = ({ text }) => {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => setRevealed(true)}
+      className={`rounded px-1 transition ${
+        revealed
+          ? 'bg-transparent'
+          : 'select-none bg-black/35 text-transparent blur-[5px] hover:bg-black/45'
+      }`}
+    >
+      {text}
+    </button>
+  );
+};
 
 interface MessageBubbleProps {
   message: Message;
@@ -43,6 +58,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
   const self = useChatStore((s) => s.self);
+  const quickReactions = useChatStore((s) => s.liquidGlass.quickReactions);
 
   const handleCopyCode = () => {
     if (!message.codeBlock) return;
@@ -78,6 +94,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         part
       )
     );
+  };
+
+  const renderFormattedContent = (text: string) => {
+    const highlighted = renderHighlightedContent(text);
+    const nodes = React.Children.toArray(highlighted);
+    return nodes.flatMap((node, nodeIndex) => {
+      if (typeof node !== 'string') return [node];
+      const spoilerParts = node.split(/(\|\|[^|]+\|\|)/g);
+      return spoilerParts.map((part, index) => {
+        if (part.startsWith('||') && part.endsWith('||')) {
+          const secret = part.slice(2, -2);
+          return (
+            <SpoilerText key={`${nodeIndex}-${index}`} text={secret} />
+          );
+        }
+        const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+        return boldParts.map((boldPart, boldIndex) =>
+          boldPart.startsWith('**') && boldPart.endsWith('**') ? (
+            <strong key={`${nodeIndex}-${index}-${boldIndex}`}>{boldPart.slice(2, -2)}</strong>
+          ) : (
+            boldPart
+          )
+        );
+      });
+    });
   };
 
   // Parse quoted reply prefix (`> Author: quote\n\nBody`)
@@ -151,7 +192,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             message.isMe ? 'right-0' : 'left-0'
           }`}
         >
-          {QUICK_REACTIONS.map((emoji) => (
+          {quickReactions.map((emoji) => (
             <button
               key={emoji}
               onClick={() => {
@@ -172,6 +213,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     <motion.div
       id={`message-${message.id}`}
       data-message-id={message.id}
+      data-message-row
       layout
       initial={{
         opacity: 0,
@@ -243,6 +285,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <motion.div
             whileHover={{ scale: 1.01 }}
             transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+            data-message-bubble
             className={`glass-panel relative overflow-hidden rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text ${
               message.isMe
                 ? 'glass-bubble-sent rounded-tr-md text-white'
@@ -304,7 +347,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <p className="italic opacity-65">This message was deleted</p>
               ) : bodyContent && (
                 <p className="whitespace-pre-wrap break-words">
-                  {renderHighlightedContent(bodyContent)}
+                  {renderFormattedContent(bodyContent)}
                 </p>
               )
             )}

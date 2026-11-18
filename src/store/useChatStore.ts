@@ -29,6 +29,7 @@ import type {
   ChatFontSize,
   ProfanityFilter,
   MemberRole,
+  LiquidGlassTheme,
 } from '../types/chat';
 
 const getContactAliasKey = (userId: string) => `lemchat_contact_aliases_${userId}`;
@@ -126,6 +127,7 @@ interface ChatStore {
   chatFont: ChatFont;
   chatFontSize: ChatFontSize;
   profanityFilter: ProfanityFilter;
+  liquidGlass: LiquidGlassTheme;
   activeTab: NavTab;
   configured: boolean;
   session: Session | null;
@@ -166,6 +168,9 @@ interface ChatStore {
   setChatFont: (font: ChatFont) => void;
   setChatFontSize: (size: ChatFontSize) => void;
   setProfanityFilter: (filter: ProfanityFilter) => void;
+  setLiquidGlass: (patch: Partial<LiquidGlassTheme>) => void;
+  resetLiquidGlass: () => void;
+  importLiquidGlass: (theme: LiquidGlassTheme) => void;
   toggleTheme: () => void;
   setActiveTab: (tab: NavTab) => void;
   setSearchQuery: (query: string) => void;
@@ -501,11 +506,49 @@ document.documentElement.dataset.chatFont =
 document.documentElement.dataset.chatFontSize =
   localStorage.getItem('skellytalk_font_size') || 'medium';
 
+const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
+  blur: 24,
+  opacity: 72,
+  borderGlow: 14,
+  roundness: 24,
+  accent: '#22C55E',
+  bubbleColor: '#10B981',
+  density: 'cozy',
+  ambientMotion: true,
+  wallpaper: '',
+  quickReactions: ['💚', '🔥', '🚀', '✨', '👍', '👀'],
+};
+
+const readLiquidGlass = (): LiquidGlassTheme => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('skellytalk_liquid_glass') || '{}') as Partial<LiquidGlassTheme>;
+    return { ...DEFAULT_LIQUID_GLASS, ...parsed };
+  } catch {
+    return { ...DEFAULT_LIQUID_GLASS };
+  }
+};
+
+const applyLiquidGlass = (theme: LiquidGlassTheme) => {
+  const root = document.documentElement;
+  root.style.setProperty('--glass-blur', `${theme.blur}px`);
+  root.style.setProperty('--glass-opacity', String(theme.opacity / 100));
+  root.style.setProperty('--glass-border-glow', `${theme.borderGlow / 100}`);
+  root.style.setProperty('--glass-radius', `${theme.roundness}px`);
+  root.style.setProperty('--glass-accent', theme.accent);
+  root.style.setProperty('--glass-bubble', theme.bubbleColor);
+  root.dataset.bubbleDensity = theme.density;
+  root.dataset.ambientMotion = theme.ambientMotion ? 'true' : 'false';
+};
+
+const savedLiquidGlass = readLiquidGlass();
+applyLiquidGlass(savedLiquidGlass);
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   theme: savedTheme,
   chatFont: (localStorage.getItem('skellytalk_font') as ChatFont) || 'system',
   chatFontSize: (localStorage.getItem('skellytalk_font_size') as ChatFontSize) || 'medium',
   profanityFilter: (localStorage.getItem('skellytalk_profanity') as ProfanityFilter) || 'off',
+  liquidGlass: savedLiquidGlass,
   activeTab: 'chats',
   configured: isSupabaseConfigured(),
   session: null,
@@ -575,6 +618,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setProfanityFilter: (profanityFilter) => {
     localStorage.setItem('skellytalk_profanity', profanityFilter);
     set({ profanityFilter });
+  },
+  setLiquidGlass: (patch) => {
+    const next = { ...get().liquidGlass, ...patch };
+    localStorage.setItem('skellytalk_liquid_glass', JSON.stringify(next));
+    applyLiquidGlass(next);
+    set({ liquidGlass: next });
+  },
+  resetLiquidGlass: () => {
+    const next = { ...DEFAULT_LIQUID_GLASS, quickReactions: [...DEFAULT_LIQUID_GLASS.quickReactions] };
+    localStorage.setItem('skellytalk_liquid_glass', JSON.stringify(next));
+    applyLiquidGlass(next);
+    set({ liquidGlass: next });
+  },
+  importLiquidGlass: (theme) => {
+    const next = { ...DEFAULT_LIQUID_GLASS, ...theme };
+    localStorage.setItem('skellytalk_liquid_glass', JSON.stringify(next));
+    applyLiquidGlass(next);
+    set({ liquidGlass: next });
   },
 
   toggleTheme: () => {

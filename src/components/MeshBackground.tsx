@@ -3,6 +3,28 @@ import { useChatStore } from '../store/useChatStore';
 
 export const MeshBackground: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
+  const liquidGlass = useChatStore((s) => s.liquidGlass);
+
+  if (liquidGlass.wallpaper) {
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 overflow-hidden transition-colors duration-500"
+        style={{
+          backgroundImage: `linear-gradient(rgba(3, 10, 7, 0.18), rgba(3, 10, 7, 0.18)), url("${liquidGlass.wallpaper}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {liquidGlass.ambientMotion && (
+          <>
+            <div className="animate-mesh-slow absolute -left-24 -top-24 h-[520px] w-[520px] rounded-full bg-emerald-300/20 blur-[120px]" />
+            <div className="animate-mesh-slow-rev absolute -bottom-24 right-0 h-[520px] w-[520px] rounded-full bg-cyan-300/15 blur-[120px]" />
+          </>
+        )}
+      </div>
+    );
+  }
 
   if (theme === 'ocean') {
     return (
