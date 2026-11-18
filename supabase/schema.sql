@@ -13,6 +13,7 @@ create table if not exists public.profiles (
   handle text not null unique,
   avatar_text text not null default 'ST',
   role text not null default '',
+  last_seen_at timestamptz,
   status text not null default 'online' check (status in ('online', 'away', 'busy')),
   updated_at timestamptz not null default now()
 );
@@ -59,6 +60,7 @@ create unique index if not exists profiles_handle_lower_unique
   on public.profiles (lower(handle));
 
 alter table public.profiles add column if not exists account_name text not null default '';
+alter table public.profiles add column if not exists last_seen_at timestamptz;
 alter table public.profiles alter column role set default '';
 update public.profiles
 set account_name = display_name

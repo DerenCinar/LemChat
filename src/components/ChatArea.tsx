@@ -39,6 +39,15 @@ const STATUS_DOT: Record<UserPresence, string> = {
   offline: 'bg-slate-400',
 };
 
+const formatLastSeen = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Last seen unavailable';
+  return `Last seen ${date.toLocaleString([], {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })}`;
+};
+
 export const ChatArea: React.FC = () => {
   const feedRef = useRef<HTMLDivElement | null>(null);
   const feedEndRef = useRef<HTMLDivElement | null>(null);
@@ -175,6 +184,16 @@ export const ChatArea: React.FC = () => {
         ? activeConv.status ?? 'online'
         : 'offline'
       : 'offline';
+  const peerProfile =
+    activeConv.type === 'dm' && activeConv.peerUserId
+      ? profiles[activeConv.peerUserId]
+      : undefined;
+  const peerStatusLabel =
+    peerPresence === 'offline'
+      ? peerProfile?.lastSeenAt
+        ? formatLastSeen(peerProfile.lastSeenAt)
+        : 'Last seen unavailable'
+      : STATUS_LABEL[peerPresence];
 
   const convMembers = activeConv.members ?? [];
   const convMessages = activeConv.messages ?? [];
@@ -276,7 +295,7 @@ export const ChatArea: React.FC = () => {
                 {typingState
                   ? `${typingState.senderName} is typing...`
                   : activeConv.type === 'dm'
-                    ? `${STATUS_LABEL[peerPresence]} · ${activeConv.roleOrTopic}`
+                    ? `${peerStatusLabel} · ${activeConv.roleOrTopic}`
                     : activeConv.roleOrTopic}
               </p>
             </div>

@@ -12,6 +12,15 @@ const STATUS_META: Record<UserPresence, { label: string; dot: string }> = {
   offline: { label: 'Offline', dot: 'bg-slate-400' },
 };
 
+const formatLastSeen = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Last seen unavailable';
+  return `Last seen ${date.toLocaleString([], {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })}`;
+};
+
 export const ProfileModal: React.FC = () => {
   const selectedProfileId = useChatStore((s) => s.selectedProfileId);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
@@ -127,6 +136,11 @@ export const ProfileModal: React.FC = () => {
               <span className="glass-pill mt-2 rounded-full px-3 py-1 text-[11px] font-medium text-emerald-900 dark:text-emerald-100">
                 {profile.role ? `${profile.role} · ` : ''}{statusMeta.label}
               </span>
+              {!isSelf && presence === 'offline' && (
+                <p className="mt-2 text-[11px] text-emerald-800/65 dark:text-emerald-200/60">
+                  {profile.lastSeenAt ? formatLastSeen(profile.lastSeenAt) : 'Last seen unavailable'}
+                </p>
+              )}
               {!isSelf && (
                 <>
                   <p className="mt-2 text-[11px] text-emerald-800/65 dark:text-emerald-200/60">

@@ -75,6 +75,7 @@ interface DbProfileRow {
   avatar_text: string;
   role: string;
   status: SelfPresence;
+  last_seen_at?: string | null;
 }
 
 interface DbConversationRow {
@@ -180,6 +181,7 @@ interface ChatStore {
   setNewConvModalOpen: (open: boolean) => void;
   setMobileChatOpen: (open: boolean) => void;
   setWindowFocused: (focused: boolean) => void;
+  touchLastSeen: () => Promise<void>;
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
   setSelectedProfileId: (userId: string | null) => void;
@@ -805,6 +807,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setWindowFocused: (isWindowFocused) => {
     set({ isWindowFocused });
     if (isWindowFocused) {
+      void get().touchLastSeen();
       const activeId = get().activeConversationId;
       if (activeId) {
         const activeConv = get().conversations.find((c) => c.id === activeId);
@@ -813,6 +816,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       }
     }
+  },
+
+  touchLastSeen: async () => {
+    const supabase = getSupabaseClient();
+    const self = get().self;
+    if (!supabase || !self) return;
+
+    const lastSeenAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('profiles')
+      .update({ last_seen_at: lastSeenAt })
+      .eq('id', self.id);
+    if (error) {
+      console.error('Failed to update last seen timestamp:', error);
+      return;
+    }
+
+    set((state) => ({
+      self: state.self ? { ...state.self, lastSeenAt } : state.self,
+      profiles: state.profiles[self.id]
+        ? { ...state.profiles, [self.id]: { ...state.profiles[self.id], lastSeenAt } }
+        : state.profiles,
+    }));
   },
 
   initializeApp: async () => {
@@ -1001,6 +1027,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           avatarText: row.avatar_text,
           role: row.role,
           status: row.status,
+          lastSeenAt: row.last_seen_at ?? undefined,
         };
       }
 
@@ -1039,6 +1066,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             avatarText: r.avatar_text,
             role: r.role,
             status: r.status,
+            lastSeenAt: r.last_seen_at ?? undefined,
           };
           profileMap[r.id] = selfProfile;
         }
@@ -1254,11 +1282,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               role: selfProfile.role,
               avatar: selfProfile.avatarText,
               status: selfProfile.status,
+              lastSeenAt: selfProfile.lastSeenAt,
             }
           : null,
       });
 
       if (selfProfile) {
+        await get().touchLastSeen();
         window.lemchat?.updateUserStatus(selfProfile.status);
         if (window.lemchat?.signalInitialize && initializedSignalUserId !== user.id) {
           initializedSignalUserId = user.id;
@@ -1553,6 +1583,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 avatarText: row.avatar_text,
                 role: row.role,
                 status: row.status,
+                lastSeenAt: row.last_seen_at ?? undefined,
               },
             };
             const updatedConvs = state.conversations.map((c) => {

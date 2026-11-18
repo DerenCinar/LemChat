@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, Search } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
@@ -41,16 +41,54 @@ const EMOJI_GRID = [
 ];
 
 const GIF_GRID: GifAttachment[] = [
-  { name: 'Cat blinking', url: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Cat_blinking.gif' },
-  { name: 'Cat paws kneading', url: 'https://upload.wikimedia.org/wikipedia/commons/1/12/Cat_paws_kneading.gif' },
-  { name: 'Cartoon cat running', url: 'https://upload.wikimedia.org/wikipedia/commons/7/74/Cartoon_Cat_Running.gif' },
-  { name: 'Black cat', url: 'https://upload.wikimedia.org/wikipedia/commons/3/31/Black_Cat_1220032.gif' },
-  { name: 'Cat falling', url: 'https://upload.wikimedia.org/wikipedia/commons/7/78/Cat_fall_150x300_6fps.gif' },
-  { name: 'Orange cat behavior', url: 'https://upload.wikimedia.org/wikipedia/commons/1/1f/Typical_orange_cat_behavior..gif' },
-  { name: 'Cat trotting to gallop', url: 'https://upload.wikimedia.org/wikipedia/commons/0/05/Cat_trotting%2C_changing_to_a_gallop.gif' },
-  { name: 'Cat tail animation', url: 'https://upload.wikimedia.org/wikipedia/commons/b/b2/Cat_tail_ani.gif' },
-  { name: 'Cat on laptop', url: 'https://upload.wikimedia.org/wikipedia/commons/d/d6/Cat_Laptop_-_Idil_Keysan_-_Wikimedia_Giphy_stickers_2019.gif' },
-  { name: 'Funny cat', url: 'https://upload.wikimedia.org/wikipedia/commons/8/81/Cat_funny_gif.gif' },
+  { name: "Arnold's Cat Map animation", url: "https://upload.wikimedia.org/wikipedia/commons/5/58/Arnold%27s_Cat_Map_animation_%2874px%2C_zoomed%2C_labelled%29.gif" },
+  { name: "Black cat", url: "https://upload.wikimedia.org/wikipedia/commons/3/31/Black_Cat_1220032.gif" },
+  { name: "Funny cat", url: "https://upload.wikimedia.org/wikipedia/commons/8/81/Cat_funny_gif.gif" },
+  { name: "Cat paws kneading", url: "https://upload.wikimedia.org/wikipedia/commons/1/12/Cat_paws_kneading.gif" },
+  { name: "Orange cat behavior", url: "https://upload.wikimedia.org/wikipedia/commons/1/1f/Typical_orange_cat_behavior..gif" },
+  { name: "Galloping dog", url: "https://upload.wikimedia.org/wikipedia/commons/9/91/Dog_galloping.gif" },
+  { name: "Galloping dog in slow motion", url: "https://upload.wikimedia.org/wikipedia/commons/6/66/Dog_galloping_slow_motion.gif" },
+  { name: "Greenhouse dog", url: "https://upload.wikimedia.org/wikipedia/commons/1/15/GreenhouseDog.gif" },
+  { name: "Floss dance", url: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Floss_%28dance%29.gif" },
+  { name: "Peterborough contra dance", url: "https://upload.wikimedia.org/wikipedia/commons/8/8f/Peterborough_contra_dance_November_2007.gif" },
+  { name: "Phenakistoscope", url: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Phenakistoscope_3g07690d.gif" },
+  { name: "Spinning dancer", url: "https://upload.wikimedia.org/wikipedia/commons/2/21/Spinning_Dancer.gif" },
+  { name: "Trump dance", url: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Trump_Dance_with_the_Navy_Sailors_%28GIF%29.gif" },
+  { name: "Happy anniversary", url: "https://upload.wikimedia.org/wikipedia/commons/6/66/Happy_Anniversary_TibiaWiki_18.gif" },
+  { name: "Happy Earth Day", url: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Happy_Earth_Day%21_%28CIRA_2020-04-22%29.gif" },
+  { name: "Happy New Year", url: "https://upload.wikimedia.org/wikipedia/commons/9/92/Happy_New_Year%21.gif" },
+  { name: "Happy New Year 2022", url: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Happy_New_Year_2022%21.gif" },
+  { name: "Happy hamster", url: "https://upload.wikimedia.org/wikipedia/commons/9/98/Happy_hamooz.gif" },
+  { name: "Original party parrot", url: "https://upload.wikimedia.org/wikipedia/commons/4/40/Original_Party_Parrot.gif" },
+  { name: "Party parrot", url: "https://upload.wikimedia.org/wikipedia/commons/9/92/Party_Parrot.gif" },
+  { name: "Animated laughing icon 2", url: "https://upload.wikimedia.org/wikipedia/commons/e/e4/Animated_asd_laugh_icon_2.gif" },
+  { name: "Animated laughing icon 3", url: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Animated_asd_laugh_icon_3.gif" },
+  { name: "Animated laughing icon 4", url: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Animated_asd_laugh_icon_4.gif" },
+  { name: "Laughing out loud", url: "https://upload.wikimedia.org/wikipedia/commons/8/8d/LaughingOutLoad.gif" },
+  { name: "Smiling laughing yes", url: "https://upload.wikimedia.org/wikipedia/commons/9/90/Smiling_laughing_yes_animated_icon_2.gif" },
+  { name: "Doctor thumbs up", url: "https://upload.wikimedia.org/wikipedia/commons/5/51/Doctor_Thumbs_Up_GIF_Animation_Loop.gif" },
+  { name: "Black thumbs up", url: "https://upload.wikimedia.org/wikipedia/commons/d/da/WP25_Thumbs_Up_-_black.gif" },
+  { name: "Blue thumbs up", url: "https://upload.wikimedia.org/wikipedia/commons/1/1d/WP25_Thumbs_Up_-_blue.gif" },
+  { name: "White thumbs up", url: "https://upload.wikimedia.org/wikipedia/commons/2/26/WP25_Thumbs_Up_-_white.gif" },
+  { name: "Bravo", url: "https://upload.wikimedia.org/wikipedia/commons/8/87/Movicon2-bravo.gif" },
+  { name: "Palm clapping alegrias", url: "https://upload.wikimedia.org/wikipedia/commons/c/c4/Palmas_alegrias1.gif" },
+  { name: "Palm clapping bulerias", url: "https://upload.wikimedia.org/wikipedia/commons/6/67/Palmas_bulerias1.gif" },
+  { name: "Clapping music rhythm", url: "https://upload.wikimedia.org/wikipedia/commons/9/91/Steve_Reich_Clapping_Music_Rhythm.gif" },
+  { name: "Celebrate the Fourth", url: "https://upload.wikimedia.org/wikipedia/commons/2/2a/%22Celebrate_the_4th_Buy_Extra_Bonds%22_-_DPLA_-_25f0f1e48aca252c3bfc354ab7e6c1b8.gif" },
+  { name: "Christmas celebration", url: "https://upload.wikimedia.org/wikipedia/commons/c/cf/Jimmy_Carter_and_family_celebrate_Christmas_at_home_-_DPLA_-_e6af0f670ffe6aaa8af4cb495ba70c30.gif" },
+  { name: "Christmas family celebration", url: "https://upload.wikimedia.org/wikipedia/commons/f/f0/Jimmy_Carter_and_family_celebrate_Christmas_at_home_-_DPLA_-_fc2342840c813dacfbcc44e9b722fff2.gif" },
+  { name: "Wikipedia 20th anniversary", url: "https://upload.wikimedia.org/wikipedia/commons/e/e9/WikiChallenge_twitter_banner_celebrating_20_years_of_Wikipedia_2.gif" },
+  { name: "Wiki Loves Africa celebration", url: "https://upload.wikimedia.org/wikipedia/commons/f/f2/Wiki_Loves_Africa_twitter_banner_celebrating_20_years_of_Wikipedia_13.gif" },
+  { name: "Beam resonance animation", url: "https://upload.wikimedia.org/wikipedia/commons/e/e4/Cantilevered_Euler-Bernoulli_beam_excited_at_mode_2_resonance.gif" },
+  { name: "Comet 2019 Q4", url: "https://upload.wikimedia.org/wikipedia/commons/9/90/Comet2019Q4-InterstellarObject-20190912.gif" },
+  { name: "FRET animation", url: "https://upload.wikimedia.org/wikipedia/commons/6/6e/FRET-Animation.gif" },
+  { name: "Particle in a box", url: "https://upload.wikimedia.org/wikipedia/commons/9/97/Particle_in_a_box_%28time_evolution%29.gif" },
+  { name: "Cat blinking", url: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Cat_blinking.gif" },
+  { name: "Cartoon cat running", url: "https://upload.wikimedia.org/wikipedia/commons/7/74/Cartoon_Cat_Running.gif" },
+  { name: "Cat falling", url: "https://upload.wikimedia.org/wikipedia/commons/7/78/Cat_fall_150x300_6fps.gif" },
+  { name: "Cat trotting to gallop", url: "https://upload.wikimedia.org/wikipedia/commons/0/05/Cat_trotting%2C_changing_to_a_gallop.gif" },
+  { name: "Cat tail animation", url: "https://upload.wikimedia.org/wikipedia/commons/b/b2/Cat_tail_ani.gif" },
+  { name: "Cat on laptop", url: "https://upload.wikimedia.org/wikipedia/commons/d/d6/Cat_Laptop_-_Idil_Keysan_-_Wikimedia_Giphy_stickers_2019.gif" },
 ];
 
 interface FloatingComposerProps {
@@ -67,8 +105,6 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const [showGif, setShowGif] = useState(false);
   const [selectedGif, setSelectedGif] = useState<GifAttachment | null>(null);
   const [gifQuery, setGifQuery] = useState('');
-  const [gifSearchResults, setGifSearchResults] = useState<GifAttachment[]>([]);
-  const [gifSearchLoading, setGifSearchLoading] = useState(false);
   const [brokenGifUrls, setBrokenGifUrls] = useState<Set<string>>(new Set());
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [codeLang, setCodeLang] = useState('typescript');
@@ -90,58 +126,11 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
 
-  useEffect(() => {
-    if (!showGif) return;
-
-    const searchText = gifQuery.trim();
-    const timer = window.setTimeout(async () => {
-      setGifSearchLoading(true);
-      const searchTerm = searchText ? `${searchText} gif` : 'animated reaction gif';
-      const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(searchTerm)}&gsrnamespace=6&gsrlimit=50&prop=imageinfo&iiprop=url&format=json&origin=*`;
-
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`GIF search failed (${response.status})`);
-        const data = await response.json();
-        const pages = data?.query?.pages ? Object.values(data.query.pages) as Array<{
-          title: string;
-          imageinfo?: Array<{ url?: string }>;
-        }> : [];
-        const gifs = pages
-          .map((page) => {
-            const rawUrl = page.imageinfo?.[0]?.url;
-            if (!rawUrl || !rawUrl.toLowerCase().split('?')[0].endsWith('.gif')) return null;
-            const name = page.title
-              .replace(/^File:/, '')
-              .replace(/\.gif$/i, '')
-              .replace(/_/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim();
-            return name ? { name, url: rawUrl } : null;
-          })
-          .filter((gif): gif is GifAttachment => gif !== null);
-        setGifSearchResults(gifs);
-      } catch {
-        setGifSearchResults([]);
-      } finally {
-        setGifSearchLoading(false);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [gifQuery, showGif]);
-
   const visibleGifs = useMemo(() => {
-    if (gifQuery.trim()) {
-      const localMatches = GIF_GRID.filter((gif) =>
-        gif.name.toLowerCase().includes(gifQuery.trim().toLowerCase())
-      );
-      return [...gifSearchResults, ...localMatches].filter((gif, index, gifs) =>
-        gifs.findIndex((candidate) => candidate.url === gif.url) === index
-      );
-    }
-    return gifSearchResults.length > 0 ? gifSearchResults : GIF_GRID;
-  }, [gifQuery, gifSearchResults]);
+    const query = gifQuery.trim().toLowerCase();
+    if (!query) return GIF_GRID;
+    return GIF_GRID.filter((gif) => gif.name.toLowerCase().includes(query));
+  }, [gifQuery]);
 
   const resizeTextarea = () => {
     const el = textareaRef.current;
@@ -514,11 +503,6 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 autoFocus
               />
             </div>
-            {gifSearchLoading && gifSearchResults.length === 0 && (
-              <div className="py-6 text-center text-[11px] text-emerald-900/55 dark:text-emerald-100/55">
-                Searching GIFs...
-              </div>
-            )}
             <div className="lem-scrollbar grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-1">
               {visibleGifs
                 .filter((gif) => !brokenGifUrls.has(gif.url))
@@ -546,7 +530,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                   </button>
                 ))}
             </div>
-            {!gifSearchLoading && visibleGifs.filter((gif) => !brokenGifUrls.has(gif.url)).length === 0 && (
+            {visibleGifs.filter((gif) => !brokenGifUrls.has(gif.url)).length === 0 && (
               <div className="py-6 text-center text-[11px] text-emerald-900/55 dark:text-emerald-100/55">
                 No GIFs found. Try another search.
               </div>

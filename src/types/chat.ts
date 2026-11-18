@@ -114,6 +114,7 @@ export interface Profile {
   avatarText: string;
   role: string;
   status: SelfPresence;
+  lastSeenAt?: string;
   pronouns?: string;
   bio?: string;
   activity?: string;
@@ -129,6 +130,7 @@ export interface SelfProfile {
   role: string;
   avatar: string;
   status: SelfPresence;
+  lastSeenAt?: string;
   pronouns?: string;
   bio?: string;
   activity?: string;
