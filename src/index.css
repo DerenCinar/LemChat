@@ -33,6 +33,7 @@ html[data-ambient-motion="false"] .animate-mesh-slow-rev {
 html[data-chat-font="system"] { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif !important; }
 
 html[data-chat-font="inter"] { font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
+
 html[data-chat-font="rounded"] { font-family: 'Segoe UI Rounded', 'Trebuchet MS', 'Arial Rounded MT Bold', sans-serif !important; }
 html[data-chat-font="mono"] { font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace !important; }
 html[data-chat-font-size="small"] { font-size: 14px !important; }
