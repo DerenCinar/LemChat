@@ -446,7 +446,7 @@ export const SettingsView: React.FC = () => {
             <select
               value={chatFont}
               onChange={(e) => setChatFont(e.target.value as typeof chatFont)}
-              className="glass-pill w-full rounded-xl px-3 py-2 text-xs text-emerald-950 outline-none dark:text-white"
+              className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
             >
               <option value="system">System</option>
               <option value="inter">Inter</option>

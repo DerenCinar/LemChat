@@ -2,12 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-html[data-chat-font="inter"] body { font-family: Inter, 'Segoe UI', sans-serif; }
-html[data-chat-font="rounded"] body { font-family: 'Trebuchet MS', 'Segoe UI Rounded', sans-serif; }
-html[data-chat-font="mono"] body { font-family: Consolas, 'Courier New', monospace; }
-html[data-chat-font-size="small"] body { font-size: 14px; }
-html[data-chat-font-size="medium"] body { font-size: 16px; }
-html[data-chat-font-size="large"] body { font-size: 18px; }
+html[data-chat-font="system"] { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif !important; }
+html[data-chat-font="inter"] { font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
+html[data-chat-font="rounded"] { font-family: 'Segoe UI Rounded', 'Trebuchet MS', 'Arial Rounded MT Bold', sans-serif !important; }
+html[data-chat-font="mono"] { font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace !important; }
+html[data-chat-font-size="small"] { font-size: 14px !important; }
+html[data-chat-font-size="medium"] { font-size: 16px !important; }
+html[data-chat-font-size="large"] { font-size: 18px !important; }
+
+.chat-font-select {
+  appearance: auto;
+  background: rgba(255, 255, 255, 0.92);
+  color: #064e3b;
+  color-scheme: light;
+}
+.chat-font-select option {
+  background: #ffffff;
+  color: #064e3b;
+}
+.dark .chat-font-select {
+  background: rgba(20, 32, 25, 0.98);
+  color: #ecfdf5;
+  color-scheme: dark;
+}
+.dark .chat-font-select option {
+  background: #142019;
+  color: #ecfdf5;
+}
 
 @layer base {
   html,
