@@ -55,10 +55,16 @@ function getAppIcon() {
   const assetPaths = [
     path.join(app.getAppPath(), 'dist', 'assets', filename),
     path.join(app.getAppPath(), 'public', 'assets', filename),
+    path.join(process.resourcesPath, 'assets', filename),
+    path.join(__dirname, '..', 'dist', 'assets', filename),
+    path.join(__dirname, '..', 'public', 'assets', filename),
   ];
   const assetPath = assetPaths.find((candidate) => fs.existsSync(candidate));
   if (assetPath) {
-    return nativeImage.createFromPath(assetPath);
+    const image = nativeImage.createFromPath(assetPath);
+    if (!image.isEmpty()) {
+      return image;
+    }
   }
   return createLemChatIcon(64);
 }
@@ -461,6 +467,9 @@ function setupAutoUpdater() {
 
 app.whenReady().then(async () => {
   nativeTheme.on('updated', refreshPlatformIcons);
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(getAppIcon());
+  }
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
       const allowed = ['media', 'mediaKeySystem', 'notifications', 'display-capture'];

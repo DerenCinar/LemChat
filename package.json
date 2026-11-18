@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.skellytalk.app",
     "productName": "SkellyTalk",
+    "icon": "public/assets/skellytalk.ico",
     "generateUpdatesFilesForAllChannels": true,
     "directories": {
       "output": "release"
@@ -24,6 +25,16 @@
       "dist/**/*",
       "dist-electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "public/assets",
+        "to": "assets",
+        "filter": [
+          "skellytalk*.png",
+          "skellytalk.ico"
+        ]
+      }
     ],
     "publish": [
       {
@@ -38,8 +49,7 @@
       "target": [
         "nsis",
         "portable"
-      ],
-      "signAndEditExecutable": false
+        ]
     },
     "nsis": {
       "oneClick": false,
