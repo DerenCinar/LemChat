@@ -2057,15 +2057,60 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         attachments: attachments.length > 0 ? attachments : undefined,
       });
     } else {
-      const { error: insertError } = await supabase.from('messages').insert({
-        conversation_id: convId,
-        sender_id: user.id,
-        content: finalContent,
-        code_block: codeBlock ?? null,
-        attachments: attachments.length > 0 ? attachments : null,
-      });
+      const { data: insertedRow, error: insertError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: convId,
+          sender_id: user.id,
+          content: finalContent,
+          code_block: codeBlock ?? null,
+          attachments: attachments.length > 0 ? attachments : null,
+        })
+        .select('id')
+        .maybeSingle();
       if (insertError) {
         throw new Error(`Message send failed: ${insertError.message}`);
+      }
+      if (insertedRow?.id) {
+        insertedId = insertedRow.id as string;
+        saveSentCacheEntry(user.id, insertedId, {
+          content: finalContent,
+          codeBlock: codeBlock ?? undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
+        });
+      }
+    }
+
+    if (insertedId) {
+      const state = get();
+      const sender = state.self;
+      const alreadyPresent = state.conversations
+        .find((conversation) => conversation.id === convId)
+        ?.messages.some((message) => message.id === insertedId);
+      if (!alreadyPresent) {
+        const sentMessage: Message = {
+          id: insertedId,
+          conversationId: convId,
+          senderId: user.id,
+          senderName: sender?.name ?? 'You',
+          senderAvatar: sender?.avatar ?? 'ST',
+          senderRole: sender?.role,
+          content: finalContent,
+          timestamp: formatTimestamp(new Date().toISOString()),
+          createdAt: new Date().toISOString(),
+          isMe: true,
+          status: 'sent',
+          reactions: [],
+          codeBlock: codeBlock ?? undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
+        };
+        set({
+          conversations: state.conversations.map((conversation) =>
+            conversation.id === convId
+              ? { ...conversation, messages: [...conversation.messages, sentMessage] }
+              : conversation
+          ),
+        });
       }
     }
 

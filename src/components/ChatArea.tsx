@@ -81,12 +81,17 @@ export const ChatArea: React.FC = () => {
   const typingState = activeConv ? typingConversations[activeConv.id] : null;
 
   useEffect(() => {
-    if (!pendingMentionMessageId) {
+    if (pendingMentionMessageId) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (feedRef.current) {
+        feedRef.current.scrollTop = feedRef.current.scrollHeight;
+      }
       feedEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
       wasNearBottomRef.current = true;
       setShowScrollToBottom(false);
-    }
-  }, [activeConversationId]);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversationId, activeConv?.messages.length, pendingMentionMessageId]);
 
   useEffect(() => {
     if (pendingMentionMessageId) return;
