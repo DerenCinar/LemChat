@@ -2218,16 +2218,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       saveDeletedCacheEntry(user.id, messageId, conversationId, deletedAt, createdAt);
     }
 
-    const { data: deletedRows, error: hardDeleteError } = await supabase
-      .from('messages')
-      .delete()
-      .eq('id', messageId)
-      .select('id');
-
-    if (!hardDeleteError && deletedRows && deletedRows.length > 0) return;
-
-    // Some RLS setups return no deleted row in data. Persist a tombstone using
-    // the existing message columns so the original text cannot be reloaded.
+    // Use an UPDATE tombstone instead of a hard DELETE. An UPDATE is the
+    // cross-client realtime event shared clients already subscribe to, and
+    // it keeps the row from reloading as the original encrypted/plaintext text.
     const { error: markerDeleteError } = await supabase
       .from('messages')
       .update({
@@ -2238,15 +2231,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         code_block: null,
         attachments: null,
       })
-      .eq('id', messageId)
-      .select('id');
+      .eq('id', messageId);
 
-    if (!markerDeleteError) return;
-
-    if (hardDeleteError || markerDeleteError) {
+    if (markerDeleteError) {
       await get().fetchWorkspaceData();
       throw new Error(
-        `Message deletion failed: ${hardDeleteError?.message || markerDeleteError?.message || 'The database did not confirm deletion'}`
+        `Message deletion failed: ${markerDeleteError.message}`
       );
     }
   },
