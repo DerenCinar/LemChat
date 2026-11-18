@@ -263,7 +263,24 @@ create policy "Conversation members can publish sender-key distributions"
     and public.is_conversation_member(conversation_id)
   );
 
--- 5. Message Reactions
+-- 5. Personal Message Pins
+create table if not exists public.message_pins (
+  message_id uuid not null references public.messages (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+
+alter table public.message_pins enable row level security;
+
+drop policy if exists "Users can manage their own message pins" on public.message_pins;
+create policy "Users can manage their own message pins"
+  on public.message_pins for all
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- 6. Message Reactions
 create table if not exists public.message_reactions (
   id uuid primary key default gen_random_uuid(),
   message_id uuid not null references public.messages (id) on delete cascade,

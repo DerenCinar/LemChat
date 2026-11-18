@@ -17,6 +17,7 @@ import {
   Check,
   Shield,
   Crown,
+  ArrowDown,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
@@ -39,7 +40,10 @@ const STATUS_DOT: Record<UserPresence, string> = {
 };
 
 export const ChatArea: React.FC = () => {
+  const feedRef = useRef<HTMLDivElement | null>(null);
   const feedEndRef = useRef<HTMLDivElement | null>(null);
+  const wasNearBottomRef = useRef(true);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
@@ -77,8 +81,20 @@ export const ChatArea: React.FC = () => {
   const typingState = activeConv ? typingConversations[activeConv.id] : null;
 
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages.length, typingState, activeConversationId]);
+    if (!pendingMentionMessageId) {
+      feedEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      wasNearBottomRef.current = true;
+      setShowScrollToBottom(false);
+    }
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    if (pendingMentionMessageId) return;
+    if (wasNearBottomRef.current) {
+      feedEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      setShowScrollToBottom(false);
+    }
+  }, [activeConv?.messages.length, typingState]);
 
   useEffect(() => {
     if (!pendingMentionMessageId) return;
@@ -448,7 +464,19 @@ export const ChatArea: React.FC = () => {
           )}
         </AnimatePresence>
 
-        <div className="lem-scrollbar flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4">
+        <div
+          ref={feedRef}
+          onScroll={() => {
+            const feed = feedRef.current;
+            if (!feed) return;
+            const distanceFromBottom =
+              feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+            const nearBottom = distanceFromBottom < 120;
+            wasNearBottomRef.current = nearBottom;
+            setShowScrollToBottom(!nearBottom);
+          }}
+          className="lem-scrollbar flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4"
+        >
           <div className="space-y-3">
             {visibleMessages.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
@@ -514,6 +542,26 @@ export const ChatArea: React.FC = () => {
 
           <div ref={feedEndRef} />
         </div>
+
+        <AnimatePresence>
+          {showScrollToBottom && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 8 }}
+              onClick={() => {
+                feedEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                wasNearBottomRef.current = true;
+                setShowScrollToBottom(false);
+              }}
+              className="glass-panel glass-surface absolute bottom-[78px] right-5 z-20 flex h-10 w-10 items-center justify-center rounded-full text-emerald-950 shadow-lem-glow-sm transition hover:scale-105 dark:text-white"
+              title="Scroll to bottom"
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         <FloatingComposer
           conversationId={activeConv.id}

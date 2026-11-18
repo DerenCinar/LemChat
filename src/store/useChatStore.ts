@@ -115,6 +115,11 @@ interface DbReactionRow {
   emoji: string;
 }
 
+interface DbMessagePinRow {
+  message_id: string;
+  user_id: string;
+}
+
 interface ChatStore {
   theme: ThemeMode;
   chatFont: ChatFont;
@@ -207,6 +212,7 @@ interface ChatStore {
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
+  togglePinMessage: (messageId: string) => Promise<void>;
   createChannel: (name: string, topic: string, invitedUserIds?: string[], logoUrl?: string) => Promise<string | null>;
   inviteToGroup: (conversationId: string, userIds: string[]) => Promise<void>;
   removeMember: (conversationId: string, userId: string) => Promise<void>;
@@ -856,13 +862,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         set({ workspaceLoading: true });
       }
 
-      const [profilesRes, convsRes, membersRes, messagesRes, reactionsRes] =
+      const [profilesRes, convsRes, membersRes, messagesRes, reactionsRes, pinsRes] =
         await Promise.all([
           supabase.from('profiles').select('*'),
           supabase.from('conversations').select('*').order('created_at', { ascending: true }),
           supabase.from('conversation_members').select('*'),
           supabase.from('messages').select('*').order('created_at', { ascending: true }),
           supabase.from('message_reactions').select('*'),
+          supabase.from('message_pins').select('message_id,user_id').eq('user_id', user.id),
         ]);
 
       const profileMap: Record<string, Profile> = {};
@@ -925,6 +932,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         reactionsByMsg.set(rx.message_id, arr);
       }
 
+      const pinnedMessageIds = new Set(
+        ((pinsRes.data ?? []) as DbMessagePinRow[])
+          .map((pin) => pin.message_id)
+      );
+
       const membersByConv = new Map<string, DbMemberRow[]>();
       for (const mem of (membersRes.data ?? []) as DbMemberRow[]) {
         const arr = membersByConv.get(mem.conversation_id) ?? [];
@@ -953,6 +965,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             status: 'read',
             reactions: buildReactionsList(reactionsByMsg.get(msg.id) ?? [], user.id),
             deletedAt: deletedEntry.deletedAt,
+            isPinned: pinnedMessageIds.has(msg.id),
           };
           const arr = messagesByConv.get(msg.conversation_id) ?? [];
           arr.push(tombstone);
@@ -988,6 +1001,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           isEdited: Boolean(msg.edited_at) || Boolean(decrypted.isEdited) || Boolean(decrypted.editedAt),
           codeBlock: decrypted.codeBlock,
           attachments: decrypted.attachments,
+          isPinned: pinnedMessageIds.has(msg.id),
           isMention: selfProfile
             ? decrypted.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
               decrypted.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
@@ -1235,6 +1249,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               ? decrypted.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
                 decrypted.content.toLowerCase().includes(state.self.handle.toLowerCase())
               : false,
+            isPinned: false,
           };
 
           const isViewing =
@@ -1392,6 +1407,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         { event: '*', schema: 'public', table: 'message_reactions' },
         () => {
           // Refresh reactions cleanly so counts stay exact across clients
+          void get().fetchWorkspaceData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_pins' },
+        () => {
           void get().fetchWorkspaceData();
         }
       )
@@ -2266,6 +2288,48 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         user_id: userId,
         emoji,
       });
+    }
+  },
+
+  togglePinMessage: async (messageId) => {
+    const supabase = getSupabaseClient();
+    const userId = get().session?.user?.id;
+    if (!supabase || !userId) return;
+
+    const existing = get().conversations
+      .flatMap((conversation) => conversation.messages)
+      .find((message) => message.id === messageId);
+    const nextPinned = !existing?.isPinned;
+
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId
+            ? { ...message, isPinned: nextPinned }
+            : message
+        ),
+      })),
+    }));
+
+    if (nextPinned) {
+      const { error } = await supabase
+        .from('message_pins')
+        .upsert({ message_id: messageId, user_id: userId }, { onConflict: 'message_id,user_id' });
+      if (error) {
+        await get().fetchWorkspaceData();
+        throw new Error(`Message pin failed: ${error.message}`);
+      }
+    } else {
+      const { error } = await supabase
+        .from('message_pins')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', userId);
+      if (error) {
+        await get().fetchWorkspaceData();
+        throw new Error(`Message unpin failed: ${error.message}`);
+      }
     }
   },
 

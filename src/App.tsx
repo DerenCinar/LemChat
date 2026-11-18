@@ -65,6 +65,7 @@ export const App: React.FC = () => {
 
       <AnimatePresence>
         {(updateStatus.status === 'downloading' ||
+          updateStatus.status === 'available' ||
           updateStatus.status === 'downloaded' ||
           updateStatus.status === 'installing') && (
           <motion.div
@@ -86,10 +87,22 @@ export const App: React.FC = () => {
                 <DownloadCloud className="h-6 w-6" />
               </motion.div>
               <h2 className="text-lg font-bold text-emerald-950 dark:text-white">
-                {updateStatus.status === 'installing' ? 'Applying update...' : 'Updating SkellyTalk'}
+                {updateStatus.status === 'installing'
+                  ? 'Applying update...'
+                  : updateStatus.status === 'available'
+                    ? 'Update available'
+                    : 'Updating SkellyTalk'}
               </h2>
               <p className="mt-2 text-xs text-emerald-800/70 dark:text-emerald-200/65">
-                {updateStatus.version ? `Version ${updateStatus.version}` : 'Downloading the latest version'}
+                {updateStatus.status === 'installing'
+                  ? 'The window will stay open while the update is prepared. Please wait.'
+                  : updateStatus.status === 'available'
+                    ? updateStatus.version
+                      ? `Preparing SkellyTalk ${updateStatus.version}`
+                      : 'Preparing the latest version'
+                    : updateStatus.version
+                      ? `Version ${updateStatus.version}`
+                      : 'Downloading the latest version'}
               </p>
               {updateStatus.status === 'downloading' && (
                 <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">

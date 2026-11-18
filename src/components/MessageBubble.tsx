@@ -9,6 +9,7 @@ import {
   Reply,
   Pencil,
   Trash2,
+  Pin,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
@@ -38,6 +39,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const togglePinMessage = useChatStore((s) => s.togglePinMessage);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
   const self = useChatStore((s) => s.self);
@@ -105,6 +107,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         title="Add reaction"
       >
         <SmilePlus className="h-3.5 w-3.5" />
+      </button>
+
+      <button
+        onClick={() => void togglePinMessage(message.id)}
+        className={`glass-pill flex h-7 w-7 items-center justify-center rounded-full hover:scale-105 ${
+          message.isPinned
+            ? 'bg-[#22C55E]/25 text-[#22C55E]'
+            : 'text-emerald-800 dark:text-emerald-200'
+        }`}
+        title={message.isPinned ? 'Unpin message' : 'Pin message'}
+      >
+        <Pin className="h-3.5 w-3.5" />
       </button>
 
       {message.isMe && (
@@ -243,6 +257,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
             />
 
+            {message.isPinned && (
+              <div className="mb-1 flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider text-[#22C55E]">
+                <Pin className="h-3 w-3" />
+                Pinned
+              </div>
+            )}
+
             {quoteLine && (
               <div
                 className={`mb-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11.5px] ${
@@ -308,8 +329,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
             {message.attachments && message.attachments.length > 0 && (
               <div className="mt-2.5 space-y-2">
-                {message.attachments.map((att) =>
-                  att.type === 'image' && att.previewUrl ? (
+                {message.attachments.map((att) => {
+                  const mime = att.mimeLabel?.toLowerCase() ?? '';
+                  const name = att.name.toLowerCase();
+                  const isVideo = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
+                  const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm)$/i.test(name);
+                  return att.previewUrl && isVideo ? (
+                    <video
+                      key={att.id}
+                      src={att.previewUrl}
+                      controls
+                      preload="metadata"
+                      className="max-h-72 w-full rounded-xl border border-white/20 bg-black"
+                    />
+                  ) : att.previewUrl && isAudio ? (
+                    <audio
+                      key={att.id}
+                      src={att.previewUrl}
+                      controls
+                      preload="metadata"
+                      className="w-full min-w-[220px]"
+                    />
+                  ) : att.type === 'image' && att.previewUrl ? (
                     <button
                       type="button"
                       key={att.id}
@@ -347,7 +388,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       </div>
                     </button>
                   )
-                )}
+                })}
               </div>
             )}
 

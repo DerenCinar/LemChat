@@ -39,6 +39,7 @@ const allWindows = new Set<BrowserWindow>();
 let tray: Tray | null = null;
 let currentStatus: UserPresence = 'online';
 let isQuitting = false;
+let isApplyingUpdate = false;
 let peerWindowCounter = 1;
 let serverStatus = { hosting: false, port: 4120 };
 
@@ -120,6 +121,7 @@ function rebuildTrayMenu() {
     {
       label: 'Quit SkellyTalk',
       click: () => {
+        if (isApplyingUpdate) return;
         isQuitting = true;
         app.quit();
       },
@@ -210,6 +212,12 @@ function createWindow(profileId = 'default'): BrowserWindow {
   });
 
   win.on('close', (event) => {
+    if (isApplyingUpdate) {
+      event.preventDefault();
+      win.show();
+      win.focus();
+      return;
+    }
     if (!isQuitting && win === mainWindow) {
       event.preventDefault();
       win.hide();
@@ -337,6 +345,11 @@ function registerIpcHandlers() {
   ipcMain.on('lemchat:window-close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
+    if (isApplyingUpdate) {
+      win.show();
+      win.focus();
+      return;
+    }
     if (!isQuitting && win === mainWindow) {
       win.hide();
     } else {
@@ -414,8 +427,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on('lemchat:install-update', () => {
-    isQuitting = true;
-    autoUpdater.quitAndInstall(true, true);
+    beginUpdateInstallation();
   });
 }
 
@@ -425,6 +437,22 @@ function broadcastUpdateStatus(payload: UpdateStatusPayload) {
       win.webContents.send('lemchat:update-status', payload);
     }
   }
+}
+
+function beginUpdateInstallation(version?: string) {
+  if (isApplyingUpdate) return;
+  isApplyingUpdate = true;
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  broadcastUpdateStatus({ status: 'installing', version });
+
+  setTimeout(() => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall(true, true);
+  }, 1800);
 }
 
 function setupAutoUpdater() {
@@ -452,11 +480,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     broadcastUpdateStatus({ status: 'downloaded', version: info.version });
-    setTimeout(() => {
-      broadcastUpdateStatus({ status: 'installing', version: info.version });
-      isQuitting = true;
-      autoUpdater.quitAndInstall(true, true);
-    }, 900);
+    setTimeout(() => beginUpdateInstallation(info.version), 2400);
   });
 
   autoUpdater.on('error', (err) => {

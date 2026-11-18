@@ -71,6 +71,7 @@ export interface Message {
   deletedAt?: string;
   isMention?: boolean;
   isEdited?: boolean;
+  isPinned?: boolean;
 }
 
 export interface Conversation {

@@ -16,6 +16,8 @@ export const AttachmentViewer: React.FC = () => {
   const isGif = mime.includes('gif') || name.endsWith('.gif');
   const isImage = attachment.type === 'image' || mime.startsWith('image/');
   const isPdf = mime.includes('pdf') || name.endsWith('.pdf');
+  const isVideo = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
+  const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm)$/i.test(name);
 
   return (
     <AnimatePresence>
@@ -70,6 +72,20 @@ export const AttachmentViewer: React.FC = () => {
                 src={attachment.previewUrl}
                 alt={attachment.name}
                 className={`max-h-full max-w-full object-contain ${isGif ? 'rounded-xl' : ''}`}
+              />
+            ) : attachment.previewUrl && isVideo ? (
+              <video
+                src={attachment.previewUrl}
+                controls
+                autoPlay
+                className="max-h-full max-w-full rounded-xl bg-black"
+              />
+            ) : attachment.previewUrl && isAudio ? (
+              <audio
+                src={attachment.previewUrl}
+                controls
+                autoPlay
+                className="w-full max-w-xl"
               />
             ) : attachment.previewUrl && isPdf ? (
               <iframe
