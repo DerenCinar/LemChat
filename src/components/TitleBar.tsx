@@ -100,7 +100,7 @@ export const TitleBar: React.FC = () => {
           </>
         )}
 
-        {!isMac && (
+        {!isMac && Boolean(window.lemchat) && (
           <div className="ml-1 flex items-center gap-1">
             <button
               onClick={() => window.lemchat?.windowMinimize()}

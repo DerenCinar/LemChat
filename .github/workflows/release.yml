@@ -12,9 +12,26 @@ permissions:
   contents: write
 
 jobs:
-  release-windows:
-    runs-on: windows-latest
+  prepare-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
+      - name: Compute release version from run number
+        id: pkg
+        run: |
+          BASE_VER=$(node -p "require('./package.json').version")
+          MAJOR=$(echo "$BASE_VER" | cut -d. -f1)
+          MINOR=$(echo "$BASE_VER" | cut -d. -f2)
+          NEW_VER="${MAJOR}.${MINOR}.${{ github.run_number }}"
+          echo "version=${NEW_VER}" >> "$GITHUB_OUTPUT"
+
+  release-windows:
+    needs: prepare-version
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -28,15 +45,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set unique release version from run number
-        id: pkg
-        shell: pwsh
-        run: |
-          $pkg = Get-Content package.json | ConvertFrom-Json
-          $parts = $pkg.version.Split('.')
-          $newVersion = "$($parts[0]).$($parts[1]).${{ github.run_number }}"
-          npm version $newVersion --no-git-tag-version
-          echo "version=$newVersion" >> $env:GITHUB_OUTPUT
+      - name: Set build version
+        run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
 
       - name: Build Windows Installer & Portable EXE
         env:
@@ -46,17 +56,147 @@ jobs:
           npm run build
           npx electron-builder --win --publish never
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v3
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ steps.pkg.outputs.version }}
-          name: SkellyTalk v${{ steps.pkg.outputs.version }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
+          name: windows-release
+          path: |
             release/*.exe
             release/*.blockmap
             release/latest.yml
+
+  release-mac:
+    needs: prepare-version
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set build version
+        run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
+
+      - name: Build macOS DMG & ZIP
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          npm run build
+          npx electron-builder --mac --publish never
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-release
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
+
+  release-linux-chromeos-android:
+    needs: prepare-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java 21 for Android
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set build version
+        run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
+
+      - name: Build Electron & Vite bundle
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Build Linux AppImage, DEB & ChromeOS Edition
+        run: |
+          npx electron-builder --linux AppImage deb --publish never
+          VER="${{ needs.prepare-version.outputs.version }}"
+          cp release/*.deb "release/SkellyTalk-ChromeOS-${VER}-amd64.deb"
+          (cd dist && zip -r "../release/SkellyTalk-ChromeOS-Web-${VER}.zip" .)
+
+      - name: Build Android APK via Capacitor
+        run: |
+          VER="${{ needs.prepare-version.outputs.version }}"
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            let xml = fs.readFileSync(p, "utf8");
+            const perms = [
+              "android.permission.CAMERA",
+              "android.permission.RECORD_AUDIO",
+              "android.permission.MODIFY_AUDIO_SETTINGS"
+            ];
+            for (const perm of perms) {
+              if (!xml.includes(perm)) {
+                xml = xml.replace("<application", `<uses-permission android:name="${perm}" />\n    <application`);
+              }
+            }
+            fs.writeFileSync(p, xml, "utf8");
+          '
+          cd android && chmod +x gradlew && ./gradlew assembleDebug
+          cd ..
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release/SkellyTalk-Android-${VER}.apk"
+
+      - name: Upload Linux, ChromeOS & Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-chromeos-android-release
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.zip
+            release/*.apk
+            release/latest-linux.yml
+
+  publish-release:
+    needs: [prepare-version, release-windows, release-mac, release-linux-chromeos-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-releases
+          merge-multiple: true
+
+      - name: Publish Multi-Platform GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.prepare-version.outputs.version }}
+          name: SkellyTalk v${{ needs.prepare-version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: all-releases/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
