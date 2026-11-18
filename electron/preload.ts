@@ -103,6 +103,9 @@ const api: LemChatAPI = {
       callback(payload);
     };
     ipcRenderer.on('lemchat:update-status', handler);
+    void ipcRenderer.invoke('lemchat:get-update-status').then((payload: UpdateStatusPayload) => {
+      callback(payload);
+    });
     return () => ipcRenderer.removeListener('lemchat:update-status', handler);
   },
   onNotificationClicked: (callback) => {

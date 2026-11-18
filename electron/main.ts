@@ -42,6 +42,8 @@ let isQuitting = false;
 let isApplyingUpdate = false;
 let peerWindowCounter = 1;
 let serverStatus = { hosting: false, port: 4120 };
+let latestUpdateStatus: UpdateStatusPayload = { status: 'idle' };
+let notifiedUpdateVersion: string | null = null;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -429,9 +431,28 @@ function registerIpcHandlers() {
   ipcMain.on('lemchat:install-update', () => {
     beginUpdateInstallation();
   });
+
+  ipcMain.handle('lemchat:get-update-status', () => latestUpdateStatus);
 }
 
 function broadcastUpdateStatus(payload: UpdateStatusPayload) {
+  const updateInProgress =
+    latestUpdateStatus.status === 'available' ||
+    latestUpdateStatus.status === 'downloading' ||
+    latestUpdateStatus.status === 'downloaded';
+
+  if (
+    updateInProgress &&
+    (payload.status === 'checking' || payload.status === 'not-available')
+  ) {
+    latestUpdateStatus = {
+      ...latestUpdateStatus,
+      message: payload.message,
+    };
+  } else {
+    latestUpdateStatus = payload;
+  }
+
   for (const win of allWindows) {
     if (!win.isDestroyed()) {
       win.webContents.send('lemchat:update-status', payload);
@@ -465,6 +486,24 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     broadcastUpdateStatus({ status: 'available', version: info.version });
+
+    if (app.isPackaged && Notification.isSupported() && notifiedUpdateVersion !== info.version) {
+      notifiedUpdateVersion = info.version;
+      const notification = new Notification({
+        title: 'SkellyTalk update available',
+        body: `v${info.version} is available. SkellyTalk may close briefly while it updates.`,
+        icon: getAppIcon(),
+        silent: currentStatus === 'busy',
+      });
+      notification.on('click', () => {
+        focusWindow(mainWindow);
+        mainWindow?.webContents.send(
+          'lemchat:notification-clicked',
+          'lemchat-update'
+        );
+      });
+      notification.show();
+    }
   });
 
   autoUpdater.on('update-not-available', (info) => {

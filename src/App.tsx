@@ -30,7 +30,11 @@ export const App: React.FC = () => {
     void initializeApp();
 
     const unsubNotif = window.lemchat?.onNotificationClicked((conversationId) => {
-      void selectConversation(conversationId);
+      if (conversationId === 'lemchat-update') {
+        useChatStore.getState().setActiveTab('settings');
+      } else {
+        void selectConversation(conversationId);
+      }
     });
 
     const unsubTrayStatus = window.lemchat?.onStatusChangedFromTray((status) => {
