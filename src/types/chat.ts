@@ -78,6 +78,7 @@ export interface Conversation {
 export interface Profile {
   id: string;
   displayName: string;
+  accountName: string;
   handle: string;
   avatarText: string;
   role: string;

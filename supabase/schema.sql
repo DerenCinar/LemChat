@@ -9,12 +9,19 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null,
+  account_name text not null default '',
   handle text not null unique,
   avatar_text text not null default 'ST',
-  role text not null default 'Member',
+  role text not null default '',
   status text not null default 'online' check (status in ('online', 'away', 'busy')),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists account_name text not null default '';
+alter table public.profiles alter column role set default '';
+update public.profiles
+set account_name = display_name
+where account_name = '';
 
 alter table public.profiles enable row level security;
 
@@ -266,18 +273,20 @@ set search_path = public
 as $$
 declare
   v_name text;
+  v_account_name text;
   v_handle text;
   v_avatar text;
 begin
   v_name := coalesce(nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''), split_part(new.email, '@', 1));
+  v_account_name := v_name;
   v_handle := coalesce(
     nullif(trim(new.raw_user_meta_data ->> 'handle'), ''),
     '@' || regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9_]', '', 'g') || '_' || substr(new.id::text, 1, 4)
   );
   v_avatar := upper(substr(v_name, 1, 1));
 
-  insert into public.profiles (id, display_name, handle, avatar_text, role, status)
-  values (new.id, v_name, v_handle, v_avatar, 'Member', 'online')
+  insert into public.profiles (id, display_name, account_name, handle, avatar_text, role, status)
+  values (new.id, v_name, v_account_name, v_handle, v_avatar, '', 'online')
   on conflict (id) do nothing;
 
   return new;

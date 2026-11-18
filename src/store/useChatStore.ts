@@ -27,6 +27,16 @@ import type {
   UpdateStatusPayload,
 } from '../types/chat';
 
+const getContactAliasKey = (userId: string) => `lemchat_contact_aliases_${userId}`;
+
+const readContactAliases = (userId: string): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(getContactAliasKey(userId)) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+
 export interface ToastNotification {
   id: string;
   conversationId: string;
@@ -43,6 +53,7 @@ interface TypingState {
 interface DbProfileRow {
   id: string;
   display_name: string;
+  account_name?: string;
   handle: string;
   avatar_text: string;
   role: string;
@@ -137,6 +148,8 @@ interface ChatStore {
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
   setSelectedProfileId: (userId: string | null) => void;
+  getContactName: (userId: string, fallbackName: string) => string;
+  setContactName: (userId: string, name: string) => void;
   openAttachment: (attachment: Attachment) => void;
   closeAttachment: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
@@ -529,6 +542,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
   setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
+  getContactName: (userId, fallbackName) => {
+    const selfId = get().session?.user?.id;
+    if (!selfId || selfId === userId) return fallbackName;
+    return readContactAliases(selfId)[userId]?.trim() || fallbackName;
+  },
+  setContactName: (userId, name) => {
+    const selfId = get().session?.user?.id;
+    if (!selfId) return;
+    const aliases = readContactAliases(selfId);
+    const cleanName = name.trim();
+    if (cleanName) aliases[userId] = cleanName;
+    else delete aliases[userId];
+    localStorage.setItem(getContactAliasKey(selfId), JSON.stringify(aliases));
+
+    set((state) => ({
+      conversations: state.conversations.map((conversation) =>
+        conversation.type === 'dm' && conversation.peerUserId === userId
+          ? {
+              ...conversation,
+              name: cleanName || state.profiles[userId]?.displayName || conversation.name,
+            }
+          : conversation
+      ),
+    }));
+  },
   openAttachment: (selectedAttachment) => set({ selectedAttachment }),
   closeAttachment: () => set({ selectedAttachment: null }),
 
@@ -769,6 +807,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         profileMap[row.id] = {
           id: row.id,
           displayName: row.display_name,
+          accountName: row.account_name?.trim() || row.display_name,
           handle: row.handle,
           avatarText: row.avatar_text,
           role: row.role,
@@ -792,9 +831,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           .upsert({
             id: user.id,
             display_name: fallbackName,
+            account_name: fallbackName,
             handle: fallbackHandle,
             avatar_text: fallbackName.trim().charAt(0).toUpperCase() || 'U',
-            role: 'Member',
+            role: '',
             status: 'online',
           })
           .select()
@@ -805,6 +845,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           selfProfile = {
             id: r.id,
             displayName: r.display_name,
+            accountName: r.account_name?.trim() || r.display_name,
             handle: r.handle,
             avatarText: r.avatar_text,
             role: r.role,
@@ -958,7 +999,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           if (c.type === 'dm') {
             const peerMem = memberRows.find((m) => m.user_id !== user.id);
             const peer = peerMem ? profileMap[peerMem.user_id] : undefined;
-            displayName = peer?.displayName ?? c.name;
+            displayName = peer
+              ? get().getContactName(peer.id, peer.displayName)
+              : c.name;
             avatar = peer?.avatarText ?? displayName.slice(0, 2).toUpperCase();
             peerUserId = peer?.id;
             status = peer?.status ?? 'offline';
@@ -1293,6 +1336,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               [row.id]: {
                 id: row.id,
                 displayName: row.display_name,
+                accountName: row.account_name?.trim() || row.display_name,
                 handle: row.handle,
                 avatarText: row.avatar_text,
                 role: row.role,
@@ -1304,7 +1348,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 return {
                   ...c,
                   status: row.status,
-                  name: row.display_name,
+                  name: get().getContactName(row.id, row.display_name),
                   avatar: row.avatar_text,
                   roleOrTopic: row.role,
                 };
@@ -1579,7 +1623,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!supabase || !self) return;
 
     const cleanName = displayName.trim() || self.name;
-    const cleanRole = role.trim() || self.role;
+    const cleanRole = role.trim();
     const currentSpec = parseAvatarSpec(self.avatar, cleanName);
 
     let nextAvatar: string;
@@ -1617,6 +1661,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         [self.id]: {
           id: self.id,
           displayName: cleanName,
+          accountName: state.profiles[self.id]?.accountName ?? cleanName,
           handle: self.handle,
           avatarText: nextAvatar,
           role: cleanRole,
@@ -2349,7 +2394,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ...state.conversations,
         {
           id: convId,
-          name: peer?.displayName ?? 'Direct Message',
+          name: peer
+            ? get().getContactName(peer.id, peer.displayName)
+            : 'Direct Message',
           type: 'dm',
           avatar: peer?.avatarText ?? (peer?.displayName?.trim().charAt(0).toUpperCase() || 'U'),
           status: peer?.status ?? 'offline',

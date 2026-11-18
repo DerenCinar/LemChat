@@ -11,6 +11,9 @@ const EMOJI_GRID = [
   '👏', '🙏', '💯', '❤️', '💜', '💙', '🧡', '💛',
   '🌈', '☀️', '🌙', '🍕', '🍔', '🍩', '☕', '🎂',
   '🎁', '🏆', '🎮', '🎵', '💻', '🐶', '🐱', '🦄',
+  '😊', '😇', '😉', '🥰', '😋', '🤩', '🥹', '😏',
+  '😴', '🤯', '🥲', '😮', '😢', '🤗', '👋', '🫶',
+  '🎊', '🎈', '🥂', '🍀', '🌸', '🦋', '🐼', '🐸',
 ];
 
 const GIF_GRID: GifAttachment[] = [
@@ -22,6 +25,10 @@ const GIF_GRID: GifAttachment[] = [
   { name: 'Cat hello', url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif' },
   { name: 'Party', url: 'https://media.giphy.com/media/26BRrSvJUa0crqw4E/giphy.gif' },
   { name: 'Laughing', url: 'https://media.giphy.com/media/10tIjpzIu8fe0/giphy.gif' },
+  { name: 'Clapping', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+  { name: 'Dancing', url: 'https://media.giphy.com/media/l0HlvtIPzPdt2usKs/giphy.gif' },
+  { name: 'Excited', url: 'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif' },
+  { name: 'Woohoo', url: 'https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif' },
 ];
 
 interface FloatingComposerProps {
