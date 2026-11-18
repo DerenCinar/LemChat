@@ -129,6 +129,8 @@ create table if not exists public.messages (
   ciphertext_type integer,
   code_block jsonb,
   attachments jsonb,
+  edited_at timestamptz,
+  deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -136,6 +138,8 @@ create table if not exists public.messages (
 alter table public.messages add column if not exists ciphertext jsonb;
 alter table public.messages add column if not exists encryption_version text;
 alter table public.messages add column if not exists ciphertext_type integer;
+alter table public.messages add column if not exists edited_at timestamptz;
+alter table public.messages add column if not exists deleted_at timestamptz;
 
 create index if not exists idx_messages_conv_created
   on public.messages (conversation_id, created_at asc);

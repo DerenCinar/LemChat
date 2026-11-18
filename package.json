@@ -34,7 +34,7 @@
       }
     ],
     "win": {
-      "icon": "public/assets/skellytalk-light-mode.png",
+      "icon": "public/assets/skellytalk.ico",
       "target": [
         "nsis",
         "portable"

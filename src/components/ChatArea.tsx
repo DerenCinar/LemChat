@@ -62,6 +62,7 @@ export const ChatArea: React.FC = () => {
   const inviteToGroup = useChatStore((s) => s.inviteToGroup);
   const leaveConversation = useChatStore((s) => s.leaveConversation);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
+  const openAttachment = useChatStore((s) => s.openAttachment);
 
   const activeConv =
     conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
@@ -600,15 +601,7 @@ export const ChatArea: React.FC = () => {
                       <button
                         type="button"
                         key={att.id}
-                        onClick={() => {
-                          if (att.previewUrl) {
-                            if (window.lemchat) {
-                              void window.lemchat.openAttachment(att.previewUrl);
-                            } else {
-                              window.open(att.previewUrl, '_blank', 'noopener,noreferrer');
-                            }
-                          }
-                        }}
+                        onClick={() => openAttachment(att)}
                         disabled={!att.previewUrl}
                         className="glass-pill block w-full rounded-xl px-3 py-2 text-left text-xs text-emerald-950 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
                       >

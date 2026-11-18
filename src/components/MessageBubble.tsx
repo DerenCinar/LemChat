@@ -37,15 +37,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
-
-  const openAttachment = (url: string | undefined) => {
-    if (!url) return;
-    if (window.lemchat) {
-      void window.lemchat.openAttachment(url);
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
+  const openAttachment = useChatStore((s) => s.openAttachment);
 
   const handleCopyCode = () => {
     if (!message.codeBlock) return;
@@ -114,6 +106,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               setEditText(message.content);
               setIsEditing((v) => !v);
             }}
+            disabled={Boolean(message.deletedAt)}
             className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
             title="Edit message"
           >
@@ -121,6 +114,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </button>
           <button
             onClick={() => void deleteMessage(message.id)}
+            disabled={Boolean(message.deletedAt)}
             className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-rose-500 hover:scale-105"
             title="Delete message"
           >
@@ -275,7 +269,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </div>
               </div>
             ) : (
-              bodyContent && (
+              message.deletedAt ? (
+                <p className="italic opacity-65">This message was deleted</p>
+              ) : bodyContent && (
                 <p className="whitespace-pre-wrap break-words">
                   {renderHighlightedContent(bodyContent)}
                 </p>
@@ -307,7 +303,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <button
                       type="button"
                       key={att.id}
-                      onClick={() => openAttachment(att.previewUrl)}
+                      onClick={() => openAttachment(att)}
                       title={`Open ${att.name}`}
                       className="overflow-hidden rounded-xl border border-white/20 bg-black/20"
                     >
@@ -325,7 +321,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     <button
                       key={att.id}
                       type="button"
-                      onClick={() => openAttachment(att.previewUrl)}
+                      onClick={() => openAttachment(att)}
                       disabled={!att.previewUrl}
                       title={`Open ${att.name}`}
                       className="flex items-center gap-2.5 rounded-xl border border-white/20 bg-black/15 px-3 py-2 text-xs transition hover:bg-black/25"
@@ -353,6 +349,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               }`}
             >
               <span>{message.timestamp}</span>
+              {message.editedAt && !message.deletedAt && (
+                <span className="opacity-75">(edited)</span>
+              )}
               {message.isMe && (
                 <span className="inline-flex items-center">
                   {message.status === 'read' ? (

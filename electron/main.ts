@@ -10,7 +10,6 @@ import {
   Tray,
   nativeImage,
   nativeTheme,
-  shell,
 } from 'electron';
 import fs from 'fs';
 import path from 'path';
@@ -47,11 +46,12 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.skellytalk.app');
 }
+app.setName('SkellyTalk');
 
 function getAppIcon() {
   const filename = nativeTheme.shouldUseDarkColors
-    ? 'skellytalk-dark-mode.png'
-    : 'skellytalk-light-mode.png';
+    ? 'skellytalk-light-mode.png'
+    : 'skellytalk-dark-mode.png';
   const assetPaths = [
     path.join(app.getAppPath(), 'dist', 'assets', filename),
     path.join(app.getAppPath(), 'public', 'assets', filename),
@@ -378,12 +378,6 @@ function registerIpcHandlers() {
       return true;
     }
   );
-  ipcMain.handle('lemchat:open-attachment', async (_event, url: string) => {
-    if (!/^https?:\/\//i.test(url)) {
-      throw new Error('Only web attachments can be opened.');
-    }
-    await shell.openExternal(url);
-  });
 
   ipcMain.handle('lemchat:open-peer-window', () => {
     peerWindowCounter += 1;

@@ -76,6 +76,8 @@ interface DbMessageRow {
   code_block: CodeBlock | null;
   attachments: Attachment[] | null;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
 }
 
 interface DbReactionRow {
@@ -108,6 +110,7 @@ interface ChatStore {
   isNewConvModalOpen: boolean;
   isWindowFocused: boolean;
   selectedProfileId: string | null;
+  selectedAttachment: Attachment | null;
 
   typingConversations: Record<string, TypingState | null>;
   latestToast: ToastNotification | null;
@@ -132,6 +135,8 @@ interface ChatStore {
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
   setSelectedProfileId: (userId: string | null) => void;
+  openAttachment: (attachment: Attachment) => void;
+  closeAttachment: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotifyWhenFocused: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
@@ -251,6 +256,9 @@ async function decryptMessageRow(
   senderId: string,
   selfId?: string
 ): Promise<DecryptedMessagePayload> {
+  if (row.deleted_at) {
+    return { content: '' };
+  }
   if (selfId && senderId === selfId) {
     const cached = readSentCache(selfId)[row.id];
     if (cached) return cached;
@@ -397,6 +405,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isNewConvModalOpen: false,
   isWindowFocused: true,
   selectedProfileId: null,
+  selectedAttachment: null,
 
   typingConversations: {},
   latestToast: null,
@@ -456,6 +465,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
   setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
+  openAttachment: (selectedAttachment) => set({ selectedAttachment }),
+  closeAttachment: () => set({ selectedAttachment: null }),
 
   setNotificationsEnabled: (notificationsEnabled) => {
     localStorage.setItem('lemchat_notif_enabled', String(notificationsEnabled));
@@ -772,6 +783,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           content: decrypted.content,
           timestamp: formatTimestamp(msg.created_at),
           createdAt: msg.created_at,
+          editedAt: msg.edited_at ?? undefined,
+          deletedAt: msg.deleted_at ?? undefined,
           isMe: msg.sender_id === user.id,
           status: 'read',
           reactions: msgReactions,
@@ -980,6 +993,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             content: decrypted.content,
             timestamp: formatTimestamp(row.created_at),
             createdAt: row.created_at,
+            editedAt: row.edited_at ?? undefined,
+            deletedAt: row.deleted_at ?? undefined,
             isMe,
             status: 'read',
             reactions: [],
@@ -1082,6 +1097,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                             content: decrypted.content,
                             codeBlock: decrypted.codeBlock,
                             attachments: decrypted.attachments,
+                            editedAt: row.edited_at ?? undefined,
+                            deletedAt: row.deleted_at ?? undefined,
                           }
                         : m
                     ),
@@ -1773,12 +1790,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!conv) return;
     const existing = conv.messages.find((message) => message.id === messageId);
     if (!existing) return;
+    const editedAt = new Date().toISOString();
 
     set((state) => ({
       conversations: state.conversations.map((c) => ({
         ...c,
         messages: c.messages.map((m) =>
-          m.id === messageId ? { ...m, content: trimmed } : m
+          m.id === messageId ? { ...m, content: trimmed, editedAt } : m
         ),
       })),
     }));
@@ -1855,6 +1873,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ...encryptedPayload,
           code_block: null,
           attachments: null,
+          edited_at: editedAt,
         })
         .eq('id', messageId);
       if (updateError) {
@@ -1863,7 +1882,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } else {
       const { error: updateError } = await supabase
         .from('messages')
-        .update({ content: trimmed })
+        .update({ content: trimmed, edited_at: editedAt })
         .eq('id', messageId);
       if (updateError) {
         await get().fetchWorkspaceData();
@@ -1874,17 +1893,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   deleteMessage: async (messageId) => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
+    const deletedAt = new Date().toISOString();
 
     set((state) => ({
       conversations: state.conversations.map((conv) => ({
         ...conv,
-        messages: conv.messages.filter((m) => m.id !== messageId),
+        messages: conv.messages.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                content: '',
+                codeBlock: undefined,
+                attachments: undefined,
+                deletedAt,
+              }
+            : m
+        ),
       })),
     }));
 
     const { error: deleteError } = await supabase
       .from('messages')
-      .delete()
+      .update({
+        content: '',
+        ciphertext: null,
+        encryption_version: null,
+        ciphertext_type: null,
+        code_block: null,
+        attachments: null,
+        deleted_at: deletedAt,
+      })
       .eq('id', messageId);
     if (deleteError) {
       await get().fetchWorkspaceData();
