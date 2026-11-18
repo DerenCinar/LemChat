@@ -184,7 +184,11 @@ export const NavRail: React.FC = () => {
         title={
           theme === 'dark'
             ? 'Switch to Frosted Mint Light Mode'
-            : 'Switch to Forest-Slate Dark Mode'
+            : theme === 'light'
+              ? 'Switch to Black & White Light Mode'
+              : theme === 'mono'
+                ? 'Switch to Black & White Dark Mode'
+                : 'Switch to Forest-Slate Dark Mode'
         }
         className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-800 transition hover:scale-105 hover:border-emerald-400/50 dark:text-emerald-200"
       >

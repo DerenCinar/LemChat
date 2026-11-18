@@ -287,3 +287,114 @@ html:not(.dark) .lem-scrollbar::-webkit-scrollbar-thumb:hover {
 .mono .lem-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(24, 24, 27, 0.42);
 }
+
+/* Black & White Theme — Dark Mode */
+.mono-dark .glass-surface {
+  background: linear-gradient(
+    145deg,
+    rgba(39, 39, 42, 0.82) 0%,
+    rgba(9, 9, 11, 0.88) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 10px 36px -6px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+.mono-dark .glass-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(39, 39, 42, 0.88) 0%,
+    rgba(9, 9, 11, 0.92) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 8px 32px 0 rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+.mono-dark .glass-pill {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mono-dark .glass-bubble-received {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 6px 20px -6px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  color: #fafafa;
+}
+
+.mono-dark .glass-bubble-sent {
+  background: linear-gradient(135deg, #52525b 0%, #27272a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 8px 24px -6px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.mono-dark .bg-\[\#22C55E\],
+.mono-dark .bg-\[\#22C55E\]\/15,
+.mono-dark .bg-\[\#22C55E\]\/20,
+.mono-dark .bg-emerald-500\/15 {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mono-dark .from-\[\#22C55E\] {
+  --tw-gradient-from: #52525b var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(82 82 91 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.mono-dark .to-\[\#10B981\],
+.mono-dark .to-\[\#059669\] {
+  --tw-gradient-to: #27272a var(--tw-gradient-to-position);
+}
+
+.mono-dark .text-\[\#22C55E\],
+.mono-dark .text-\[\#10B981\],
+.mono-dark .text-emerald-300,
+.mono-dark .text-emerald-700,
+.mono-dark .text-emerald-800,
+.mono-dark .text-emerald-900,
+.mono-dark .text-emerald-950,
+.mono-dark .text-emerald-200,
+.mono-dark .text-emerald-100 {
+  color: #d4d4d8;
+}
+
+.mono-dark .border-\[\#22C55E\],
+.mono-dark .border-\[\#22C55E\]\/60,
+.mono-dark .border-emerald-500\/30,
+.mono-dark .border-zinc-300 {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.mono-dark .ring-\[\#22C55E\]\/40,
+.mono-dark .ring-\[\#22C55E\]\/50,
+.mono-dark .ring-zinc-300\/50 {
+  --tw-ring-color: rgba(255, 255, 255, 0.28);
+}
+
+.mono-dark .shadow-lem-glow,
+.mono-dark .shadow-lem-glow-sm {
+  box-shadow: 0 8px 22px -6px rgba(0, 0, 0, 0.58);
+}
+
+.mono-dark .lem-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.mono-dark .lem-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+}

@@ -1,7 +1,7 @@
 export type UserPresence = 'online' | 'away' | 'busy' | 'offline';
 export type SelfPresence = 'online' | 'away' | 'busy';
 export type NavTab = 'chats' | 'channels' | 'mentions' | 'settings';
-export type ThemeMode = 'dark' | 'light' | 'mono';
+export type ThemeMode = 'dark' | 'light' | 'mono' | 'mono-dark';
 
 export interface Reaction {
   emoji: string;

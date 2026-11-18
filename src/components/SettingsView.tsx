@@ -5,7 +5,6 @@ import {
   Sun,
   Contrast,
   LogOut,
-  Database,
   Wifi,
   Check,
   Bell,
@@ -15,7 +14,6 @@ import {
   Camera,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
-import { getSupabaseConfig } from '../lib/supabase';
 import {
   UserAvatar,
   AVATAR_BG_PRESETS,
@@ -48,8 +46,6 @@ export const SettingsView: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
-
-  const { url } = getSupabaseConfig();
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,7 +318,7 @@ export const SettingsView: React.FC = () => {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
             Liquid Glass Theme
           </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <motion.button
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
@@ -382,6 +378,27 @@ export const SettingsView: React.FC = () => {
                 </p>
                 <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
                   Light Mode · Black/Gray accent
+                </p>
+              </div>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setTheme('mono-dark')}
+              className={`glass-pill flex items-center gap-3 rounded-2xl p-4 text-left transition ${
+                theme === 'mono-dark'
+                  ? 'border-zinc-300 bg-white/10 ring-1 ring-zinc-300/50'
+                  : 'hover:bg-black/5 dark:hover:bg-white/5'
+              }`}
+            >
+              <Contrast className="h-5 w-5 shrink-0 text-zinc-100" />
+              <div>
+                <p className="text-xs font-bold text-emerald-950 dark:text-white">
+                  Black &amp; White Dark
+                </p>
+                <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+                  #09090B · Silver glass
                 </p>
               </div>
             </motion.button>
@@ -555,15 +572,6 @@ export const SettingsView: React.FC = () => {
           </h2>
           <div className="glass-pill space-y-3 rounded-2xl p-4 text-xs">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-emerald-950 dark:text-white">
-                <Database className="h-4 w-4 text-[#22C55E]" />
-                <span className="font-semibold">Project Endpoint</span>
-              </div>
-              <span className="max-w-[260px] truncate font-mono text-[11px] text-emerald-800/75 dark:text-emerald-200/75">
-                {url}
-              </span>
-            </div>
-            <div className="flex items-center justify-between border-t border-black/5 pt-2.5 dark:border-white/10">
               <div className="flex items-center gap-2 text-emerald-950 dark:text-white">
                 <Wifi className="h-4 w-4 text-[#22C55E]" />
                 <span className="font-semibold">Realtime WebSocket</span>

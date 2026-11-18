@@ -4,6 +4,30 @@ import { useChatStore } from '../store/useChatStore';
 export const MeshBackground: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
 
+  if (theme === 'mono-dark') {
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 overflow-hidden bg-[#09090B]/95 transition-colors duration-500"
+      >
+        <div
+          className="animate-mesh-slow absolute -left-20 -top-20 h-[520px] w-[520px] rounded-full opacity-45 blur-[110px]"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(63, 63, 70, 0.75) 0%, rgba(39, 39, 42, 0.28) 55%, transparent 75%)',
+          }}
+        />
+        <div
+          className="animate-mesh-slow-rev absolute -bottom-24 right-0 h-[560px] w-[560px] rounded-full opacity-40 blur-[120px]"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(82, 82, 91, 0.65) 0%, rgba(24, 24, 27, 0.32) 55%, transparent 75%)',
+          }}
+        />
+      </div>
+    );
+  }
+
   if (theme === 'mono') {
     return (
       <div

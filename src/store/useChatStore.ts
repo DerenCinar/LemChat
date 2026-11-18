@@ -350,16 +350,28 @@ function buildReactionsList(
   }));
 }
 
-const savedTheme = (localStorage.getItem('skellytalk_theme') as ThemeMode | null) ?? 'dark';
-if (savedTheme === 'dark') {
+const savedThemeValue = localStorage.getItem('skellytalk_theme');
+const savedTheme: ThemeMode =
+  savedThemeValue === 'dark' ||
+  savedThemeValue === 'light' ||
+  savedThemeValue === 'mono' ||
+  savedThemeValue === 'mono-dark'
+    ? savedThemeValue
+    : 'dark';
+if (savedTheme === 'dark' || savedTheme === 'mono-dark') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
 }
-if (savedTheme === 'mono') {
+if (savedTheme === 'mono' || savedTheme === 'mono-dark') {
   document.documentElement.classList.add('mono');
 } else {
   document.documentElement.classList.remove('mono');
+}
+if (savedTheme === 'mono-dark') {
+  document.documentElement.classList.add('mono-dark');
+} else {
+  document.documentElement.classList.remove('mono-dark');
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -399,15 +411,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setTheme: (theme) => {
     localStorage.setItem('skellytalk_theme', theme);
-    if (theme === 'dark') {
+    if (theme === 'dark' || theme === 'mono-dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    if (theme === 'mono') {
+    if (theme === 'mono' || theme === 'mono-dark') {
       document.documentElement.classList.add('mono');
     } else {
       document.documentElement.classList.remove('mono');
+    }
+    if (theme === 'mono-dark') {
+      document.documentElement.classList.add('mono-dark');
+    } else {
+      document.documentElement.classList.remove('mono-dark');
     }
     set({ theme });
   },
@@ -415,7 +432,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   toggleTheme: () => {
     const cur = get().theme;
     const next: ThemeMode =
-      cur === 'dark' ? 'light' : cur === 'light' ? 'mono' : 'dark';
+      cur === 'dark'
+        ? 'light'
+        : cur === 'light'
+          ? 'mono'
+          : cur === 'mono'
+            ? 'mono-dark'
+            : 'dark';
     get().setTheme(next);
   },
 
