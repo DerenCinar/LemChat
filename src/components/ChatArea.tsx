@@ -200,7 +200,7 @@ export const ChatArea: React.FC = () => {
   };
 
   return (
-    <div className="relative flex min-w-0 flex-1 gap-3">
+    <div className="relative flex min-h-0 min-w-0 flex-1 gap-3">
       <section className="glass-panel glass-surface flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl">
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-3 py-2.5 md:px-5 md:py-3.5 dark:border-white/[0.09]">
@@ -585,7 +585,7 @@ export const ChatArea: React.FC = () => {
             animate={{ width: 270, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-            className="glass-panel glass-surface fixed inset-2 top-12 z-40 flex !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:inset-auto md:!w-[270px]"
+            className="glass-panel glass-surface fixed inset-2 top-12 z-40 flex min-h-0 !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:inset-auto md:h-full md:!w-[270px]"
           >
             <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5 dark:border-white/[0.09]">
               <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900/75 dark:text-emerald-200/75">
@@ -599,7 +599,7 @@ export const ChatArea: React.FC = () => {
               </button>
             </div>
 
-            <div className="lem-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
+            <div className="lem-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <div className="flex flex-col items-center text-center">
                 {activeConv.type === 'channel' ? (
                   activeConv.logoUrl ? (

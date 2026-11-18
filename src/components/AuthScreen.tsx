@@ -217,6 +217,10 @@ export const AuthScreen: React.FC = () => {
                 <input
                   type="text"
                   required
+                  minLength={3}
+                  maxLength={24}
+                  pattern="@?[A-Za-z0-9_]+"
+                  title="Use 3-24 letters, numbers, or underscores"
                   value={handle}
                   onChange={(e) => setHandle(e.target.value)}
                   placeholder="Handle (e.g. mayalin)"

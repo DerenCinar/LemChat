@@ -17,6 +17,47 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Usernames are case-insensitive and restricted to a compact, searchable format.
+do $$
+declare
+  r record;
+  v_base text;
+  v_handle text;
+begin
+  for r in select id, handle from public.profiles loop
+    v_base := regexp_replace(lower(trim(r.handle)), '^@', '');
+    v_base := regexp_replace(v_base, '[^a-z0-9_]', '', 'g');
+    if length(v_base) < 3 then
+      v_base := 'user_' || substr(r.id::text, 1, 4);
+    elsif length(v_base) > 24 then
+      v_base := substr(v_base, 1, 19);
+    end if;
+    v_handle := '@' || v_base;
+
+    if exists (
+      select 1
+      from public.profiles p
+      where p.id <> r.id and lower(p.handle) = lower(v_handle)
+    ) then
+      v_handle := '@' || substr(v_base, 1, 19) || '_' || substr(r.id::text, 1, 4);
+    end if;
+
+    update public.profiles
+    set handle = v_handle
+    where id = r.id;
+  end loop;
+end;
+$$;
+
+alter table public.profiles
+  drop constraint if exists profiles_handle_format;
+alter table public.profiles
+  add constraint profiles_handle_format
+  check (handle ~ '^@[a-z0-9_]{3,24}$');
+
+create unique index if not exists profiles_handle_lower_unique
+  on public.profiles (lower(handle));
+
 alter table public.profiles add column if not exists account_name text not null default '';
 alter table public.profiles alter column role set default '';
 update public.profiles
@@ -324,8 +365,13 @@ begin
   v_account_name := v_name;
   v_handle := coalesce(
     nullif(trim(new.raw_user_meta_data ->> 'handle'), ''),
-    '@' || regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9_]', '', 'g') || '_' || substr(new.id::text, 1, 4)
+    '@' || coalesce(nullif(substr(regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9_]', '', 'g'), 1, 19), ''), 'user') || '_' || substr(new.id::text, 1, 4)
   );
+  v_handle := '@' || regexp_replace(lower(trim(v_handle)), '^@', '', 'g');
+
+  if v_handle !~ '^@[a-z0-9_]{3,24}$' then
+    raise exception 'Username must be 3-24 characters and contain only letters, numbers, or underscores.';
+  end if;
   v_avatar := upper(substr(v_name, 1, 1));
 
   insert into public.profiles (id, display_name, account_name, handle, avatar_text, role, status)

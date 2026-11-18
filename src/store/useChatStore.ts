@@ -796,9 +796,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!supabase) return 'Supabase is not configured.';
     set({ authLoading: true, authError: null });
 
-    const normalizedHandle = handle.trim().startsWith('@')
-      ? handle.trim().toLowerCase()
-      : `@${handle.trim().toLowerCase()}`;
+    const handleText = handle.trim().replace(/^@/, '').toLowerCase();
+    if (!/^[a-z0-9_]{3,24}$/.test(handleText)) {
+      const message = 'Username must be 3-24 characters and contain only letters, numbers, or underscores.';
+      set({ authLoading: false, authError: message });
+      return message;
+    }
+
+    const normalizedHandle = `@${handleText}`;
+
+    const { data: existingProfile, error: handleLookupError } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('handle', normalizedHandle)
+      .limit(1)
+      .maybeSingle();
+
+    if (handleLookupError) {
+      set({ authLoading: false, authError: handleLookupError.message });
+      return handleLookupError.message;
+    }
+    if (existingProfile) {
+      const message = `The username ${normalizedHandle} is already taken.`;
+      set({ authLoading: false, authError: message });
+      return message;
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
