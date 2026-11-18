@@ -8,6 +8,7 @@ export const NotificationToast: React.FC = () => {
   const latestToast = useChatStore((s) => s.latestToast);
   const dismissToast = useChatStore((s) => s.dismissToast);
   const selectConversation = useChatStore((s) => s.selectConversation);
+  const setActiveTab = useChatStore((s) => s.setActiveTab);
 
   useEffect(() => {
     if (!latestToast) return;
@@ -26,7 +27,11 @@ export const NotificationToast: React.FC = () => {
           exit={{ opacity: 0, y: -16, scale: 0.94 }}
           transition={{ type: 'spring', stiffness: 420, damping: 28 }}
           onClick={() => {
-            selectConversation(latestToast.conversationId);
+            if (latestToast.kind === 'update') {
+              setActiveTab('settings');
+            } else {
+              selectConversation(latestToast.conversationId);
+            }
             dismissToast();
           }}
           className="glass-panel glass-surface fixed right-5 top-14 z-50 flex w-80 cursor-pointer items-start gap-3 rounded-2xl p-3.5 ring-1 ring-[#22C55E]/40 transition hover:scale-[1.01]"

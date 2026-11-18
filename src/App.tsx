@@ -91,18 +91,22 @@ export const App: React.FC = () => {
                   ? 'Applying update...'
                   : updateStatus.status === 'available'
                     ? 'Update available'
-                    : 'Updating SkellyTalk'}
+                    : updateStatus.status === 'downloaded'
+                      ? 'Update ready'
+                      : 'Updating SkellyTalk'}
               </h2>
-              <p className="mt-2 text-xs text-emerald-800/70 dark:text-emerald-200/65">
+              <p className="mt-2 text-sm font-medium leading-relaxed text-emerald-950/80 dark:text-emerald-50/90">
                 {updateStatus.status === 'installing'
-                  ? 'The window will stay open while the update is prepared. Please wait.'
+                  ? 'SkellyTalk will close briefly, install the update, and reopen. Please wait.'
                   : updateStatus.status === 'available'
                     ? updateStatus.version
-                      ? `Preparing SkellyTalk ${updateStatus.version}`
-                      : 'Preparing the latest version'
-                    : updateStatus.version
-                      ? `Version ${updateStatus.version}`
-                      : 'Downloading the latest version'}
+                      ? `An update to v${updateStatus.version} is available. SkellyTalk will close briefly while it updates.`
+                      : 'An update is available. SkellyTalk will close briefly while it updates.'
+                    : updateStatus.status === 'downloaded'
+                      ? 'The update has downloaded. SkellyTalk will close briefly and reopen automatically.'
+                      : updateStatus.version
+                        ? `Downloading SkellyTalk v${updateStatus.version}. The app will close briefly during installation.`
+                        : 'Downloading the latest version. The app will close briefly during installation.'}
               </p>
               {updateStatus.status === 'downloading' && (
                 <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">

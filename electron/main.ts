@@ -495,7 +495,13 @@ function setupAutoUpdater() {
   });
 
   if (app.isPackaged) {
-    void autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    void autoUpdater.checkForUpdates().catch(() => {});
+
+    setInterval(() => {
+      if (!isApplyingUpdate) {
+        void autoUpdater.checkForUpdates().catch(() => {});
+      }
+    }, 30 * 60 * 1000);
   }
 }
 

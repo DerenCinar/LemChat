@@ -46,6 +46,7 @@ export const SettingsView: React.FC = () => {
   const updateStatus = useChatStore((s) => s.updateStatus);
   const checkForUpdates = useChatStore((s) => s.checkForUpdates);
   const installUpdate = useChatStore((s) => s.installUpdate);
+  const updateSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [displayName, setDisplayName] = useState(self?.name ?? '');
   const [role, setRole] = useState(self?.role ?? '');
@@ -109,6 +110,35 @@ export const SettingsView: React.FC = () => {
             Manage your profile, Liquid Glass theme, notifications, and live session.
           </p>
         </div>
+
+        {(updateStatus.status === 'available' ||
+          updateStatus.status === 'downloading' ||
+          updateStatus.status === 'downloaded') && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#22C55E]/35 bg-[#22C55E]/12 px-4 py-3 ring-1 ring-[#22C55E]/15">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-emerald-950 dark:text-white">
+                Update available
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-emerald-900/75 dark:text-emerald-100/80">
+                {updateStatus.version
+                  ? `SkellyTalk v${updateStatus.version} is ready or downloading.`
+                  : 'A new SkellyTalk update is ready or downloading.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                updateSectionRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center',
+                })
+              }
+              className="shrink-0 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-2 text-xs font-bold text-white shadow-lem-glow-sm hover:brightness-110"
+            >
+              View Update
+            </button>
+          </div>
+        )}
 
         {/* Profile Card + Inline Editor */}
         {self && (
@@ -604,7 +634,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Auto-Updates */}
-        <div className="space-y-2.5">
+        <div ref={updateSectionRef} className="scroll-mt-6 space-y-2.5">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
             Software Updates
           </h2>

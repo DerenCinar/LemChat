@@ -58,6 +58,7 @@ export interface ToastNotification {
   senderName: string;
   senderAvatar: string;
   body: string;
+  kind?: 'message' | 'update';
 }
 
 interface TypingState {
@@ -654,7 +655,42 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ soundEnabled });
   },
 
-  setUpdateStatus: (updateStatus) => set({ updateStatus }),
+  setUpdateStatus: (updateStatus) => {
+    const previous = get().updateStatus;
+    set({ updateStatus });
+
+    if (
+      updateStatus.status === 'available' &&
+      (previous.status !== 'available' || previous.version !== updateStatus.version)
+    ) {
+      const version = updateStatus.version ? `v${updateStatus.version}` : 'the latest version';
+      const title = 'SkellyTalk update available';
+      const body = `${version} is ready to download. SkellyTalk may close briefly while it installs.`;
+
+      if (window.lemchat) {
+        void window.lemchat.sendNotification({
+          id: `update-${updateStatus.version ?? 'available'}-${Date.now()}`,
+          conversationId: '',
+          senderName: title,
+          body,
+          forceShow: true,
+        });
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body });
+      }
+
+      set({
+        latestToast: {
+          id: `update-${updateStatus.version ?? 'available'}-${Date.now()}`,
+          conversationId: '',
+          senderName: title,
+          senderAvatar: 'ST',
+          body,
+          kind: 'update',
+        },
+      });
+    }
+  },
 
   checkForUpdates: async () => {
     await window.lemchat?.checkForUpdates?.();
