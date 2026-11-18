@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, MessageSquarePlus, X, Sparkles } from 'lucide-react';
+import { Users, MessageSquarePlus, X, Sparkles, Check, XCircle } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
+import type { Profile } from '../types/chat';
 
 export const NewConversationModal: React.FC = () => {
   const isOpen = useChatStore((s) => s.isNewConvModalOpen);
@@ -18,6 +20,7 @@ export const NewConversationModal: React.FC = () => {
   const [dmUsername, setDmUsername] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [focusedUsernameField, setFocusedUsernameField] = useState<'group' | 'dm' | null>(null);
 
   if (!isOpen) return null;
 
@@ -67,6 +70,90 @@ export const NewConversationModal: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => setLogoUrl(typeof reader.result === 'string' ? reader.result : '');
     reader.readAsDataURL(file);
+  };
+
+  const normalizeHandle = (handle: string) => handle.trim().replace(/^@/, '').toLowerCase();
+  const groupUsernameToken = usernameInput.split(/[\s,]+/).pop()?.replace(/^@/, '') ?? '';
+  const dmUsernameToken = dmUsername.replace(/^@/, '');
+  const getSuggestions = (value: string) => {
+    const query = normalizeHandle(value);
+    if (!query) return [];
+    return Object.values(profiles)
+      .filter((profile) => normalizeHandle(profile.handle).includes(query))
+      .sort((a, b) => {
+        const aExact = normalizeHandle(a.handle) === query;
+        const bExact = normalizeHandle(b.handle) === query;
+        return Number(bExact) - Number(aExact);
+      })
+      .slice(0, 5);
+  };
+  const groupSuggestions = getSuggestions(groupUsernameToken);
+  const dmSuggestions = getSuggestions(dmUsernameToken);
+
+  const selectGroupUsername = (profile: Profile) => {
+    const parts = usernameInput.split(/([\s,]+)/);
+    const tokenIndex = parts.length - 1;
+    parts[tokenIndex] = `@${profile.handle.replace(/^@/, '')}`;
+    setUsernameInput(parts.join(''));
+    setFocusedUsernameField('group');
+  };
+
+  const renderUsernameSuggestions = (
+    field: 'group' | 'dm',
+    value: string,
+    suggestions: Profile[],
+    onSelect: (profile: Profile) => void
+  ) => {
+    if (focusedUsernameField !== field || !value.trim()) return null;
+    const exactMatch = suggestions.find((profile) => normalizeHandle(profile.handle) === normalizeHandle(value));
+
+    return (
+      <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-emerald-500/20 bg-white/95 p-1 shadow-xl backdrop-blur-xl dark:bg-slate-950/95">
+        {suggestions.length > 0 ? (
+          suggestions.map((profile) => (
+            <button
+              key={profile.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onSelect(profile)}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-[#22C55E]/10"
+            >
+              <UserAvatar
+                avatar={profile.avatarText}
+                name={profile.displayName}
+                className="h-7 w-7 rounded-full bg-emerald-500/20"
+                textClassName="text-[10px] font-bold"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-emerald-950 dark:text-white">
+                  {profile.displayName}
+                </span>
+                <span className="block truncate text-[10px] text-emerald-800/60 dark:text-emerald-200/60">
+                  @{profile.handle.replace(/^@/, '')}
+                </span>
+              </span>
+              {normalizeHandle(profile.handle) === normalizeHandle(value) && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
+                  <Check className="h-3.5 w-3.5" />
+                  Account found
+                </span>
+              )}
+            </button>
+          ))
+        ) : (
+          <div className="flex items-center gap-2 px-2.5 py-2 text-[10px] text-rose-600 dark:text-rose-300">
+            <XCircle className="h-3.5 w-3.5" />
+            No account found for @{value.replace(/^@/, '')}
+          </div>
+        )}
+        {exactMatch && (
+          <div className="flex items-center gap-1.5 border-t border-emerald-500/10 px-2.5 py-1.5 text-[10px] text-emerald-700/70 dark:text-emerald-200/70">
+            <Check className="h-3 w-3" />
+            This username is ready to use.
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -163,17 +250,23 @@ export const NewConversationModal: React.FC = () => {
               />
             </div>
 
-            <div>
+            <div className="relative">
               <label className="mb-1 block text-[11px] font-semibold text-emerald-900/75 dark:text-emerald-200/75">
                 Invite by Username
               </label>
               <input
                 type="text"
                 value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
+                onFocus={() => setFocusedUsernameField('group')}
+                onChange={(e) => {
+                  setUsernameInput(e.target.value);
+                  setFocusedUsernameField('group');
+                }}
+                onBlur={() => setFocusedUsernameField(null)}
                 placeholder="@alice, @bob"
                 className="glass-pill w-full rounded-xl px-3.5 py-2.5 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white dark:placeholder-emerald-100/35"
               />
+              {renderUsernameSuggestions('group', groupUsernameToken, groupSuggestions, selectGroupUsername)}
               <p className="mt-1 text-[10px] text-emerald-800/55 dark:text-emerald-200/50">
                 Type exact usernames separated by commas or spaces.
               </p>
@@ -202,18 +295,29 @@ export const NewConversationModal: React.FC = () => {
             <label className="mb-1 block text-[11px] font-semibold text-emerald-900/75 dark:text-emerald-200/75">
               Username
             </label>
-            <div className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2.5">
-              <span className="text-sm font-bold text-[#22C55E]">@</span>
-              <input
-                type="text"
-                value={dmUsername.replace(/^@/, '')}
-                onChange={(e) => setDmUsername(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleStartDm();
-                }}
-                placeholder="exact.username"
-                className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/35"
-              />
+            <div className="relative">
+              <div className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2.5">
+                <span className="text-sm font-bold text-[#22C55E]">@</span>
+                <input
+                  type="text"
+                  value={dmUsername.replace(/^@/, '')}
+                  onFocus={() => setFocusedUsernameField('dm')}
+                  onChange={(e) => {
+                    setDmUsername(e.target.value);
+                    setFocusedUsernameField('dm');
+                  }}
+                  onBlur={() => setFocusedUsernameField(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleStartDm();
+                  }}
+                  placeholder="exact.username"
+                  className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/35"
+                />
+              </div>
+              {renderUsernameSuggestions('dm', dmUsernameToken, dmSuggestions, (profile) => {
+                setDmUsername(profile.handle.replace(/^@/, ''));
+                setFocusedUsernameField('dm');
+              })}
             </div>
             <button
               type="button"
