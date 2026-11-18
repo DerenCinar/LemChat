@@ -140,6 +140,7 @@ jobs:
           VER="${{ needs.prepare-version.outputs.version }}"
           cp release/*.deb "release/SkellyTalk-ChromeOS-${VER}-amd64.deb"
           (cd dist && zip -r "../release/SkellyTalk-ChromeOS-Web-${VER}.zip" .)
+          cp dist/index.html "release/SkellyTalk-ChromeOS-Web-${VER}.html"
 
       - name: Build Android APK via Capacitor
         run: |
@@ -176,6 +177,7 @@ jobs:
             release/*.AppImage
             release/*.deb
             release/*.zip
+            release/*.html
             release/*.apk
             release/latest-linux.yml
 
