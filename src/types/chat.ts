@@ -28,6 +28,11 @@ export interface StagedUpload {
   mimeLabel?: string;
 }
 
+export interface GifAttachment {
+  url: string;
+  name: string;
+}
+
 export interface CodeBlock {
   language: string;
   code: string;

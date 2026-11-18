@@ -1,12 +1,27 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, Smile, Send, X, FileText, Code2, Reply } from 'lucide-react';
+import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
-import type { StagedUpload } from '../types/chat';
+import type { GifAttachment, StagedUpload } from '../types/chat';
 
 const EMOJI_GRID = [
   '💚', '🚀', '✨', '🔥', '👍', '🎉', '⚡', '👀',
   '😄', '🙌', '💡', '✅', '🌿', '💎', '🛠️', '📦',
+  '😂', '🤣', '😍', '🥳', '😎', '🤔', '😭', '😤',
+  '👏', '🙏', '💯', '❤️', '💜', '💙', '🧡', '💛',
+  '🌈', '☀️', '🌙', '🍕', '🍔', '🍩', '☕', '🎂',
+  '🎁', '🏆', '🎮', '🎵', '💻', '🐶', '🐱', '🦄',
+];
+
+const GIF_GRID: GifAttachment[] = [
+  { name: 'Celebration', url: 'https://media.giphy.com/media/g9582DNuQppxC/giphy.gif' },
+  { name: 'Happy dance', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
+  { name: 'Mind blown', url: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif' },
+  { name: 'Thumbs up', url: 'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif' },
+  { name: 'High five', url: 'https://media.giphy.com/media/3oKIPwoeGErMmaI43S/giphy.gif' },
+  { name: 'Cat hello', url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif' },
+  { name: 'Party', url: 'https://media.giphy.com/media/26BRrSvJUa0crqw4E/giphy.gif' },
+  { name: 'Laughing', url: 'https://media.giphy.com/media/10tIjpzIu8fe0/giphy.gif' },
 ];
 
 interface FloatingComposerProps {
@@ -20,6 +35,8 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 }) => {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGif, setShowGif] = useState(false);
+  const [selectedGif, setSelectedGif] = useState<GifAttachment | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [codeLang, setCodeLang] = useState('typescript');
   const [codeText, setCodeText] = useState('');
@@ -56,14 +73,15 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const handleSend = async () => {
     if (sending) return;
     const hasCode = showCodeEditor && codeText.trim().length > 0;
-    if (!text.trim() && stagedUploads.length === 0 && !hasCode) return;
+    if (!text.trim() && stagedUploads.length === 0 && !hasCode && !selectedGif) return;
 
     setSending(true);
     setSendPulseKey((k) => k + 1);
     await sendMessage(
       text,
       stagedUploads.length > 0 ? stagedUploads : undefined,
-      hasCode ? { language: codeLang, code: codeText } : undefined
+      hasCode ? { language: codeLang, code: codeText } : undefined,
+      selectedGif ?? undefined
     );
 
     setText('');
@@ -71,6 +89,8 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     setCodeText('');
     setShowCodeEditor(false);
     setShowEmoji(false);
+    setShowGif(false);
+    setSelectedGif(null);
     setSending(false);
 
     if (textareaRef.current) {
@@ -132,7 +152,8 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     !sending &&
     (text.trim().length > 0 ||
       stagedUploads.length > 0 ||
-      (showCodeEditor && codeText.trim().length > 0));
+      (showCodeEditor && codeText.trim().length > 0) ||
+      selectedGif !== null);
 
   return (
     <div className="relative px-4 pb-4 pt-2">
@@ -205,6 +226,29 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {selectedGif && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="mb-2 flex items-center gap-2 px-2"
+          >
+            <div className="glass-panel glass-pill flex items-center gap-2 rounded-2xl px-2.5 py-1.5 text-xs text-emerald-950 dark:text-emerald-100">
+              <img src={selectedGif.url} alt={selectedGif.name} className="h-9 w-12 rounded-lg object-cover" />
+              <span className="font-medium">{selectedGif.name}</span>
+              <button
+                onClick={() => setSelectedGif(null)}
+                className="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                title="Remove GIF"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Optional Code Block Input */}
       <AnimatePresence>
         {showCodeEditor && (
@@ -248,7 +292,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 right-16 z-30 grid grid-cols-4 gap-1.5 rounded-2xl p-2.5"
+            className="glass-panel glass-surface absolute bottom-20 right-16 z-30 grid max-h-64 grid-cols-8 gap-1.5 overflow-y-auto rounded-2xl p-2.5"
           >
             {EMOJI_GRID.map((emoji) => (
               <button
@@ -261,6 +305,36 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 className="flex h-8 w-8 items-center justify-center rounded-xl text-base transition hover:scale-115 hover:bg-emerald-500/20"
               >
                 {emoji}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showGif && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="glass-panel glass-surface absolute bottom-20 right-4 z-30 grid max-h-72 w-[280px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl p-2.5"
+          >
+            {GIF_GRID.map((gif) => (
+              <button
+                key={gif.url}
+                onClick={() => {
+                  setSelectedGif(gif);
+                  setShowGif(false);
+                  textareaRef.current?.focus();
+                }}
+                className="group overflow-hidden rounded-xl border border-white/10 bg-black/10 text-left transition hover:scale-[1.03] hover:border-emerald-400/60"
+                title={`Use ${gif.name} GIF`}
+              >
+                <img src={gif.url} alt="" className="h-20 w-full object-cover" loading="lazy" />
+                <span className="block truncate px-2 py-1 text-[10px] text-emerald-900/70 dark:text-emerald-100/70">
+                  {gif.name}
+                </span>
               </button>
             ))}
           </motion.div>
@@ -336,6 +410,18 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Smile className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => setShowGif((v) => !v)}
+          title="Choose a GIF"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
+            showGif
+              ? 'bg-emerald-500/20 text-[#22C55E]'
+              : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
+          }`}
+        >
+          <Film className="h-4 w-4" />
         </button>
 
         <div className="relative shrink-0">

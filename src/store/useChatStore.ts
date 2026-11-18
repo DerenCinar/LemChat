@@ -14,6 +14,7 @@ import type {
   CallMode,
   CodeBlock,
   Conversation,
+  GifAttachment,
   IncomingCallState,
   Message,
   NavTab,
@@ -152,7 +153,12 @@ interface ChatStore {
   uploadAvatar: (file: File) => Promise<string | null>;
   selectConversation: (conversationId: string) => Promise<void>;
   togglePinConversation: (conversationId: string) => Promise<void>;
-  sendMessage: (content: string, uploads?: StagedUpload[], codeBlock?: CodeBlock) => Promise<void>;
+  sendMessage: (
+    content: string,
+    uploads?: StagedUpload[],
+    codeBlock?: CodeBlock,
+    gif?: GifAttachment
+  ) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
@@ -1534,14 +1540,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  sendMessage: async (content, uploads, codeBlock) => {
+  sendMessage: async (content, uploads, codeBlock, gif) => {
     const supabase = getSupabaseClient();
     const user = get().session?.user;
     const convId = get().activeConversationId;
     const trimmed = content.trim();
 
     if (!supabase || !user || !convId) return;
-    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock) return;
+    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif) return;
 
     // Upload any staged files to Supabase Storage bucket 'lemchat-attachments'
     const attachments: Attachment[] = [];
@@ -1573,6 +1579,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           mimeLabel: item.mimeLabel,
         });
       }
+    }
+    if (gif) {
+      attachments.push({
+        id: `gif-${Date.now()}`,
+        name: gif.name,
+        type: 'image',
+        size: 'GIF',
+        previewUrl: gif.url,
+        mimeLabel: 'Animated GIF',
+      });
     }
 
     get().broadcastTyping(convId, false);
