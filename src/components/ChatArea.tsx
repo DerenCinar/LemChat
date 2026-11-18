@@ -15,6 +15,8 @@ import {
   UserPlus,
   LogOut,
   Check,
+  Shield,
+  Crown,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
@@ -62,6 +64,8 @@ export const ChatArea: React.FC = () => {
   const activeCall = useChatStore((s) => s.activeCall);
   const inviteToGroup = useChatStore((s) => s.inviteToGroup);
   const leaveConversation = useChatStore((s) => s.leaveConversation);
+  const removeMember = useChatStore((s) => s.removeMember);
+  const setMemberRole = useChatStore((s) => s.setMemberRole);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
   const setMobileChatOpen = useChatStore((s) => s.setMobileChatOpen);
@@ -184,9 +188,13 @@ export const ChatArea: React.FC = () => {
               title={activeConv.type === 'dm' ? `View ${activeConv.name}'s profile` : undefined}
             >
               {activeConv.type === 'channel' ? (
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  <Hash className="h-4 w-4" />
-                </div>
+                activeConv.logoUrl ? (
+                  <img src={activeConv.logoUrl} alt="" className="h-10 w-10 rounded-2xl object-cover ring-1 ring-white/25" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    <Hash className="h-4 w-4" />
+                  </div>
+                )
               ) : (
                 <UserAvatar
                   avatar={activeConv.avatar}
@@ -523,9 +531,13 @@ export const ChatArea: React.FC = () => {
             <div className="lem-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
               <div className="flex flex-col items-center text-center">
                 {activeConv.type === 'channel' ? (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-lg font-bold text-white shadow-lem-glow">
-                    #
-                  </div>
+                  activeConv.logoUrl ? (
+                    <img src={activeConv.logoUrl} alt="" className="h-16 w-16 rounded-3xl object-cover shadow-lem-glow ring-1 ring-white/25" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-lg font-bold text-white shadow-lem-glow">
+                      #
+                    </div>
+                  )
                 ) : (
                   <button
                     type="button"
@@ -583,12 +595,15 @@ export const ChatArea: React.FC = () => {
                     {convMembers.map((member) => {
                       const isOnline =
                         member.id === self?.id || onlineUserIds.has(member.id);
+                      const selfRole = activeConv.memberRoles?.[self?.id ?? ''] ?? 'member';
+                      const memberRole = activeConv.memberRoles?.[member.id] ?? 'member';
+                      const canManage = selfRole === 'owner' || selfRole === 'admin';
                       return (
-                        <button
+                        <div
                           key={member.id}
-                          onClick={() => setSelectedProfileId(member.id)}
                           className="glass-pill flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition hover:border-[#22C55E]/40"
                         >
+                          <button type="button" onClick={() => setSelectedProfileId(member.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
                           <div className="relative shrink-0">
                             <UserAvatar
                               avatar={member.avatarText}
@@ -610,7 +625,30 @@ export const ChatArea: React.FC = () => {
                               {member.handle}
                             </p>
                           </div>
-                        </button>
+                          </button>
+                          {canManage && member.id !== self?.id && (
+                            <div className="flex shrink-0 items-center gap-1">
+                              {selfRole === 'owner' && (
+                                <button
+                                  type="button"
+                                  title={memberRole === 'admin' ? 'Make moderator' : 'Make admin'}
+                                  onClick={() => void setMemberRole(activeConv.id, member.id, memberRole === 'admin' ? 'moderator' : 'admin')}
+                                  className="rounded-full p-1 text-amber-500 hover:bg-amber-500/10"
+                                >
+                                  {memberRole === 'admin' ? <Shield className="h-3 w-3" /> : <Crown className="h-3 w-3" />}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title={`Remove ${member.displayName}`}
+                                onClick={() => void removeMember(activeConv.id, member.id)}
+                                className="rounded-full p-1 text-rose-500 hover:bg-rose-500/10"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

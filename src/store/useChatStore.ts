@@ -25,9 +25,24 @@ import type {
   StagedUpload,
   ThemeMode,
   UpdateStatusPayload,
+  ChatFont,
+  ChatFontSize,
+  ProfanityFilter,
+  MemberRole,
 } from '../types/chat';
 
 const getContactAliasKey = (userId: string) => `lemchat_contact_aliases_${userId}`;
+
+const PROFANITY_WORDS = ['fuck', 'shit', 'bitch', 'asshole', 'bastard', 'damn', 'cunt', 'dick'];
+const filterProfanity = (text: string, mode: ProfanityFilter) => {
+  if (mode === 'off') return text;
+  const words = PROFANITY_WORDS;
+  return words.reduce((result, word) => {
+    const pattern = new RegExp(`\\b${word}\\b`, 'gi');
+    const replacement = mode === 'strict' ? '****' : `${word[0]}${'*'.repeat(Math.max(2, word.length - 1))}`;
+    return result.replace(pattern, replacement);
+  }, text);
+};
 
 const readContactAliases = (userId: string): Record<string, string> => {
   try {
@@ -67,6 +82,7 @@ interface DbConversationRow {
   topic: string;
   created_by: string | null;
   created_at: string;
+  logo_url?: string;
 }
 
 interface DbMemberRow {
@@ -74,6 +90,7 @@ interface DbMemberRow {
   user_id: string;
   pinned: boolean;
   last_read_at: string;
+  role?: MemberRole;
 }
 
 interface DbMessageRow {
@@ -100,6 +117,9 @@ interface DbReactionRow {
 
 interface ChatStore {
   theme: ThemeMode;
+  chatFont: ChatFont;
+  chatFontSize: ChatFontSize;
+  profanityFilter: ProfanityFilter;
   activeTab: NavTab;
   configured: boolean;
   session: Session | null;
@@ -137,6 +157,9 @@ interface ChatStore {
   updateStatus: UpdateStatusPayload;
 
   setTheme: (theme: ThemeMode) => void;
+  setChatFont: (font: ChatFont) => void;
+  setChatFontSize: (size: ChatFontSize) => void;
+  setProfanityFilter: (filter: ProfanityFilter) => void;
   toggleTheme: () => void;
   setActiveTab: (tab: NavTab) => void;
   setSearchQuery: (query: string) => void;
@@ -184,8 +207,10 @@ interface ChatStore {
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
-  createChannel: (name: string, topic: string, invitedUserIds?: string[]) => Promise<string | null>;
+  createChannel: (name: string, topic: string, invitedUserIds?: string[], logoUrl?: string) => Promise<string | null>;
   inviteToGroup: (conversationId: string, userIds: string[]) => Promise<void>;
+  removeMember: (conversationId: string, userId: string) => Promise<void>;
+  setMemberRole: (conversationId: string, userId: string, role: MemberRole) => Promise<void>;
   leaveConversation: (conversationId: string) => Promise<void>;
   startDirectMessage: (targetUserId: string) => Promise<string | null>;
   broadcastTyping: (conversationId: string, isTyping: boolean) => void;
@@ -443,10 +468,13 @@ const savedTheme: ThemeMode =
   savedThemeValue === 'mono-dark' ||
   savedThemeValue === 'ocean' ||
   savedThemeValue === 'sunset' ||
-  savedThemeValue === 'rose'
+  savedThemeValue === 'rose' ||
+  savedThemeValue === 'aurora' ||
+  savedThemeValue === 'ice' ||
+  savedThemeValue === 'amethyst'
     ? savedThemeValue
     : 'dark';
-if (savedTheme === 'dark' || savedTheme === 'mono-dark' || savedTheme === 'ocean' || savedTheme === 'sunset' || savedTheme === 'rose') {
+if (savedTheme === 'dark' || savedTheme === 'mono-dark' || savedTheme === 'ocean' || savedTheme === 'sunset' || savedTheme === 'rose' || savedTheme === 'aurora' || savedTheme === 'ice' || savedTheme === 'amethyst') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
@@ -461,9 +489,16 @@ if (savedTheme === 'mono-dark') {
 } else {
   document.documentElement.classList.remove('mono-dark');
 }
+document.documentElement.dataset.chatFont =
+  localStorage.getItem('skellytalk_font') || 'system';
+document.documentElement.dataset.chatFontSize =
+  localStorage.getItem('skellytalk_font_size') || 'medium';
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   theme: savedTheme,
+  chatFont: (localStorage.getItem('skellytalk_font') as ChatFont) || 'system',
+  chatFontSize: (localStorage.getItem('skellytalk_font_size') as ChatFontSize) || 'medium',
+  profanityFilter: (localStorage.getItem('skellytalk_profanity') as ProfanityFilter) || 'off',
   activeTab: 'chats',
   configured: isSupabaseConfigured(),
   session: null,
@@ -502,7 +537,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setTheme: (theme) => {
     localStorage.setItem('skellytalk_theme', theme);
-    if (theme === 'dark' || theme === 'mono-dark' || theme === 'ocean' || theme === 'sunset' || theme === 'rose') {
+    if (theme === 'dark' || theme === 'mono-dark' || theme === 'ocean' || theme === 'sunset' || theme === 'rose' || theme === 'aurora' || theme === 'ice' || theme === 'amethyst') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
@@ -518,6 +553,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       document.documentElement.classList.remove('mono-dark');
     }
     set({ theme });
+  },
+
+  setChatFont: (chatFont) => {
+    localStorage.setItem('skellytalk_font', chatFont);
+    document.documentElement.dataset.chatFont = chatFont;
+    set({ chatFont });
+  },
+  setChatFontSize: (chatFontSize) => {
+    localStorage.setItem('skellytalk_font_size', chatFontSize);
+    document.documentElement.dataset.chatFontSize = chatFontSize;
+    set({ chatFontSize });
+  },
+  setProfanityFilter: (profanityFilter) => {
+    localStorage.setItem('skellytalk_profanity', profanityFilter);
+    set({ profanityFilter });
   },
 
   toggleTheme: () => {
@@ -1037,6 +1087,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             unreadCount,
             membersCount: c.type === 'channel' ? Math.max(memberRows.length, 1) : undefined,
             members: memberProfiles,
+            memberRoles: Object.fromEntries(memberRows.map((m) => [m.user_id, (m.role ?? 'member') as MemberRole])) as Record<string, MemberRole>,
+            logoUrl: c.logo_url,
             lastReadAt: myMem?.last_read_at,
             messages: msgs,
           };
@@ -1801,7 +1853,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const supabase = getSupabaseClient();
     const user = get().session?.user;
     const convId = get().activeConversationId;
-    const trimmed = content.trim();
+    const trimmed = filterProfanity(content.trim(), get().profanityFilter);
 
     if (!supabase || !user || !convId) return;
     if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif) return;
@@ -2224,7 +2276,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  createChannel: async (name, topic, invitedUserIds = []) => {
+  createChannel: async (name, topic, invitedUserIds = [], logoUrl) => {
     const supabase = getSupabaseClient();
     const userId = get().session?.user?.id;
     if (!supabase || !userId) return null;
@@ -2264,6 +2316,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           unreadCount: 0,
           membersCount: Math.max(memberProfiles.length, 1),
           members: memberProfiles,
+          memberRoles: Object.fromEntries([userId, ...uniqueInvites].map((id, index) => [id, index === 0 ? 'owner' : 'member'])) as Record<string, MemberRole>,
+          logoUrl,
           messages: [],
         },
       ],
@@ -2276,6 +2330,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         type: 'channel',
         topic: topic.trim() || 'Group chat',
         created_by: userId,
+        ...(logoUrl ? { logo_url: logoUrl } : {}),
       });
 
       if (error) {
@@ -2290,6 +2345,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             conversation_id: convId,
             user_id: userId,
             pinned: false,
+            role: 'owner',
           },
           { onConflict: 'conversation_id,user_id' }
         );
@@ -2351,6 +2407,41 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (err) {
       console.error('[SkellyTalk] inviteToGroup error:', err);
     }
+  },
+
+  removeMember: async (conversationId, userId) => {
+    const supabase = getSupabaseClient();
+    const selfId = get().session?.user?.id;
+    if (!supabase || !selfId || userId === selfId) return;
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    const selfRole = conv?.memberRoles?.[selfId] ?? 'member';
+    if (selfRole !== 'owner' && selfRole !== 'admin') return;
+    const { error } = await supabase
+      .from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId);
+    if (error) {
+      console.error('[SkellyTalk] Failed to remove member:', error.message);
+      return;
+    }
+    await get().fetchWorkspaceData();
+  },
+
+  setMemberRole: async (conversationId, userId, role) => {
+    const supabase = getSupabaseClient();
+    const selfId = get().session?.user?.id;
+    if (!supabase || !selfId) return;
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    const selfRole = conv?.memberRoles?.[selfId] ?? 'member';
+    if (selfRole !== 'owner' && (selfRole !== 'admin' || role === 'owner')) return;
+    const { error } = await supabase
+      .from('conversation_members')
+      .update({ role })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId);
+    if (error) console.error('[SkellyTalk] Failed to update member role:', error.message);
+    else await get().fetchWorkspaceData();
   },
 
   leaveConversation: async (conversationId) => {

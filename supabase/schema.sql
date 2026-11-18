@@ -50,6 +50,8 @@ create table if not exists public.conversations (
   created_at timestamptz not null default now()
 );
 
+alter table public.conversations add column if not exists logo_url text;
+
 alter table public.conversations enable row level security;
 
 -- 3. Conversation Members
@@ -59,6 +61,7 @@ create table if not exists public.conversation_members (
   pinned boolean not null default false,
   last_read_at timestamptz not null default now(),
   joined_at timestamptz not null default now(),
+  role text not null default 'member' check (role in ('owner', 'admin', 'moderator', 'member')),
   primary key (conversation_id, user_id)
 );
 
@@ -76,6 +79,22 @@ as $$
     from public.conversation_members
     where conversation_id = conv_id
       and user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.can_manage_conversation(conv_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.conversation_members
+    where conversation_id = conv_id
+      and user_id = auth.uid()
+      and role in ('owner', 'admin')
   );
 $$;
 
@@ -114,16 +133,23 @@ create policy "Members can invite others or join conversations"
     )
   );
 
+drop policy if exists "Owners and admins can update group memberships" on public.conversation_members;
 create policy "Users can update their own membership (pin, last_read_at)"
   on public.conversation_members for update
   to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or public.can_manage_conversation(conversation_id)
+  );
 
 drop policy if exists "Users can leave conversations" on public.conversation_members;
-create policy "Users can leave conversations"
+create policy "Users can leave or owners/admins can remove members"
   on public.conversation_members for delete
   to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or public.can_manage_conversation(conversation_id)
+  );
 
 -- 4. Messages
 create table if not exists public.messages (

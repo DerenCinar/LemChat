@@ -116,9 +116,13 @@ export const ConversationSidebar: React.FC = () => {
         )}
         <div className="relative z-10 shrink-0">
           {conv.type === 'channel' ? (
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 transition-transform group-hover:scale-105 dark:text-emerald-300">
-              <Hash className="h-4 w-4" />
-            </div>
+            conv.logoUrl ? (
+              <img src={conv.logoUrl} alt="" className="h-10 w-10 rounded-2xl object-cover ring-1 ring-white/20 transition-transform group-hover:scale-105" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 transition-transform group-hover:scale-105 dark:text-emerald-300">
+                <Hash className="h-4 w-4" />
+              </div>
+            )
           ) : (
             <UserAvatar
               avatar={conv.avatar}

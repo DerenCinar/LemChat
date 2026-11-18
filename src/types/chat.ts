@@ -8,7 +8,14 @@ export type ThemeMode =
   | 'mono-dark'
   | 'ocean'
   | 'sunset'
-  | 'rose';
+  | 'rose'
+  | 'aurora'
+  | 'ice'
+  | 'amethyst';
+export type ChatFont = 'system' | 'inter' | 'rounded' | 'mono';
+export type ChatFontSize = 'small' | 'medium' | 'large';
+export type ProfanityFilter = 'off' | 'mild' | 'strict';
+export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member';
 
 export interface Reaction {
   emoji: string;
@@ -78,6 +85,8 @@ export interface Conversation {
   unreadCount: number;
   membersCount?: number;
   members: Profile[];
+  memberRoles?: Record<string, MemberRole>;
+  logoUrl?: string;
   lastReadAt?: string;
   messages: Message[];
 }

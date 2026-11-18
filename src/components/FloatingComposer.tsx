@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film } from 'lucide-react';
+import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import type { GifAttachment, StagedUpload } from '../types/chat';
 
@@ -19,6 +19,11 @@ const EMOJI_GRID = [
   '🤠', '🤡', '👻', '👽', '🤖', '👑', '💍', '🎩',
   '🦊', '🐯', '🦁', '🐵', '🐨', '🐻', '🐙', '🦑',
   '🌻', '🌺', '🌊', '🏖️', '⛰️', '🌍', '🪐', '⭐',
+  '🫡', '🫣', '🫨', '🫢', '🫠', '🫥', '🫤', '🫶',
+  '🫀', '🫁', '🧠', '🦾', '🦿', '🦄', '🪽', '🐝',
+  '🥨', '🥯', '🧇', '🧋', '🧃', '🧉', '🥥', '🫒',
+  '🪩', '🪄', '🪅', '🪆', '🪞', '🪟', '🪺', '🪴',
+  '🛼', '🛹', '🛸', '🚁', '🚀', '🧑‍🚀', '🧚', '🧙',
 ];
 
 const GIF_GRID: GifAttachment[] = [
@@ -44,6 +49,16 @@ const GIF_GRID: GifAttachment[] = [
   { name: 'Slow clap', url: 'https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/giphy.gif' },
   { name: 'No way', url: 'https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif' },
   { name: 'Nodding', url: 'https://media.giphy.com/media/KmTnUKop0AfFm/giphy.gif' },
+  { name: 'Let it out', url: 'https://media.giphy.com/media/ROF8OQvDmxytW/giphy.gif' },
+  { name: 'You got this', url: 'https://media.giphy.com/media/3o6Zt6KHxJTbXCnSvu/giphy.gif' },
+  { name: 'Facepalm', url: 'https://media.giphy.com/media/5ZhDfrDqEVmz6/giphy.gif' },
+  { name: 'Surprise', url: 'https://media.giphy.com/media/gnJgBlackNBFSM/giphy.gif' },
+  { name: 'Proud', url: 'https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif' },
+  { name: 'On fire', url: 'https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif' },
+  { name: 'Working', url: 'https://media.giphy.com/media/3oKIPEqDGUULpEU0aQ/giphy.gif' },
+  { name: 'Sleepy', url: 'https://media.giphy.com/media/Sgqi6MxpOe95A1sQeG/giphy.gif' },
+  { name: 'Cheering', url: 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif' },
+  { name: 'Confetti', url: 'https://media.giphy.com/media/26BRv0ThflsHCqDrG/giphy.gif' },
 ];
 
 interface FloatingComposerProps {
@@ -65,6 +80,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const [sending, setSending] = useState(false);
   const [sendPulseKey, setSendPulseKey] = useState(0);
   const [stagedUploads, setStagedUploads] = useState<StagedUpload[]>([]);
+  const [recordingMode, setRecordingMode] = useState<'audio' | 'video' | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -168,6 +186,54 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     });
 
     e.target.value = '';
+  };
+
+  const startRecording = async (mode: 'audio' | 'video') => {
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: mode === 'video',
+      });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = () => {
+        const type = mode === 'video' ? 'video/webm' : 'audio/webm';
+        const blob = new Blob(chunks, { type });
+        const extension = mode === 'video' ? 'webm' : 'webm';
+        const file = new File([blob], `${mode}-recording.${extension}`, { type });
+        const sizeKb = file.size / 1024;
+        setStagedUploads((prev) => [
+          ...prev,
+          {
+            id: `recording-${Date.now()}`,
+            file,
+            name: file.name,
+            type: mode === 'video' ? 'file' : 'file',
+            size: sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(sizeKb))} KB`,
+            mimeLabel: type,
+          },
+        ]);
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecordingMode(mode);
+    } catch (error) {
+      console.error('[SkellyTalk] Recording failed:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    mediaRecorderRef.current = null;
+    setRecordingMode(null);
   };
 
   const canSend =
@@ -411,6 +477,33 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         >
           <Code2 className="h-4 w-4" />
         </button>
+
+        {recordingMode ? (
+          <button
+            onClick={stopRecording}
+            title={`Stop ${recordingMode} recording`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-rose-500 md:h-9 md:w-9"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => void startRecording('audio')}
+              title="Record audio"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70"
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => void startRecording('video')}
+              title="Record video"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70"
+            >
+              <Video className="h-4 w-4" />
+            </button>
+          </>
+        )}
 
         <textarea
           ref={textareaRef}

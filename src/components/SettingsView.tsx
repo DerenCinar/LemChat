@@ -27,6 +27,12 @@ export const SettingsView: React.FC = () => {
   const self = useChatStore((s) => s.self);
   const realtimeConnected = useChatStore((s) => s.realtimeConnected);
   const setTheme = useChatStore((s) => s.setTheme);
+  const chatFont = useChatStore((s) => s.chatFont);
+  const chatFontSize = useChatStore((s) => s.chatFontSize);
+  const profanityFilter = useChatStore((s) => s.profanityFilter);
+  const setChatFont = useChatStore((s) => s.setChatFont);
+  const setChatFontSize = useChatStore((s) => s.setChatFontSize);
+  const setProfanityFilter = useChatStore((s) => s.setProfanityFilter);
   const signOut = useChatStore((s) => s.signOut);
   const updateSelfProfile = useChatStore((s) => s.updateSelfProfile);
   const uploadAvatar = useChatStore((s) => s.uploadAvatar);
@@ -407,6 +413,9 @@ export const SettingsView: React.FC = () => {
               ['ocean', 'Ocean Glass', 'Deep blue · Cyan glow', 'from-sky-400 to-cyan-400'],
               ['sunset', 'Sunset Glass', 'Orange · Violet glow', 'from-orange-400 to-violet-500'],
               ['rose', 'Rose Glass', 'Rose · Pink glow', 'from-rose-400 to-fuchsia-500'],
+              ['aurora', 'Aurora Glass', 'Green · Indigo shimmer', 'from-emerald-300 to-indigo-500'],
+              ['ice', 'Ice Glass', 'Frost · Arctic blue', 'from-cyan-100 to-blue-500'],
+              ['amethyst', 'Amethyst Glass', 'Violet · Orchid glow', 'from-violet-400 to-pink-500'],
             ] as const).map(([mode, title, subtitle, gradient]) => (
               <motion.button
                 key={mode}
@@ -425,6 +434,64 @@ export const SettingsView: React.FC = () => {
                   <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">{subtitle}</p>
                 </div>
               </motion.button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Chat Font
+            </h2>
+            <select
+              value={chatFont}
+              onChange={(e) => setChatFont(e.target.value as typeof chatFont)}
+              className="glass-pill w-full rounded-xl px-3 py-2 text-xs text-emerald-950 outline-none dark:text-white"
+            >
+              <option value="system">System</option>
+              <option value="inter">Inter</option>
+              <option value="rounded">Rounded</option>
+              <option value="mono">Monospace</option>
+            </select>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['small', 'medium', 'large'] as const).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setChatFontSize(size)}
+                  className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize ${
+                    chatFontSize === size ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 dark:text-white' : 'text-emerald-900/70 dark:text-emerald-100/70'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Profanity Filter
+            </h2>
+            {([
+              ['off', 'Off', 'Send messages normally'],
+              ['mild', 'Mild', 'Mask part of strong words'],
+              ['strict', 'Strict', 'Replace strong words'],
+            ] as const).map(([mode, title, subtitle]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setProfanityFilter(mode)}
+                className={`glass-pill flex w-full items-center justify-between rounded-xl px-3 py-2 text-left ${
+                  profanityFilter === mode ? 'border-[#22C55E] bg-[#22C55E]/15' : ''
+                }`}
+              >
+                <div>
+                  <p className="text-xs font-semibold text-emerald-950 dark:text-white">{title}</p>
+                  <p className="text-[10px] text-emerald-800/60 dark:text-emerald-200/55">{subtitle}</p>
+                </div>
+                {profanityFilter === mode && <Check className="h-3.5 w-3.5 text-[#22C55E]" />}
+              </button>
             ))}
           </div>
         </div>

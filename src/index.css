@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+html[data-chat-font="inter"] body { font-family: Inter, 'Segoe UI', sans-serif; }
+html[data-chat-font="rounded"] body { font-family: 'Trebuchet MS', 'Segoe UI Rounded', sans-serif; }
+html[data-chat-font="mono"] body { font-family: Consolas, 'Courier New', monospace; }
+html[data-chat-font-size="small"] body { font-size: 14px; }
+html[data-chat-font-size="medium"] body { font-size: 16px; }
+html[data-chat-font-size="large"] body { font-size: 18px; }
+
 @layer base {
   html,
   body,
