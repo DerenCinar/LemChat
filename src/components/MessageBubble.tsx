@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 import type { Message } from '../types/chat';
 
 const QUICK_REACTIONS = ['💚', '🔥', '🚀', '✨', '👍', '👀'];
@@ -35,6 +36,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
 
   const openAttachment = (url: string | undefined) => {
     if (!url) return;
@@ -178,9 +180,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {!message.isMe && (
         <div className="w-8 shrink-0 pt-0.5">
           {showHeader ? (
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-700/45 text-[11px] font-bold text-emerald-950 ring-1 ring-white/25 dark:text-white">
-              {message.senderAvatar}
-            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedProfileId(message.senderId)}
+              title={`View ${message.senderName}'s profile`}
+              className="transition hover:scale-105"
+            >
+              <UserAvatar
+                avatar={message.senderAvatar}
+                name={message.senderName}
+                className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-700/45 text-emerald-950 ring-1 ring-white/25 dark:text-white"
+                textClassName="text-[11px] font-bold"
+              />
+            </button>
           ) : null}
         </div>
       )}
@@ -192,9 +204,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       >
         {showHeader && !message.isMe && (
           <div className="mb-1 flex items-center gap-2 px-1">
-            <span className="text-xs font-semibold text-emerald-950 dark:text-emerald-100">
+            <button
+              type="button"
+              onClick={() => setSelectedProfileId(message.senderId)}
+              className="text-xs font-semibold text-emerald-950 hover:underline dark:text-emerald-100"
+            >
               {message.senderName}
-            </span>
+            </button>
             {message.senderRole && (
               <span className="text-[10px] text-emerald-800/60 dark:text-emerald-200/45">
                 {message.senderRole}

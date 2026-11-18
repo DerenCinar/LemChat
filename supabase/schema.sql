@@ -1,5 +1,5 @@
 -- ============================================================================
--- LemChat by LemHand — Complete Supabase Schema, RLS, Realtime & Storage
+-- SkellyTalk — Complete Supabase Schema, RLS, Realtime & Storage
 -- Run this script once in your Supabase Dashboard -> SQL Editor
 -- ============================================================================
 
@@ -10,8 +10,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null,
   handle text not null unique,
-  avatar_text text not null default 'LC',
-  role text not null default 'LemHand Member',
+  avatar_text text not null default 'ST',
+  role text not null default 'Member',
   status text not null default 'online' check (status in ('online', 'away', 'busy')),
   updated_at timestamptz not null default now()
 );
@@ -72,33 +72,35 @@ as $$
   );
 $$;
 
-create policy "Channels are visible to all authenticated users, DMs to members"
+drop policy if exists "Channels are visible to all authenticated users, DMs to members" on public.conversations;
+drop policy if exists "Conversations are visible to creator or members" on public.conversations;
+create policy "Conversations are visible to creator or members"
   on public.conversations for select
   to authenticated
-  using (type = 'channel' or public.is_conversation_member(id));
+  using (created_by = auth.uid() or public.is_conversation_member(id));
 
 create policy "Authenticated users can create conversations"
   on public.conversations for insert
   to authenticated
   with check (auth.uid() = created_by);
 
+drop policy if exists "Members can view membership of accessible conversations" on public.conversation_members;
 create policy "Members can view membership of accessible conversations"
   on public.conversation_members for select
   to authenticated
   using (
     user_id = auth.uid()
     or public.is_conversation_member(conversation_id)
-    or exists (
-      select 1 from public.conversations c
-      where c.id = conversation_id and c.type = 'channel'
-    )
   );
 
-create policy "Authenticated users can join channels or add DM members"
+drop policy if exists "Authenticated users can join channels or add DM members" on public.conversation_members;
+drop policy if exists "Members can invite others or join conversations" on public.conversation_members;
+create policy "Members can invite others or join conversations"
   on public.conversation_members for insert
   to authenticated
   with check (
     user_id = auth.uid()
+    or public.is_conversation_member(conversation_id)
     or exists (
       select 1 from public.conversations c
       where c.id = conversation_id and c.created_by = auth.uid()
@@ -107,6 +109,12 @@ create policy "Authenticated users can join channels or add DM members"
 
 create policy "Users can update their own membership (pin, last_read_at)"
   on public.conversation_members for update
+  to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "Users can leave conversations" on public.conversation_members;
+create policy "Users can leave conversations"
+  on public.conversation_members for delete
   to authenticated
   using (user_id = auth.uid());
 
@@ -124,7 +132,7 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
--- Upgrade existing LemChat databases in place.
+-- Upgrade existing SkellyTalk databases in place.
 alter table public.messages add column if not exists ciphertext jsonb;
 alter table public.messages add column if not exists encryption_version text;
 alter table public.messages add column if not exists ciphertext_type integer;
@@ -134,29 +142,19 @@ create index if not exists idx_messages_conv_created
 
 alter table public.messages enable row level security;
 
-create policy "Users can read messages in channels or their DMs"
+drop policy if exists "Users can read messages in channels or their DMs" on public.messages;
+create policy "Users can read messages in their groups and DMs"
   on public.messages for select
   to authenticated
-  using (
-    public.is_conversation_member(conversation_id)
-    or exists (
-      select 1 from public.conversations c
-      where c.id = conversation_id and c.type = 'channel'
-    )
-  );
+  using (public.is_conversation_member(conversation_id));
 
-create policy "Users can send messages to channels or their DMs"
+drop policy if exists "Users can send messages to channels or their DMs" on public.messages;
+create policy "Users can send messages to their groups and DMs"
   on public.messages for insert
   to authenticated
   with check (
     sender_id = auth.uid()
-    and (
-      public.is_conversation_member(conversation_id)
-      or exists (
-        select 1 from public.conversations c
-        where c.id = conversation_id and c.type = 'channel'
-      )
-    )
+    and public.is_conversation_member(conversation_id)
   );
 
 create policy "Users can update their own messages"
@@ -255,7 +253,7 @@ create policy "Users can remove their own reactions"
   to authenticated
   using (user_id = auth.uid());
 
--- 6. Default #general channel + Auto-profile trigger on signup
+-- 6. Auto-profile trigger on signup
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -266,7 +264,6 @@ declare
   v_name text;
   v_handle text;
   v_avatar text;
-  v_general_id uuid;
 begin
   v_name := coalesce(nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''), split_part(new.email, '@', 1));
   v_handle := coalesce(
@@ -276,23 +273,8 @@ begin
   v_avatar := upper(substr(v_name, 1, 2));
 
   insert into public.profiles (id, display_name, handle, avatar_text, role, status)
-  values (new.id, v_name, v_handle, v_avatar, 'LemHand Member', 'online')
+  values (new.id, v_name, v_handle, v_avatar, 'Member', 'online')
   on conflict (id) do nothing;
-
-  -- Ensure #general exists and join the user automatically
-  select id into v_general_id from public.conversations
-  where type = 'channel' and name = 'general'
-  limit 1;
-
-  if v_general_id is null then
-    insert into public.conversations (name, type, topic, created_by)
-    values ('general', 'channel', 'Company-wide LemHand announcements & real-time chat', new.id)
-    returning id into v_general_id;
-  end if;
-
-  insert into public.conversation_members (conversation_id, user_id, pinned)
-  values (v_general_id, new.id, true)
-  on conflict do nothing;
 
   return new;
 end;

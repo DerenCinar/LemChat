@@ -15,6 +15,7 @@ import {
   Shrink,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 
 function formatDuration(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -119,7 +120,12 @@ export const CallOverlay: React.FC = () => {
             />
             <div className="flex items-center gap-3">
               <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-sm font-bold text-white shadow-lem-glow">
-                {incomingCall.callerAvatar}
+                <UserAvatar
+                  avatar={incomingCall.callerAvatar}
+                  name={incomingCall.callerName}
+                  className="h-11 w-11 rounded-2xl"
+                  textClassName="text-sm font-bold text-white"
+                />
                 <span className="absolute -inset-1 animate-ping rounded-2xl border border-[#22C55E]/50" />
               </div>
               <div>

@@ -105,6 +105,7 @@ interface ChatStore {
   isInfoPanelOpen: boolean;
   isNewConvModalOpen: boolean;
   isWindowFocused: boolean;
+  selectedProfileId: string | null;
 
   typingConversations: Record<string, TypingState | null>;
   latestToast: ToastNotification | null;
@@ -128,6 +129,7 @@ interface ChatStore {
   setWindowFocused: (focused: boolean) => void;
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
+  setSelectedProfileId: (userId: string | null) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotifyWhenFocused: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
@@ -145,14 +147,17 @@ interface ChatStore {
   cleanupRealtime: () => void;
 
   setSelfStatus: (status: SelfPresence, syncToTray?: boolean) => Promise<void>;
-  updateSelfProfile: (displayName: string, role: string) => Promise<void>;
+  updateSelfProfile: (displayName: string, role: string, avatarUrl?: string) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<string | null>;
   selectConversation: (conversationId: string) => Promise<void>;
   togglePinConversation: (conversationId: string) => Promise<void>;
   sendMessage: (content: string, uploads?: StagedUpload[], codeBlock?: CodeBlock) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
-  createChannel: (name: string, topic: string) => Promise<string | null>;
+  createChannel: (name: string, topic: string, invitedUserIds?: string[]) => Promise<string | null>;
+  inviteToGroup: (conversationId: string, userIds: string[]) => Promise<void>;
+  leaveConversation: (conversationId: string) => Promise<void>;
   startDirectMessage: (targetUserId: string) => Promise<string | null>;
   broadcastTyping: (conversationId: string, isTyping: boolean) => void;
   syncBadgeCount: () => void;
@@ -198,10 +203,48 @@ interface DecryptedMessagePayload {
   attachments?: Attachment[];
 }
 
+function getSentCacheKey(userId: string): string {
+  return `skellytalk_sent_cache_${userId}`;
+}
+
+function readSentCache(userId: string): Record<string, DecryptedMessagePayload> {
+  try {
+    const raw = localStorage.getItem(getSentCacheKey(userId));
+    return raw ? (JSON.parse(raw) as Record<string, DecryptedMessagePayload>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSentCacheEntry(
+  userId: string,
+  messageId: string,
+  payload: DecryptedMessagePayload
+): void {
+  try {
+    const cache = readSentCache(userId);
+    cache[messageId] = payload;
+    const keys = Object.keys(cache);
+    if (keys.length > 500) {
+      for (const k of keys.slice(0, keys.length - 500)) {
+        delete cache[k];
+      }
+    }
+    localStorage.setItem(getSentCacheKey(userId), JSON.stringify(cache));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 async function decryptMessageRow(
   row: DbMessageRow,
-  senderId: string
+  senderId: string,
+  selfId?: string
 ): Promise<DecryptedMessagePayload> {
+  if (selfId && senderId === selfId) {
+    const cached = readSentCache(selfId)[row.id];
+    if (cached) return cached;
+  }
   const ciphertext = row.ciphertext?.ciphertext;
   if (!row.encryption_version || !ciphertext || row.ciphertext_type == null) {
     return {
@@ -210,7 +253,16 @@ async function decryptMessageRow(
       attachments: row.attachments ?? undefined,
     };
   }
-  if (!window.lemchat) return { content: '[Encrypted message — open in the desktop app]' };
+  if (!window.lemchat) {
+    if (row.content) {
+      return {
+        content: row.content,
+        codeBlock: row.code_block ?? undefined,
+        attachments: row.attachments ?? undefined,
+      };
+    }
+    return { content: '[Encrypted message — open in the desktop app]' };
+  }
   try {
     const encryptedEnvelope = row.ciphertext;
     if (row.ciphertext_type === 7 && encryptedEnvelope?.distribution_id) {
@@ -254,8 +306,15 @@ async function decryptMessageRow(
       return { content: decrypted };
     }
   } catch (error) {
-    console.error('[LemChat] Failed to decrypt message:', error);
-    return { content: '[Unable to decrypt message]' };
+    console.error('[SkellyTalk] Failed to decrypt message:', error);
+    if (row.content) {
+      return {
+        content: row.content,
+        codeBlock: row.code_block ?? undefined,
+        attachments: row.attachments ?? undefined,
+      };
+    }
+    return { content: '[Encrypted message]' };
   }
 }
 
@@ -282,7 +341,7 @@ function buildReactionsList(
 }
 
 const savedTheme = (localStorage.getItem('skellytalk_theme') as ThemeMode | null) ?? 'dark';
-if (savedTheme === 'dark' || savedTheme === 'mono') {
+if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
@@ -315,6 +374,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isInfoPanelOpen: false,
   isNewConvModalOpen: false,
   isWindowFocused: true,
+  selectedProfileId: null,
 
   typingConversations: {},
   latestToast: null,
@@ -329,7 +389,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setTheme: (theme) => {
     localStorage.setItem('skellytalk_theme', theme);
-    if (theme === 'dark' || theme === 'mono') {
+    if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
@@ -362,6 +422,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setNewConvModalOpen: (isNewConvModalOpen) => set({ isNewConvModalOpen }),
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
+  setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
 
   setNotificationsEnabled: (notificationsEnabled) => {
     localStorage.setItem('lemchat_notif_enabled', String(notificationsEnabled));
@@ -602,7 +663,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const fallbackName =
         (user.user_metadata?.display_name as string | undefined) ||
         user.email?.split('@')[0] ||
-        'LemHand User';
+        'SkellyTalk User';
       const fallbackHandle =
         (user.user_metadata?.handle as string | undefined) ||
         `@${fallbackName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${user.id.slice(0, 4)}`;
@@ -614,7 +675,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           display_name: fallbackName,
           handle: fallbackHandle,
           avatar_text: fallbackName.slice(0, 2).toUpperCase(),
-          role: 'LemHand Member',
+          role: 'Member',
           status: 'online',
         })
         .select()
@@ -655,14 +716,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         reactionsByMsg.get(msg.id) ?? [],
         user.id
       );
-      const decrypted = await decryptMessageRow(msg, msg.sender_id);
+      const decrypted = await decryptMessageRow(msg, msg.sender_id, user.id);
 
       const formatted: Message = {
         id: msg.id,
         conversationId: msg.conversation_id,
         senderId: msg.sender_id,
         senderName: sender?.displayName ?? 'Member',
-        senderAvatar: sender?.avatarText ?? 'LM',
+        senderAvatar: sender?.avatarText ?? 'ST',
         senderRole: sender?.role,
         content: decrypted.content,
         timestamp: formatTimestamp(msg.created_at),
@@ -673,8 +734,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         codeBlock: decrypted.codeBlock,
         attachments: decrypted.attachments,
         isMention: selfProfile
-          ? msg.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
-            msg.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
+          ? decrypted.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
+            decrypted.content.toLowerCase().includes(selfProfile.handle.toLowerCase())
           : false,
       };
 
@@ -684,49 +745,80 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     const convRows = (convsRes.data ?? []) as DbConversationRow[];
-    const conversations: Conversation[] = convRows.map((c) => {
-      const members = membersByConv.get(c.id) ?? [];
-      const myMem = members.find((m) => m.user_id === user.id);
-      const msgs = messagesByConv.get(c.id) ?? [];
-      const lastReadMs = myMem ? new Date(myMem.last_read_at).getTime() : 0;
+    const legacyGeneralIds: string[] = [];
 
-      const unreadCount = myMem
-        ? msgs.filter(
-            (m) => !m.isMe && new Date(m.createdAt).getTime() > lastReadMs
-          ).length
-        : 0;
+    const conversations: Conversation[] = convRows
+      .filter((c) => {
+        const members = membersByConv.get(c.id) ?? [];
+        const myMem = members.find((m) => m.user_id === user.id);
+        if (!myMem) return false;
+        // Remove legacy auto-joined #general channel
+        if (
+          c.type === 'channel' &&
+          c.name === 'general' &&
+          c.topic.toLowerCase().includes('lemhand')
+        ) {
+          legacyGeneralIds.push(c.id);
+          return false;
+        }
+        return true;
+      })
+      .map((c) => {
+        const memberRows = membersByConv.get(c.id) ?? [];
+        const myMem = memberRows.find((m) => m.user_id === user.id);
+        const msgs = messagesByConv.get(c.id) ?? [];
+        const lastReadMs = myMem ? new Date(myMem.last_read_at).getTime() : 0;
 
-      let displayName = c.name;
-      let avatar = '#';
-      let peerUserId: string | undefined;
-      let status: Conversation['status'];
-      let roleOrTopic = c.topic;
+        const unreadCount = myMem
+          ? msgs.filter(
+              (m) => !m.isMe && new Date(m.createdAt).getTime() > lastReadMs
+            ).length
+          : 0;
 
-      if (c.type === 'dm') {
-        const peerMem = members.find((m) => m.user_id !== user.id);
-        const peer = peerMem ? profileMap[peerMem.user_id] : undefined;
-        displayName = peer?.displayName ?? c.name;
-        avatar = peer?.avatarText ?? displayName.slice(0, 2).toUpperCase();
-        peerUserId = peer?.id;
-        status = peer?.status ?? 'offline';
-        roleOrTopic = peer?.role ?? 'Direct Message';
-      }
+        const memberProfiles: Profile[] = memberRows
+          .map((m) => profileMap[m.user_id])
+          .filter((p): p is Profile => Boolean(p));
 
-      return {
-        id: c.id,
-        name: displayName,
-        type: c.type,
-        avatar,
-        status,
-        peerUserId,
-        roleOrTopic,
-        pinned: myMem?.pinned ?? false,
-        unreadCount,
-        membersCount: c.type === 'channel' ? Math.max(members.length, 1) : undefined,
-        lastReadAt: myMem?.last_read_at,
-        messages: msgs,
-      };
-    });
+        let displayName = c.name;
+        let avatar = '#';
+        let peerUserId: string | undefined;
+        let status: Conversation['status'];
+        let roleOrTopic = c.topic;
+
+        if (c.type === 'dm') {
+          const peerMem = memberRows.find((m) => m.user_id !== user.id);
+          const peer = peerMem ? profileMap[peerMem.user_id] : undefined;
+          displayName = peer?.displayName ?? c.name;
+          avatar = peer?.avatarText ?? displayName.slice(0, 2).toUpperCase();
+          peerUserId = peer?.id;
+          status = peer?.status ?? 'offline';
+          roleOrTopic = peer?.role ?? 'Direct Message';
+        }
+
+        return {
+          id: c.id,
+          name: displayName,
+          type: c.type,
+          avatar,
+          status,
+          peerUserId,
+          roleOrTopic,
+          pinned: myMem?.pinned ?? false,
+          unreadCount,
+          membersCount: c.type === 'channel' ? Math.max(memberRows.length, 1) : undefined,
+          members: memberProfiles,
+          lastReadAt: myMem?.last_read_at,
+          messages: msgs,
+        };
+      });
+
+    if (legacyGeneralIds.length > 0) {
+      void supabase
+        .from('conversation_members')
+        .delete()
+        .in('conversation_id', legacyGeneralIds)
+        .eq('user_id', user.id);
+    }
 
     const currentActive = get().activeConversationId;
     const nextActiveId =
@@ -754,34 +846,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (selfProfile) {
       window.lemchat?.updateUserStatus(selfProfile.status);
       if (window.lemchat?.signalInitialize) {
-        void window.lemchat.signalInitialize().then(async (result) => {
-          const initialized = result as {
-            publicBundle: {
-              identityKey: string;
-              registrationId: number;
-              signedPreKeyId: number;
-              signedPreKey: string;
-              signedPreKeySignature: string;
-              kyberPreKeyId: number;
-              kyberPreKey: string;
-              kyberPreKeySignature: string;
-              oneTimePreKeys: Array<{ id: number; publicKey: string }>;
+        void window.lemchat
+          .signalInitialize()
+          .then(async (result) => {
+            const initialized = result as {
+              publicBundle: {
+                identityKey: string;
+                registrationId: number;
+                signedPreKeyId: number;
+                signedPreKey: string;
+                signedPreKeySignature: string;
+                kyberPreKeyId: number;
+                kyberPreKey: string;
+                kyberPreKeySignature: string;
+                oneTimePreKeys: Array<{ id: number; publicKey: string }>;
+              };
             };
-          };
-          await supabase.from('signal_key_bundles').upsert({
-            user_id: user.id,
-            identity_key: initialized.publicBundle.identityKey,
-            registration_id: initialized.publicBundle.registrationId,
-            signed_pre_key_id: initialized.publicBundle.signedPreKeyId,
-            signed_pre_key: initialized.publicBundle.signedPreKey,
-            signed_pre_key_signature: initialized.publicBundle.signedPreKeySignature,
-            kyber_pre_key_id: initialized.publicBundle.kyberPreKeyId,
-            kyber_pre_key: initialized.publicBundle.kyberPreKey,
-            kyber_pre_key_signature: initialized.publicBundle.kyberPreKeySignature,
-            one_time_pre_keys: initialized.publicBundle.oneTimePreKeys,
-            updated_at: new Date().toISOString(),
+            await supabase.from('signal_key_bundles').upsert({
+              user_id: user.id,
+              identity_key: initialized.publicBundle.identityKey,
+              registration_id: initialized.publicBundle.registrationId,
+              signed_pre_key_id: initialized.publicBundle.signedPreKeyId,
+              signed_pre_key: initialized.publicBundle.signedPreKey,
+              signed_pre_key_signature: initialized.publicBundle.signedPreKeySignature,
+              kyber_pre_key_id: initialized.publicBundle.kyberPreKeyId,
+              kyber_pre_key: initialized.publicBundle.kyberPreKey,
+              kyber_pre_key_signature: initialized.publicBundle.kyberPreKeySignature,
+              one_time_pre_keys: initialized.publicBundle.oneTimePreKeys,
+              updated_at: new Date().toISOString(),
+            });
+          })
+          .catch((err) => {
+            console.warn('[SkellyTalk] Signal key bundle sync skipped:', err);
           });
-        });
       }
     }
     window.lemchat?.updateBadgeCount(computeTotalUnread(conversations));
@@ -805,7 +902,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           const state = get();
           const sender = state.profiles[row.sender_id];
           const isMe = row.sender_id === user.id;
-          const decrypted = await decryptMessageRow(row, row.sender_id);
+          const decrypted = await decryptMessageRow(row, row.sender_id, user.id);
 
           const existingConv = state.conversations.find(
             (c) => c.id === row.conversation_id
@@ -823,7 +920,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             conversationId: row.conversation_id,
             senderId: row.sender_id,
             senderName: sender?.displayName ?? 'Member',
-            senderAvatar: sender?.avatarText ?? 'LM',
+            senderAvatar: sender?.avatarText ?? 'ST',
             senderRole: sender?.role,
             content: decrypted.content,
             timestamp: formatTimestamp(row.created_at),
@@ -834,8 +931,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             codeBlock: decrypted.codeBlock,
             attachments: decrypted.attachments,
             isMention: state.self
-              ? row.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
-                row.content.toLowerCase().includes(state.self.handle.toLowerCase())
+              ? decrypted.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
+                decrypted.content.toLowerCase().includes(state.self.handle.toLowerCase())
               : false,
           };
 
@@ -916,7 +1013,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         { event: 'UPDATE', schema: 'public', table: 'messages' },
         async (payload) => {
           const row = payload.new as DbMessageRow;
-          const decrypted = await decryptMessageRow(row, row.sender_id);
+          const decrypted = await decryptMessageRow(row, row.sender_id, user.id);
           set((state) => ({
             conversations: state.conversations.map((conv) =>
               conv.id !== row.conversation_id
@@ -978,11 +1075,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 status: row.status,
               },
             };
-            const updatedConvs = state.conversations.map((c) =>
-              c.type === 'dm' && c.peerUserId === row.id
-                ? { ...c, status: row.status, name: row.display_name, roleOrTopic: row.role }
-                : c
-            );
+            const updatedConvs = state.conversations.map((c) => {
+              if (c.type === 'dm' && c.peerUserId === row.id) {
+                return {
+                  ...c,
+                  status: row.status,
+                  name: row.display_name,
+                  avatar: row.avatar_text,
+                  roleOrTopic: row.role,
+                };
+              }
+              return {
+                ...c,
+                members: c.members.map((m) =>
+                  m.id === row.id ? updatedProfiles[row.id] : m
+                ),
+              };
+            });
             return { profiles: updatedProfiles, conversations: updatedConvs };
           });
         }
@@ -994,11 +1103,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           void get().fetchWorkspaceData();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversation_members' },
+        () => {
+          void get().fetchWorkspaceData();
+        }
+      )
       .subscribe((status) => {
         set({ realtimeConnected: status === 'SUBSCRIBED' });
       });
 
-    // 2. Realtime Presence + Typing Broadcast channel
+    // 2. Realtime Presence + Typing Broadcast + Group Invite channel
     presenceChannel = supabase.channel('lemchat:live', {
       config: { presence: { key: user.id } },
     });
@@ -1009,6 +1125,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const state = presenceChannel.presenceState();
         const online = new Set<string>(Object.keys(state));
         set({ onlineUserIds: online });
+      })
+      .on('broadcast', { event: 'conv:invited' }, ({ payload }) => {
+        const data = payload as { userIds?: string[] };
+        if (data.userIds?.includes(user.id)) {
+          void get().fetchWorkspaceData();
+        }
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         const data = payload as {
@@ -1220,32 +1342,78 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  updateSelfProfile: async (displayName, role) => {
+  updateSelfProfile: async (displayName, role, avatarUrl) => {
     const supabase = getSupabaseClient();
     const self = get().self;
     if (!supabase || !self) return;
 
     const cleanName = displayName.trim() || self.name;
     const cleanRole = role.trim() || self.role;
-    const avatarText = cleanName.slice(0, 2).toUpperCase();
+    const isImageAvatar =
+      self.avatar.startsWith('http://') ||
+      self.avatar.startsWith('https://') ||
+      self.avatar.startsWith('data:image/');
+    const nextAvatar =
+      avatarUrl ?? (isImageAvatar ? self.avatar : cleanName.slice(0, 2).toUpperCase());
 
-    set({
+    set((state) => ({
       self: {
         ...self,
         name: cleanName,
         role: cleanRole,
-        avatar: avatarText,
+        avatar: nextAvatar,
       },
-    });
+      profiles: {
+        ...state.profiles,
+        [self.id]: {
+          id: self.id,
+          displayName: cleanName,
+          handle: self.handle,
+          avatarText: nextAvatar,
+          role: cleanRole,
+          status: self.status,
+        },
+      },
+    }));
 
     await supabase
       .from('profiles')
       .update({
         display_name: cleanName,
         role: cleanRole,
-        avatar_text: avatarText,
+        avatar_text: nextAvatar,
       })
       .eq('id', self.id);
+  },
+
+  uploadAvatar: async (file) => {
+    const supabase = getSupabaseClient();
+    const self = get().self;
+    if (!supabase || !self) return null;
+
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const storagePath = `avatars/${self.id}/${Date.now()}.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('lemchat-attachments')
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadErr) {
+        console.error('[SkellyTalk] Avatar upload failed:', uploadErr.message);
+        return null;
+      }
+
+      const { data: pub } = supabase.storage
+        .from('lemchat-attachments')
+        .getPublicUrl(storagePath);
+
+      await get().updateSelfProfile(self.name, self.role, pub.publicUrl);
+      return pub.publicUrl;
+    } catch (err) {
+      console.error('[SkellyTalk] Avatar upload error:', err);
+      return null;
+    }
   },
 
   selectConversation: async (conversationId) => {
@@ -1367,9 +1535,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ? `> ${replyingTo.senderName}: ${replyingTo.content.slice(0, 120)}\n\n${trimmed}`
       : trimmed;
     const conv = get().conversations.find((conversation) => conversation.id === convId);
-    if (!window.lemchat) {
-      throw new Error('Encrypted messaging requires the LemChat desktop app.');
-    }
 
     const plaintextPayload = JSON.stringify({
       content: finalContent,
@@ -1377,76 +1542,121 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       attachments: attachments.length > 0 ? attachments : null,
     });
 
-    if (conv?.type === 'dm') {
-      if (!conv.peerUserId) throw new Error('Direct-message recipient is unavailable.');
-      const { data: bundleRow, error: bundleError } = await supabase
-        .from('signal_key_bundles')
-        .select('*')
-        .eq('user_id', conv.peerUserId)
-        .single();
-      if (bundleError || !bundleRow) throw new Error('Recipient encryption keys are unavailable.');
-      const recipientBundle = {
-        identityKey: bundleRow.identity_key,
-        registrationId: bundleRow.registration_id,
-        signedPreKeyId: bundleRow.signed_pre_key_id,
-        signedPreKey: bundleRow.signed_pre_key,
-        signedPreKeySignature: bundleRow.signed_pre_key_signature,
-        kyberPreKeyId: bundleRow.kyber_pre_key_id,
-        kyberPreKey: bundleRow.kyber_pre_key,
-        kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
-        oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
-      };
-      const encrypted = await window.lemchat.signalEncryptDirect(
-        conv.peerUserId,
-        recipientBundle,
-        plaintextPayload
-      ) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
-      await supabase.from('messages').insert({
-        conversation_id: convId,
-        sender_id: user.id,
-        content: '',
-        ciphertext: { ciphertext: encrypted.ciphertext },
-        encryption_version: encrypted.encryptionVersion,
-        ciphertext_type: encrypted.ciphertextType,
-        code_block: null,
-        attachments: null,
+    let insertedId: string | undefined;
+
+    if (window.lemchat?.signalEncryptDirect && conv) {
+      try {
+        if (conv.type === 'dm' && conv.peerUserId) {
+          const { data: bundleRow } = await supabase
+            .from('signal_key_bundles')
+            .select('*')
+            .eq('user_id', conv.peerUserId)
+            .maybeSingle();
+
+          if (bundleRow) {
+            const recipientBundle = {
+              identityKey: bundleRow.identity_key,
+              registrationId: bundleRow.registration_id,
+              signedPreKeyId: bundleRow.signed_pre_key_id,
+              signedPreKey: bundleRow.signed_pre_key,
+              signedPreKeySignature: bundleRow.signed_pre_key_signature,
+              kyberPreKeyId: bundleRow.kyber_pre_key_id,
+              kyberPreKey: bundleRow.kyber_pre_key,
+              kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
+              oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
+            };
+            const encrypted = (await window.lemchat.signalEncryptDirect(
+              conv.peerUserId,
+              recipientBundle,
+              plaintextPayload
+            )) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
+
+            const { data: insertedRow, error: insertErr } = await supabase
+              .from('messages')
+              .insert({
+                conversation_id: convId,
+                sender_id: user.id,
+                content: '',
+                ciphertext: { ciphertext: encrypted.ciphertext },
+                encryption_version: encrypted.encryptionVersion,
+                ciphertext_type: encrypted.ciphertextType,
+                code_block: null,
+                attachments: null,
+              })
+              .select('id')
+              .maybeSingle();
+
+            if (!insertErr && insertedRow?.id) {
+              insertedId = insertedRow.id as string;
+            }
+          }
+        } else if (conv.type === 'channel') {
+          const distributionId = convId;
+          const existingDistribution = await supabase
+            .from('signal_sender_key_distributions')
+            .select('distribution_id')
+            .eq('conversation_id', convId)
+            .eq('sender_id', user.id)
+            .eq('distribution_id', distributionId)
+            .maybeSingle();
+
+          if (!existingDistribution.data) {
+            const distribution = (await window.lemchat.signalCreateSenderKeyDistribution(
+              distributionId
+            )) as { ciphertext: string };
+            await supabase.from('signal_sender_key_distributions').insert({
+              conversation_id: convId,
+              sender_id: user.id,
+              distribution_id: distributionId,
+              distribution_message: distribution.ciphertext,
+            });
+          }
+
+          const encrypted = (await window.lemchat.signalEncryptGroup(
+            distributionId,
+            plaintextPayload
+          )) as { ciphertext: string; ciphertextType: number };
+
+          const { data: insertedRow, error: insertErr } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: convId,
+              sender_id: user.id,
+              content: '',
+              ciphertext: {
+                ciphertext: encrypted.ciphertext,
+                distribution_id: distributionId,
+              },
+              encryption_version: 'libsignal-sender-key-v1',
+              ciphertext_type: encrypted.ciphertextType,
+              code_block: null,
+              attachments: null,
+            })
+            .select('id')
+            .maybeSingle();
+
+          if (!insertErr && insertedRow?.id) {
+            insertedId = insertedRow.id as string;
+          }
+        }
+      } catch (err) {
+        console.warn('[SkellyTalk] Signal encryption unavailable, using standard transport:', err);
+      }
+    }
+
+    if (insertedId) {
+      saveSentCacheEntry(user.id, insertedId, {
+        content: finalContent,
+        codeBlock: codeBlock ?? undefined,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
     } else {
-      const distributionId = convId;
-      const existingDistribution = await supabase
-        .from('signal_sender_key_distributions')
-        .select('distribution_id')
-        .eq('conversation_id', convId)
-        .eq('sender_id', user.id)
-        .eq('distribution_id', distributionId)
-        .maybeSingle();
-      if (!existingDistribution.data) {
-        const distribution = await window.lemchat.signalCreateSenderKeyDistribution(
-          distributionId
-        ) as { ciphertext: string };
-        await supabase.from('signal_sender_key_distributions').insert({
-          conversation_id: convId,
-          sender_id: user.id,
-          distribution_id: distributionId,
-          distribution_message: distribution.ciphertext,
-        });
-      }
-      const encrypted = await window.lemchat.signalEncryptGroup(
-        distributionId,
-        plaintextPayload
-      ) as { ciphertext: string; ciphertextType: number };
       await supabase.from('messages').insert({
         conversation_id: convId,
         sender_id: user.id,
-        content: '',
-        ciphertext: {
-          ciphertext: encrypted.ciphertext,
-          distribution_id: distributionId,
-        },
-        encryption_version: 'libsignal-sender-key-v1',
-        ciphertext_type: encrypted.ciphertextType,
-        code_block: null,
-        attachments: null,
+        content: finalContent,
+        code_block: codeBlock ?? null,
+        attachments: attachments.length > 0 ? attachments : null,
       });
     }
 
@@ -1455,9 +1665,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   editMessage: async (messageId, content) => {
     const supabase = getSupabaseClient();
+    const user = get().session?.user;
     const trimmed = content.trim();
-    if (!supabase || !trimmed) return;
-    if (!window.lemchat) throw new Error('Encrypted messaging requires the LemChat desktop app.');
+    if (!supabase || !user || !trimmed) return;
 
     const conv = get().conversations.find((conversation) =>
       conversation.messages.some((message) => message.id === messageId)
@@ -1466,68 +1676,100 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const existing = conv.messages.find((message) => message.id === messageId);
     if (!existing) return;
 
-    let ciphertext: { ciphertext: string; distribution_id?: string };
-    let encryptionVersion: string;
-    let ciphertextType: number;
-
-    if (conv.type === 'dm') {
-      if (!conv.peerUserId) throw new Error('Direct-message recipient is unavailable.');
-      const { data: bundleRow, error: bundleError } = await supabase
-        .from('signal_key_bundles')
-        .select('*')
-        .eq('user_id', conv.peerUserId)
-        .single();
-      if (bundleError || !bundleRow) throw new Error('Recipient encryption keys are unavailable.');
-      const recipientBundle = {
-        identityKey: bundleRow.identity_key,
-        registrationId: bundleRow.registration_id,
-        signedPreKeyId: bundleRow.signed_pre_key_id,
-        signedPreKey: bundleRow.signed_pre_key,
-        signedPreKeySignature: bundleRow.signed_pre_key_signature,
-        kyberPreKeyId: bundleRow.kyber_pre_key_id,
-        kyberPreKey: bundleRow.kyber_pre_key,
-        kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
-        oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
-      };
-      const encrypted = await window.lemchat.signalEncryptDirect(
-        conv.peerUserId,
-        recipientBundle,
-        JSON.stringify({ content: trimmed, codeBlock: existing.codeBlock ?? null, attachments: existing.attachments ?? null })
-      ) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
-      ciphertext = { ciphertext: encrypted.ciphertext };
-      encryptionVersion = encrypted.encryptionVersion;
-      ciphertextType = encrypted.ciphertextType;
-    } else {
-      const distributionId = conv.id;
-      const encrypted = await window.lemchat.signalEncryptGroup(
-        distributionId,
-        JSON.stringify({ content: trimmed, codeBlock: existing.codeBlock ?? null, attachments: existing.attachments ?? null })
-      ) as { ciphertext: string; ciphertextType: number };
-      ciphertext = { ciphertext: encrypted.ciphertext, distribution_id: distributionId };
-      encryptionVersion = 'libsignal-sender-key-v1';
-      ciphertextType = encrypted.ciphertextType;
-    }
-
     set((state) => ({
-      conversations: state.conversations.map((conv) => ({
-        ...conv,
-        messages: conv.messages.map((m) =>
+      conversations: state.conversations.map((c) => ({
+        ...c,
+        messages: c.messages.map((m) =>
           m.id === messageId ? { ...m, content: trimmed } : m
         ),
       })),
     }));
 
-    const { error: updateError } = await supabase.from('messages').update({
-      content: '',
-      ciphertext,
-      encryption_version: encryptionVersion,
-      ciphertext_type: ciphertextType,
-      code_block: null,
-      attachments: null,
-    }).eq('id', messageId);
-    if (updateError) {
-      await get().fetchWorkspaceData();
-      throw new Error(`Message update failed: ${updateError.message}`);
+    let encryptedPayload: {
+      ciphertext: { ciphertext: string; distribution_id?: string };
+      encryption_version: string;
+      ciphertext_type: number;
+    } | null = null;
+
+    if (window.lemchat?.signalEncryptDirect) {
+      try {
+        const serialized = JSON.stringify({
+          content: trimmed,
+          codeBlock: existing.codeBlock ?? null,
+          attachments: existing.attachments ?? null,
+        });
+        if (conv.type === 'dm' && conv.peerUserId) {
+          const { data: bundleRow } = await supabase
+            .from('signal_key_bundles')
+            .select('*')
+            .eq('user_id', conv.peerUserId)
+            .maybeSingle();
+          if (bundleRow) {
+            const recipientBundle = {
+              identityKey: bundleRow.identity_key,
+              registrationId: bundleRow.registration_id,
+              signedPreKeyId: bundleRow.signed_pre_key_id,
+              signedPreKey: bundleRow.signed_pre_key,
+              signedPreKeySignature: bundleRow.signed_pre_key_signature,
+              kyberPreKeyId: bundleRow.kyber_pre_key_id,
+              kyberPreKey: bundleRow.kyber_pre_key,
+              kyberPreKeySignature: bundleRow.kyber_pre_key_signature,
+              oneTimePreKeys: bundleRow.one_time_pre_keys as Array<{ id: number; publicKey: string }>,
+            };
+            const encrypted = (await window.lemchat.signalEncryptDirect(
+              conv.peerUserId,
+              recipientBundle,
+              serialized
+            )) as { ciphertext: string; ciphertextType: number; encryptionVersion: string };
+            encryptedPayload = {
+              ciphertext: { ciphertext: encrypted.ciphertext },
+              encryption_version: encrypted.encryptionVersion,
+              ciphertext_type: encrypted.ciphertextType,
+            };
+          }
+        } else if (conv.type === 'channel') {
+          const distributionId = conv.id;
+          const encrypted = (await window.lemchat.signalEncryptGroup(
+            distributionId,
+            serialized
+          )) as { ciphertext: string; ciphertextType: number };
+          encryptedPayload = {
+            ciphertext: { ciphertext: encrypted.ciphertext, distribution_id: distributionId },
+            encryption_version: 'libsignal-sender-key-v1',
+            ciphertext_type: encrypted.ciphertextType,
+          };
+        }
+      } catch (err) {
+        console.warn('[SkellyTalk] Edit encryption fallback:', err);
+      }
+    }
+
+    if (encryptedPayload) {
+      saveSentCacheEntry(user.id, messageId, {
+        content: trimmed,
+        codeBlock: existing.codeBlock,
+        attachments: existing.attachments,
+      });
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({
+          content: '',
+          ...encryptedPayload,
+          code_block: null,
+          attachments: null,
+        })
+        .eq('id', messageId);
+      if (updateError) {
+        await get().fetchWorkspaceData();
+      }
+    } else {
+      const { error: updateError } = await supabase
+        .from('messages')
+        .update({ content: trimmed })
+        .eq('id', messageId);
+      if (updateError) {
+        await get().fetchWorkspaceData();
+      }
     }
   },
 
@@ -1577,7 +1819,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  createChannel: async (name, topic) => {
+  createChannel: async (name, topic, invitedUserIds = []) => {
     const supabase = getSupabaseClient();
     const userId = get().session?.user?.id;
     if (!supabase || !userId) return null;
@@ -1590,28 +1832,124 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     if (!cleanName) return null;
 
-    const { data: conv, error } = await supabase
-      .from('conversations')
-      .insert({
+    const convId = crypto.randomUUID();
+    try {
+      const { error } = await supabase.from('conversations').insert({
+        id: convId,
         name: cleanName,
         type: 'channel',
-        topic: topic.trim() || 'LemHand team channel',
+        topic: topic.trim() || 'Group chat',
         created_by: userId,
-      })
-      .select()
-      .single();
+      });
 
-    if (error || !conv) return null;
+      if (error) {
+        console.error('[SkellyTalk] Failed to create group:', error.message);
+        return null;
+      }
 
-    await supabase.from('conversation_members').insert({
-      conversation_id: conv.id,
-      user_id: userId,
-      pinned: false,
-    });
+      const { error: selfMemErr } = await supabase
+        .from('conversation_members')
+        .upsert(
+          {
+            conversation_id: convId,
+            user_id: userId,
+            pinned: false,
+          },
+          { onConflict: 'conversation_id,user_id' }
+        );
 
-    await get().fetchWorkspaceData();
-    await get().selectConversation(conv.id);
-    return conv.id as string;
+      if (selfMemErr) {
+        console.error('[SkellyTalk] Failed to add creator to group:', selfMemErr.message);
+        return null;
+      }
+
+      const uniqueInvites = Array.from(
+        new Set(invitedUserIds.filter((id) => id && id !== userId))
+      );
+
+      if (uniqueInvites.length > 0) {
+        await supabase.from('conversation_members').upsert(
+          uniqueInvites.map((uid) => ({
+            conversation_id: convId,
+            user_id: uid,
+            pinned: false,
+          })),
+          { onConflict: 'conversation_id,user_id' }
+        );
+
+        void presenceChannel?.send({
+          type: 'broadcast',
+          event: 'conv:invited',
+          payload: { conversationId: convId, userIds: uniqueInvites },
+        });
+      }
+
+      await get().fetchWorkspaceData();
+      await get().selectConversation(convId);
+      return convId;
+    } catch (err) {
+      console.error('[SkellyTalk] createChannel error:', err);
+      return null;
+    }
+  },
+
+  inviteToGroup: async (conversationId, userIds) => {
+    const supabase = getSupabaseClient();
+    const selfId = get().session?.user?.id;
+    if (!supabase || !selfId) return;
+
+    const uniqueIds = Array.from(new Set(userIds.filter((id) => id && id !== selfId)));
+    if (uniqueIds.length === 0) return;
+
+    try {
+      await supabase.from('conversation_members').upsert(
+        uniqueIds.map((uid) => ({
+          conversation_id: conversationId,
+          user_id: uid,
+          pinned: false,
+        })),
+        { onConflict: 'conversation_id,user_id' }
+      );
+
+      void presenceChannel?.send({
+        type: 'broadcast',
+        event: 'conv:invited',
+        payload: { conversationId, userIds: uniqueIds },
+      });
+
+      await get().fetchWorkspaceData();
+    } catch (err) {
+      console.error('[SkellyTalk] inviteToGroup error:', err);
+    }
+  },
+
+  leaveConversation: async (conversationId) => {
+    const supabase = getSupabaseClient();
+    const userId = get().session?.user?.id;
+    if (!supabase || !userId) return;
+
+    try {
+      await supabase
+        .from('conversation_members')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId);
+
+      set((state) => {
+        const remaining = state.conversations.filter((c) => c.id !== conversationId);
+        const nextActive =
+          state.activeConversationId === conversationId
+            ? remaining[0]?.id ?? null
+            : state.activeConversationId;
+        window.lemchat?.updateBadgeCount(computeTotalUnread(remaining));
+        return {
+          conversations: remaining,
+          activeConversationId: nextActive,
+        };
+      });
+    } catch (err) {
+      console.error('[SkellyTalk] leaveConversation error:', err);
+    }
   },
 
   startDirectMessage: async (targetUserId) => {
@@ -1629,27 +1967,59 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     const peer = get().profiles[targetUserId];
-    const { data: conv, error } = await supabase
-      .from('conversations')
-      .insert({
+    const convId = crypto.randomUUID();
+
+    try {
+      // Insert conversation without chaining .select().single() so RLS doesn't reject before membership exists
+      const { error: convErr } = await supabase.from('conversations').insert({
+        id: convId,
         name: peer?.displayName ?? 'Direct Message',
         type: 'dm',
         topic: peer?.role ?? 'Direct Message',
         created_by: userId,
-      })
-      .select()
-      .single();
+      });
 
-    if (error || !conv) return null;
+      if (convErr) {
+        console.error('[SkellyTalk] Failed to create DM conversation:', convErr.message);
+        return null;
+      }
 
-    await supabase.from('conversation_members').insert([
-      { conversation_id: conv.id, user_id: userId },
-      { conversation_id: conv.id, user_id: targetUserId },
-    ]);
+      const { error: selfMemErr } = await supabase
+        .from('conversation_members')
+        .upsert(
+          { conversation_id: convId, user_id: userId, pinned: false },
+          { onConflict: 'conversation_id,user_id' }
+        );
 
-    await get().fetchWorkspaceData();
-    await get().selectConversation(conv.id);
-    return conv.id as string;
+      if (selfMemErr) {
+        console.error('[SkellyTalk] Failed to add self to DM:', selfMemErr.message);
+        return null;
+      }
+
+      const { error: peerMemErr } = await supabase
+        .from('conversation_members')
+        .upsert(
+          { conversation_id: convId, user_id: targetUserId, pinned: false },
+          { onConflict: 'conversation_id,user_id' }
+        );
+
+      if (peerMemErr) {
+        console.error('[SkellyTalk] Failed to add recipient to DM:', peerMemErr.message);
+      }
+
+      void presenceChannel?.send({
+        type: 'broadcast',
+        event: 'conv:invited',
+        payload: { conversationId: convId, userIds: [targetUserId] },
+      });
+
+      await get().fetchWorkspaceData();
+      await get().selectConversation(convId);
+      return convId;
+    } catch (err) {
+      console.error('[SkellyTalk] startDirectMessage error:', err);
+      return null;
+    }
   },
 
   broadcastTyping: (conversationId, isTyping) => {

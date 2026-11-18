@@ -11,6 +11,7 @@ import { NotificationToast } from './components/NotificationToast';
 import { AuthScreen } from './components/AuthScreen';
 import { NewConversationModal } from './components/NewConversationModal';
 import { CallOverlay } from './components/CallOverlay';
+import { ProfileModal } from './components/ProfileModal';
 import { useChatStore } from './store/useChatStore';
 
 export const App: React.FC = () => {
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
       <NotificationToast />
       <NewConversationModal />
       <CallOverlay />
+      <ProfileModal />
 
       <AnimatePresence>
         {updateStatus.status === 'downloaded' && (

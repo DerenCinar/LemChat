@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Hash, MessageSquarePlus, Search, X, Sparkles } from 'lucide-react';
+import { Users, MessageSquarePlus, Search, X, Sparkles, Check } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 
 export const NewConversationModal: React.FC = () => {
   const isOpen = useChatStore((s) => s.isNewConvModalOpen);
@@ -15,28 +16,36 @@ export const NewConversationModal: React.FC = () => {
   const [tab, setTab] = useState<'channel' | 'dm'>('channel');
   const [channelName, setChannelName] = useState('');
   const [channelTopic, setChannelTopic] = useState('');
+  const [invitedIds, setInvitedIds] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const otherUsers = Object.values(profiles)
-    .filter((p) => p.id !== self?.id)
-    .filter((p) => {
-      if (!memberSearch.trim()) return true;
-      const q = memberSearch.toLowerCase();
-      return (
-        p.displayName.toLowerCase().includes(q) ||
-        p.handle.toLowerCase().includes(q) ||
-        p.role.toLowerCase().includes(q)
-      );
-    });
+  const allOtherUsers = Object.values(profiles).filter((p) => p.id !== self?.id);
+  const filteredUsers = allOtherUsers.filter((p) => {
+    if (!memberSearch.trim()) return true;
+    const q = memberSearch.toLowerCase();
+    return (
+      p.displayName.toLowerCase().includes(q) ||
+      p.handle.toLowerCase().includes(q) ||
+      p.role.toLowerCase().includes(q)
+    );
+  });
 
-  const handleCreateChannel = async (e: React.FormEvent) => {
+  const toggleInvite = (userId: string) => {
+    setInvitedIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!channelName.trim() || submitting) return;
     setSubmitting(true);
-    await createChannel(channelName, channelTopic);
+    await createChannel(channelName, channelTopic, invitedIds);
     setChannelName('');
     setChannelTopic('');
+    setInvitedIds([]);
+    setMemberSearch('');
     setSubmitting(false);
     setOpen(false);
   };
@@ -45,6 +54,7 @@ export const NewConversationModal: React.FC = () => {
     if (submitting) return;
     setSubmitting(true);
     await startDirectMessage(userId);
+    setMemberSearch('');
     setSubmitting(false);
     setOpen(false);
   };
@@ -120,8 +130,8 @@ export const NewConversationModal: React.FC = () => {
                     className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#22C55E] to-[#10B981] shadow-lem-glow-sm"
                   />
                 )}
-                <Hash className="relative z-10 h-3.5 w-3.5" />
-                <span className="relative z-10">Create Channel</span>
+                <Users className="relative z-10 h-3.5 w-3.5" />
+                <span className="relative z-10">Create Group</span>
               </button>
 
               <button
@@ -153,13 +163,13 @@ export const NewConversationModal: React.FC = () => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-                  onSubmit={handleCreateChannel}
+                  onSubmit={handleCreateGroup}
                   className="relative z-10 space-y-3.5"
                 >
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <label className="text-[11px] font-semibold text-emerald-900/75 dark:text-emerald-200/75">
-                        Channel Name
+                        Group Name
                       </label>
                       {slugPreview && (
                         <span className="rounded-full bg-[#22C55E]/15 px-2 py-0.5 font-mono text-[10px] text-emerald-700 dark:text-emerald-300">
@@ -172,7 +182,7 @@ export const NewConversationModal: React.FC = () => {
                       required
                       value={channelName}
                       onChange={(e) => setChannelName(e.target.value)}
-                      placeholder="e.g. lemhand-design"
+                      placeholder="e.g. weekend-hangout"
                       className="glass-pill w-full rounded-xl px-3.5 py-2.5 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white dark:placeholder-emerald-100/35"
                     />
                   </div>
@@ -184,10 +194,74 @@ export const NewConversationModal: React.FC = () => {
                       type="text"
                       value={channelTopic}
                       onChange={(e) => setChannelTopic(e.target.value)}
-                      placeholder="What is this channel about?"
+                      placeholder="What is this group about?"
                       className="glass-pill w-full rounded-xl px-3.5 py-2.5 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white dark:placeholder-emerald-100/35"
                     />
                   </div>
+
+                  {/* Invite Members Picker */}
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-emerald-900/75 dark:text-emerald-200/75">
+                        Invite Members
+                      </label>
+                      {invitedIds.length > 0 && (
+                        <span className="rounded-full bg-[#22C55E]/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          {invitedIds.length} selected
+                        </span>
+                      )}
+                    </div>
+                    <div className="lem-scrollbar max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                      {allOtherUsers.length === 0 ? (
+                        <p className="py-3 text-center text-[11px] text-emerald-900/55 dark:text-emerald-200/55">
+                          No other users registered yet — you can invite people later too.
+                        </p>
+                      ) : (
+                        allOtherUsers.map((user) => {
+                          const selected = invitedIds.includes(user.id);
+                          return (
+                            <button
+                              type="button"
+                              key={user.id}
+                              onClick={() => toggleInvite(user.id)}
+                              className={`glass-pill flex w-full items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left transition ${
+                                selected
+                                  ? 'border-[#22C55E]/60 bg-[#22C55E]/15'
+                                  : 'hover:bg-black/5 dark:hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <UserAvatar
+                                  avatar={user.avatarText}
+                                  name={user.displayName}
+                                  className="h-7 w-7 shrink-0 rounded-lg bg-gradient-to-br from-emerald-500/30 to-teal-700/40 text-emerald-950 dark:text-white"
+                                  textClassName="text-[10px] font-bold"
+                                />
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-semibold text-emerald-950 dark:text-white">
+                                    {user.displayName}
+                                  </p>
+                                  <p className="truncate text-[10px] text-emerald-800/60 dark:text-emerald-200/55">
+                                    {user.handle}
+                                  </p>
+                                </div>
+                              </div>
+                              <div
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+                                  selected
+                                    ? 'border-[#22C55E] bg-[#22C55E] text-white'
+                                    : 'border-emerald-900/25 dark:border-white/25'
+                                }`}
+                              >
+                                {selected && <Check className="h-3 w-3" />}
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
                   <motion.button
                     whileHover={{ scale: 1.015 }}
                     whileTap={{ scale: 0.97 }}
@@ -195,7 +269,7 @@ export const NewConversationModal: React.FC = () => {
                     disabled={submitting}
                     className="w-full rounded-xl bg-gradient-to-r from-[#22C55E] to-[#10B981] py-2.5 text-xs font-bold text-white shadow-lem-glow transition hover:brightness-110 disabled:opacity-60"
                   >
-                    {submitting ? 'Creating Channel...' : 'Create Channel'}
+                    {submitting ? 'Creating Group...' : 'Create Group'}
                   </motion.button>
                 </motion.form>
               ) : (
@@ -213,20 +287,20 @@ export const NewConversationModal: React.FC = () => {
                       type="text"
                       value={memberSearch}
                       onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Filter teammates..."
+                      placeholder="Filter people..."
                       className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/35"
                     />
                   </div>
 
                   <div className="lem-scrollbar max-h-60 space-y-1.5 overflow-y-auto pr-1">
-                    {otherUsers.length === 0 ? (
+                    {filteredUsers.length === 0 ? (
                       <p className="py-8 text-center text-xs text-emerald-900/60 dark:text-emerald-200/55">
                         {memberSearch
-                          ? 'No matching teammates found.'
-                          : 'No other team members have signed up yet.'}
+                          ? 'No matching people found.'
+                          : 'No other users have signed up yet.'}
                       </p>
                     ) : (
-                      otherUsers.map((user, idx) => {
+                      filteredUsers.map((user, idx) => {
                         const isLive = onlineUserIds.has(user.id);
                         return (
                           <motion.button
@@ -239,8 +313,13 @@ export const NewConversationModal: React.FC = () => {
                             onClick={() => void handleStartDm(user.id)}
                             className="glass-pill flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:border-[#22C55E]/45 hover:bg-[#22C55E]/10"
                           >
-                            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-700/40 text-xs font-bold text-emerald-950 dark:text-white">
-                              {user.avatarText}
+                            <div className="relative shrink-0">
+                              <UserAvatar
+                                avatar={user.avatarText}
+                                name={user.displayName}
+                                className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-700/40 text-emerald-950 dark:text-white"
+                                textClassName="text-xs font-bold"
+                              />
                               <span
                                 className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-[#090F0C] ${
                                   isLive ? 'bg-[#22C55E]' : 'bg-slate-400'

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 
 export const NotificationToast: React.FC = () => {
   const latestToast = useChatStore((s) => s.latestToast);
@@ -30,9 +31,12 @@ export const NotificationToast: React.FC = () => {
           }}
           className="glass-panel glass-surface fixed right-5 top-14 z-50 flex w-80 cursor-pointer items-start gap-3 rounded-2xl p-3.5 ring-1 ring-[#22C55E]/40 transition hover:scale-[1.01]"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-xs font-bold text-white shadow-lem-glow-sm">
-            {latestToast.senderAvatar}
-          </div>
+          <UserAvatar
+            avatar={latestToast.senderAvatar}
+            name={latestToast.senderName}
+            className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm"
+            textClassName="text-xs font-bold"
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-bold text-emerald-950 dark:text-white">
               {latestToast.senderName}

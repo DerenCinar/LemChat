@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Pin, Hash, X, Plus } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 import type { Conversation, UserPresence } from '../types/chat';
 
 const PRESENCE_DOT: Record<UserPresence, string> = {
@@ -68,7 +69,7 @@ export const ConversationSidebar: React.FC = () => {
 
   const headerLabel =
     activeTab === 'channels'
-      ? 'Team Channels'
+      ? 'Groups'
       : activeTab === 'mentions'
         ? 'Mentions'
         : 'Messages';
@@ -106,15 +107,18 @@ export const ConversationSidebar: React.FC = () => {
           />
         )}
         <div className="relative z-10 shrink-0">
-          <div
-            className={`flex h-10 w-10 items-center justify-center rounded-2xl text-xs font-bold transition-transform group-hover:scale-105 ${
-              conv.type === 'channel'
-                ? 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                : 'bg-gradient-to-br from-emerald-500/30 to-teal-700/40 text-emerald-950 ring-1 ring-white/20 dark:text-white'
-            }`}
-          >
-            {conv.type === 'channel' ? <Hash className="h-4 w-4" /> : conv.avatar}
-          </div>
+          {conv.type === 'channel' ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 transition-transform group-hover:scale-105 dark:text-emerald-300">
+              <Hash className="h-4 w-4" />
+            </div>
+          ) : (
+            <UserAvatar
+              avatar={conv.avatar}
+              name={conv.name}
+              className="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-teal-700/40 text-emerald-950 ring-1 ring-white/20 transition-transform group-hover:scale-105 dark:text-white"
+              textClassName="text-xs font-bold"
+            />
+          )}
 
           {conv.type === 'dm' && (
             <span

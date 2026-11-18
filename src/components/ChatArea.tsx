@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Hash,
@@ -11,10 +11,14 @@ import {
   Pin,
   Sparkles,
   Plus,
+  UserPlus,
+  LogOut,
+  Check,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
 import { FloatingComposer } from './FloatingComposer';
+import { UserAvatar } from './UserAvatar';
 import type { UserPresence } from '../types/chat';
 
 const STATUS_LABEL: Record<UserPresence, string> = {
@@ -33,8 +37,13 @@ const STATUS_DOT: Record<UserPresence, string> = {
 
 export const ChatArea: React.FC = () => {
   const feedEndRef = useRef<HTMLDivElement | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
+  const [inviting, setInviting] = useState(false);
 
   const conversations = useChatStore((s) => s.conversations);
+  const profiles = useChatStore((s) => s.profiles);
+  const self = useChatStore((s) => s.self);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isInChatSearchOpen = useChatStore((s) => s.isInChatSearchOpen);
   const inChatSearchQuery = useChatStore((s) => s.inChatSearchQuery);
@@ -50,6 +59,9 @@ export const ChatArea: React.FC = () => {
   const setNewConvModalOpen = useChatStore((s) => s.setNewConvModalOpen);
   const startCall = useChatStore((s) => s.startCall);
   const activeCall = useChatStore((s) => s.activeCall);
+  const inviteToGroup = useChatStore((s) => s.inviteToGroup);
+  const leaveConversation = useChatStore((s) => s.leaveConversation);
+  const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
 
   const activeConv =
     conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
@@ -58,6 +70,11 @@ export const ChatArea: React.FC = () => {
   useEffect(() => {
     feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages.length, typingState, activeConversationId]);
+
+  useEffect(() => {
+    setInviteOpen(false);
+    setSelectedInvites([]);
+  }, [activeConversationId]);
 
   if (workspaceLoading) {
     return (
@@ -77,7 +94,7 @@ export const ChatArea: React.FC = () => {
           Welcome to SkellyTalk
         </p>
         <p className="max-w-xs text-xs text-emerald-800/65 dark:text-emerald-200/60">
-          Create a channel or start a direct message with anyone to begin chatting in real time.
+          Create a group and invite people, or start a direct message to begin chatting in real time.
         </p>
         <button
           onClick={() => setNewConvModalOpen(true)}
@@ -103,34 +120,70 @@ export const ChatArea: React.FC = () => {
       )
     : activeConv.messages;
 
+  const existingMemberIds = new Set(activeConv.members.map((m) => m.id));
+  const invitableUsers = Object.values(profiles).filter(
+    (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
+  );
+
+  const handleConfirmInvites = async () => {
+    if (selectedInvites.length === 0 || inviting) return;
+    setInviting(true);
+    await inviteToGroup(activeConv.id, selectedInvites);
+    setSelectedInvites([]);
+    setInviting(false);
+    setInviteOpen(false);
+  };
+
   return (
-    <div className="flex min-w-0 flex-1 gap-3">
+    <div className="relative flex min-w-0 flex-1 gap-3">
       <section className="glass-panel glass-surface flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl">
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-3.5 dark:border-white/[0.09]">
           <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xs font-bold ${
-                activeConv.type === 'channel'
-                  ? 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-gradient-to-br from-emerald-500/35 to-teal-700/45 text-emerald-950 ring-1 ring-white/25 dark:text-white'
+            <button
+              type="button"
+              disabled={activeConv.type !== 'dm' || !activeConv.peerUserId}
+              onClick={() => {
+                if (activeConv.type === 'dm' && activeConv.peerUserId) {
+                  setSelectedProfileId(activeConv.peerUserId);
+                }
+              }}
+              className={`relative shrink-0 ${
+                activeConv.type === 'dm' ? 'cursor-pointer transition hover:scale-105' : 'cursor-default'
               }`}
+              title={activeConv.type === 'dm' ? `View ${activeConv.name}'s profile` : undefined}
             >
               {activeConv.type === 'channel' ? (
-                <Hash className="h-4 w-4" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  <Hash className="h-4 w-4" />
+                </div>
               ) : (
-                activeConv.avatar
+                <UserAvatar
+                  avatar={activeConv.avatar}
+                  name={activeConv.name}
+                  className="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-500/35 to-teal-700/45 text-emerald-950 ring-1 ring-white/25 dark:text-white"
+                  textClassName="text-xs font-bold"
+                />
               )}
               {activeConv.type === 'dm' && (
                 <span
                   className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-[#090F0C] ${STATUS_DOT[peerPresence]}`}
                 />
               )}
-            </div>
+            </button>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-[15px] font-bold text-emerald-950 dark:text-white">
+                <h1
+                  onClick={() => {
+                    if (activeConv.type === 'dm' && activeConv.peerUserId) {
+                      setSelectedProfileId(activeConv.peerUserId);
+                    }
+                  }}
+                  className={`truncate text-[15px] font-bold text-emerald-950 dark:text-white ${
+                    activeConv.type === 'dm' ? 'cursor-pointer hover:underline' : ''
+                  }`}
+                >
                   {activeConv.type === 'channel'
                     ? `#${activeConv.name}`
                     : activeConv.name}
@@ -153,6 +206,22 @@ export const ChatArea: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {activeConv.type === 'channel' && (
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => setInviteOpen((v) => !v)}
+                title="Invite people to group"
+                className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
+                  inviteOpen
+                    ? 'border-[#22C55E]/60 bg-[#22C55E]/20 text-emerald-700 dark:text-emerald-300'
+                    : 'text-emerald-800/75 hover:text-emerald-950 dark:text-emerald-100/75 dark:hover:text-white'
+                }`}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+              </motion.button>
+            )}
+
             <button
               onClick={toggleInChatSearch}
               title="Search in conversation"
@@ -209,6 +278,85 @@ export const ChatArea: React.FC = () => {
           </div>
         </header>
 
+        {/* Inline Group Invite Popover */}
+        <AnimatePresence>
+          {inviteOpen && activeConv.type === 'channel' && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden border-b border-black/[0.06] px-5 dark:border-white/[0.08]"
+            >
+              <div className="space-y-2.5 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-emerald-950 dark:text-white">
+                    Invite people to #{activeConv.name}
+                  </span>
+                  <button
+                    onClick={() => setInviteOpen(false)}
+                    className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {invitableUsers.length === 0 ? (
+                  <p className="text-xs text-emerald-800/65 dark:text-emerald-200/60">
+                    Everyone registered is already in this group!
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {invitableUsers.map((u) => {
+                        const selected = selectedInvites.includes(u.id);
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() =>
+                              setSelectedInvites((prev) =>
+                                prev.includes(u.id)
+                                  ? prev.filter((id) => id !== u.id)
+                                  : [...prev, u.id]
+                              )
+                            }
+                            className={`glass-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition ${
+                              selected
+                                ? 'border-[#22C55E] bg-[#22C55E]/20 font-semibold text-emerald-900 dark:text-emerald-200'
+                                : 'text-emerald-950 dark:text-emerald-100'
+                            }`}
+                          >
+                            <UserAvatar
+                              avatar={u.avatarText}
+                              name={u.displayName}
+                              className="h-5 w-5 rounded-full bg-emerald-500/25"
+                              textClassName="text-[9px] font-bold"
+                            />
+                            <span>{u.displayName}</span>
+                            {selected && <Check className="h-3 w-3 text-[#22C55E]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={selectedInvites.length === 0 || inviting}
+                        onClick={() => void handleConfirmInvites()}
+                        className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white shadow-lem-glow-sm transition hover:brightness-110 disabled:opacity-50"
+                      >
+                        {inviting
+                          ? 'Inviting...'
+                          : `Send Invite${selectedInvites.length > 1 ? 's' : ''} (${selectedInvites.length})`}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {isInChatSearchOpen && (
             <motion.div
@@ -243,8 +391,6 @@ export const ChatArea: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Expandable Search-in-Chat Bar */}
 
         <div className="lem-scrollbar flex-1 overflow-y-auto px-5 py-4">
           <AnimatePresence mode="wait">
@@ -292,7 +438,7 @@ export const ChatArea: React.FC = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 6, scale: 0.94 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-                className="flex items-center gap-2.5"
+                className="flex items-center gap-2.5 pt-2"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/20 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
                   <Sparkles className="h-3.5 w-3.5 animate-pulse" />
@@ -354,9 +500,28 @@ export const ChatArea: React.FC = () => {
 
             <div className="lem-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
               <div className="flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-lg font-bold text-white shadow-lem-glow">
-                  {activeConv.type === 'channel' ? '#' : activeConv.avatar}
-                </div>
+                {activeConv.type === 'channel' ? (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-lg font-bold text-white shadow-lem-glow">
+                    #
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeConv.peerUserId) {
+                        setSelectedProfileId(activeConv.peerUserId);
+                      }
+                    }}
+                    className="transition hover:scale-105"
+                  >
+                    <UserAvatar
+                      avatar={activeConv.avatar}
+                      name={activeConv.name}
+                      className="h-16 w-16 rounded-3xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow"
+                      textClassName="text-lg font-bold"
+                    />
+                  </button>
+                )}
                 <h4 className="mt-3 text-sm font-bold text-emerald-950 dark:text-white">
                   {activeConv.type === 'channel'
                     ? `#${activeConv.name}`
@@ -377,9 +542,62 @@ export const ChatArea: React.FC = () => {
                 </span>
               </button>
 
+              {activeConv.type === 'channel' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
+                      Members ({activeConv.members.length})
+                    </p>
+                    <button
+                      onClick={() => setInviteOpen(true)}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-[#22C55E] hover:underline"
+                    >
+                      <UserPlus className="h-3 w-3" />
+                      <span>Invite</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    {activeConv.members.map((member) => {
+                      const isOnline =
+                        member.id === self?.id || onlineUserIds.has(member.id);
+                      return (
+                        <button
+                          key={member.id}
+                          onClick={() => setSelectedProfileId(member.id)}
+                          className="glass-pill flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition hover:border-[#22C55E]/40"
+                        >
+                          <div className="relative shrink-0">
+                            <UserAvatar
+                              avatar={member.avatarText}
+                              name={member.displayName}
+                              className="h-7 w-7 rounded-lg bg-emerald-500/20"
+                              textClassName="text-[10px] font-bold"
+                            />
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-white dark:border-[#090F0C] ${
+                                isOnline ? 'bg-[#22C55E]' : 'bg-slate-400'
+                              }`}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-emerald-950 dark:text-white">
+                              {member.displayName}
+                            </p>
+                            <p className="truncate text-[10px] text-emerald-800/60 dark:text-emerald-200/55">
+                              {member.handle}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
-                  Shared Media & Files
+                  Shared Media &amp; Files
                 </p>
                 {activeConv.messages.some((m) => m.attachments?.length) ? (
                   activeConv.messages
@@ -398,7 +616,7 @@ export const ChatArea: React.FC = () => {
                           }
                         }}
                         disabled={!att.previewUrl}
-                        className="glass-pill block rounded-xl px-3 py-2 text-xs text-emerald-950 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
+                        className="glass-pill block w-full rounded-xl px-3 py-2 text-left text-xs text-emerald-950 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
                       >
                         <p className="truncate font-medium">{att.name}</p>
                         <p className="text-[10px] opacity-65">{att.size}</p>
@@ -410,6 +628,16 @@ export const ChatArea: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              {activeConv.type === 'channel' && (
+                <button
+                  onClick={() => void leaveConversation(activeConv.id)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-rose-500/15 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Leave Group</span>
+                </button>
+              )}
             </div>
           </motion.aside>
         )}

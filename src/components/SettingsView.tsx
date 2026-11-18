@@ -1,8 +1,22 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Moon, Sun, Contrast, LogOut, Database, Wifi, Check, Bell, Volume2, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  Moon,
+  Sun,
+  Contrast,
+  LogOut,
+  Database,
+  Wifi,
+  Check,
+  Bell,
+  Volume2,
+  Sparkles,
+  RefreshCw,
+  Camera,
+} from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { getSupabaseConfig } from '../lib/supabase';
+import { UserAvatar } from './UserAvatar';
 
 export const SettingsView: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
@@ -11,6 +25,7 @@ export const SettingsView: React.FC = () => {
   const setTheme = useChatStore((s) => s.setTheme);
   const signOut = useChatStore((s) => s.signOut);
   const updateSelfProfile = useChatStore((s) => s.updateSelfProfile);
+  const uploadAvatar = useChatStore((s) => s.uploadAvatar);
   const notificationsEnabled = useChatStore((s) => s.notificationsEnabled);
   const notifyWhenFocused = useChatStore((s) => s.notifyWhenFocused);
   const soundEnabled = useChatStore((s) => s.soundEnabled);
@@ -25,6 +40,8 @@ export const SettingsView: React.FC = () => {
   const [displayName, setDisplayName] = useState(self?.name ?? '');
   const [role, setRole] = useState(self?.role ?? '');
   const [saved, setSaved] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const { url } = getSupabaseConfig();
 
@@ -33,6 +50,15 @@ export const SettingsView: React.FC = () => {
     await updateSelfProfile(displayName, role);
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    await uploadAvatar(file);
+    setUploadingAvatar(false);
+    e.target.value = '';
   };
 
   return (
@@ -60,9 +86,29 @@ export const SettingsView: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3.5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-sm font-bold text-white shadow-lem-glow-sm">
-                  {self.avatar}
-                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void handleAvatarChange(e)}
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  title="Upload profile picture"
+                  className="group relative shrink-0"
+                >
+                  <UserAvatar
+                    avatar={self.avatar}
+                    name={self.name}
+                    className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm"
+                    textClassName="text-sm font-bold"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/45 text-white opacity-0 transition group-hover:opacity-100">
+                    <Camera className="h-4 w-4" />
+                  </span>
+                </button>
                 <div>
                   <p className="text-sm font-bold text-emerald-950 dark:text-white">
                     {self.name}
@@ -70,6 +116,14 @@ export const SettingsView: React.FC = () => {
                   <p className="text-xs text-emerald-800/70 dark:text-emerald-200/65">
                     {self.handle} · {self.role}
                   </p>
+                  <button
+                    type="button"
+                    disabled={uploadingAvatar}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="mt-1 text-[11px] font-semibold text-[#22C55E] hover:underline disabled:opacity-60"
+                  >
+                    {uploadingAvatar ? 'Uploading photo...' : 'Change Profile Picture'}
+                  </button>
                 </div>
               </div>
               <button
@@ -174,17 +228,17 @@ export const SettingsView: React.FC = () => {
               onClick={() => setTheme('mono')}
               className={`glass-pill flex items-center gap-3 rounded-2xl p-4 text-left transition ${
                 theme === 'mono'
-                  ? 'border-white/70 bg-white/15 ring-1 ring-white/60'
+                  ? 'border-zinc-900 bg-zinc-900/10 ring-1 ring-zinc-900/50'
                   : 'hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <Contrast className="h-5 w-5 shrink-0 text-white" />
+              <Contrast className="h-5 w-5 shrink-0 text-zinc-900 dark:text-white" />
               <div>
                 <p className="text-xs font-bold text-emerald-950 dark:text-white">
                   Black &amp; White
                 </p>
                 <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
-                  #050507 · Monochrome glass
+                  Light Mode · Black/Gray accent
                 </p>
               </div>
             </motion.button>

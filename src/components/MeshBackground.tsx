@@ -8,20 +8,20 @@ export const MeshBackground: React.FC = () => {
     return (
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 overflow-hidden bg-[#050507]/95 transition-colors duration-500"
+        className="pointer-events-none fixed inset-0 overflow-hidden bg-[#F4F4F5]/90 transition-colors duration-500"
       >
         <div
-          className="animate-mesh-slow absolute -left-24 -top-24 h-[520px] w-[520px] rounded-full opacity-40 blur-[120px]"
+          className="animate-mesh-slow absolute -left-20 -top-20 h-[500px] w-[500px] rounded-full opacity-70 blur-[110px]"
           style={{
             background:
-              'radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(161, 161, 170, 0.10) 45%, transparent 75%)',
+              'radial-gradient(circle, rgba(212, 212, 216, 0.9) 0%, rgba(161, 161, 170, 0.28) 55%, transparent 75%)',
           }}
         />
         <div
-          className="animate-mesh-slow-rev absolute -bottom-32 right-[-60px] h-[560px] w-[560px] rounded-full opacity-35 blur-[130px]"
+          className="animate-mesh-slow-rev absolute -bottom-24 right-0 h-[520px] w-[520px] rounded-full opacity-60 blur-[120px]"
           style={{
             background:
-              'radial-gradient(circle, rgba(212, 212, 216, 0.20) 0%, rgba(113, 113, 122, 0.10) 50%, transparent 75%)',
+              'radial-gradient(circle, rgba(228, 228, 231, 0.9) 0%, rgba(113, 113, 122, 0.22) 55%, transparent 75%)',
           }}
         />
       </div>

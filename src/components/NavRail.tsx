@@ -9,6 +9,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { UserAvatar } from './UserAvatar';
 import type { NavTab, SelfPresence } from '../types/chat';
 
 const STATUS_CONFIG: Record<
@@ -42,6 +43,7 @@ export const NavRail: React.FC = () => {
   const setActiveTab = useChatStore((s) => s.setActiveTab);
   const setSelfStatus = useChatStore((s) => s.setSelfStatus);
   const toggleTheme = useChatStore((s) => s.toggleTheme);
+  const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
 
   const dmUnread = conversations
     .filter((c) => c.type === 'dm')
@@ -61,7 +63,7 @@ export const NavRail: React.FC = () => {
     badge?: number;
   }> = [
     { id: 'chats', label: 'Chats', icon: MessageSquare, badge: dmUnread + channelUnread },
-    { id: 'channels', label: 'Channels', icon: Hash, badge: channelUnread },
+    { id: 'channels', label: 'Groups', icon: Hash, badge: channelUnread },
     { id: 'mentions', label: 'Mentions', icon: AtSign, badge: mentionCount },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -78,7 +80,12 @@ export const NavRail: React.FC = () => {
           title={`${self?.name ?? 'User'} (${statusMeta.label}) — Click to change status`}
           className="group relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#059669] text-sm font-bold text-white shadow-lem-glow-sm transition-transform hover:scale-105 active:scale-95"
         >
-          {self?.avatar ?? 'LC'}
+          <UserAvatar
+            avatar={self?.avatar ?? 'ST'}
+            name={self?.name ?? 'User'}
+            className="h-11 w-11 rounded-2xl"
+            textClassName="text-sm font-bold text-white"
+          />
           <span
             className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#090F0C] ring-4 ${statusMeta.dotClass} ${statusMeta.ringClass} dark:border-[#090F0C]`}
           />
@@ -93,14 +100,20 @@ export const NavRail: React.FC = () => {
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
               className="glass-panel glass-surface absolute left-14 top-0 z-50 w-48 rounded-2xl p-2"
             >
-              <div className="mb-1.5 px-2.5 py-1">
+              <button
+                onClick={() => {
+                  setSelectedProfileId(self.id);
+                  setStatusMenuOpen(false);
+                }}
+                className="mb-1.5 w-full rounded-xl px-2.5 py-1.5 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
+              >
                 <p className="text-xs font-semibold text-emerald-950 dark:text-white">
                   {self.name}
                 </p>
                 <p className="text-[10px] text-emerald-800/70 dark:text-emerald-200/60">
-                  {self.handle}
+                  {self.handle} · View profile
                 </p>
-              </div>
+              </button>
               <div className="h-px bg-black/10 dark:bg-white/10" />
               <div className="mt-1.5 space-y-1">
                 {(['online', 'away', 'busy'] as SelfPresence[]).map((st) => {

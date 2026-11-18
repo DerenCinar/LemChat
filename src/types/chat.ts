@@ -62,6 +62,7 @@ export interface Conversation {
   pinned: boolean;
   unreadCount: number;
   membersCount?: number;
+  members: Profile[];
   lastReadAt?: string;
   messages: Message[];
 }
