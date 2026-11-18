@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  ArrowLeft,
   Hash,
   Search,
   Phone,
@@ -63,6 +64,7 @@ export const ChatArea: React.FC = () => {
   const leaveConversation = useChatStore((s) => s.leaveConversation);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
+  const setMobileChatOpen = useChatStore((s) => s.setMobileChatOpen);
 
   const activeConv =
     conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
@@ -142,8 +144,16 @@ export const ChatArea: React.FC = () => {
     <div className="relative flex min-w-0 flex-1 gap-3">
       <section className="glass-panel glass-surface flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl">
         {/* Header */}
-        <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-5 py-3.5 dark:border-white/[0.09]">
-          <div className="flex min-w-0 items-center gap-3">
+        <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-3 py-2.5 md:px-5 md:py-3.5 dark:border-white/[0.09]">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileChatOpen(false)}
+              aria-label="Back to conversations"
+              className="glass-pill flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-900 md:hidden dark:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
             <button
               type="button"
               disabled={activeConv.type !== 'dm' || !activeConv.peerUserId}
@@ -396,7 +406,7 @@ export const ChatArea: React.FC = () => {
           )}
         </AnimatePresence>
 
-        <div className="lem-scrollbar flex-1 overflow-y-auto px-5 py-4">
+        <div className="lem-scrollbar flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4">
           <div className="space-y-3">
             {visibleMessages.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
@@ -479,7 +489,7 @@ export const ChatArea: React.FC = () => {
             animate={{ width: 270, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-            className="glass-panel glass-surface flex shrink-0 flex-col overflow-hidden rounded-2xl"
+            className="glass-panel glass-surface fixed inset-2 top-12 z-40 flex !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:inset-auto md:!w-[270px]"
           >
             <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5 dark:border-white/[0.09]">
               <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900/75 dark:text-emerald-200/75">

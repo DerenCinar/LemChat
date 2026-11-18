@@ -92,7 +92,7 @@ export const SettingsView: React.FC = () => {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-      className="glass-panel glass-surface lem-scrollbar flex flex-1 flex-col overflow-y-auto rounded-2xl p-6"
+      className="glass-panel glass-surface lem-scrollbar flex flex-1 flex-col overflow-y-auto rounded-2xl p-4 md:p-6"
     >
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <div>
@@ -110,7 +110,7 @@ export const SettingsView: React.FC = () => {
             onSubmit={handleSaveProfile}
             className="glass-pill space-y-4 rounded-2xl p-4"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3.5">
                 <input
                   ref={avatarInputRef}
@@ -571,7 +571,7 @@ export const SettingsView: React.FC = () => {
             Supabase Backend
           </h2>
           <div className="glass-pill space-y-3 rounded-2xl p-4 text-xs">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-emerald-950 dark:text-white">
                 <Wifi className="h-4 w-4 text-[#22C55E]" />
                 <span className="font-semibold">Realtime WebSocket</span>

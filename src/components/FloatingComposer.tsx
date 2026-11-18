@@ -156,7 +156,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       selectedGif !== null);
 
   return (
-    <div className="relative px-4 pb-4 pt-2">
+    <div className="relative px-2.5 pb-2.5 pt-1.5 md:px-4 md:pb-4 md:pt-2">
       {/* Reply Quote Preview */}
       <AnimatePresence>
         {replyingTo && (
@@ -292,7 +292,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 right-16 z-30 grid max-h-64 grid-cols-8 gap-1.5 overflow-y-auto rounded-2xl p-2.5"
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 grid max-h-64 grid-cols-6 gap-1.5 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-16 sm:grid-cols-8"
           >
             {EMOJI_GRID.map((emoji) => (
               <button
@@ -318,7 +318,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 right-4 z-30 grid max-h-72 w-[280px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl p-2.5"
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 grid max-h-72 grid-cols-2 gap-2 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[280px]"
           >
             {GIF_GRID.map((gif) => (
               <button
@@ -349,7 +349,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             : undefined
         }
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-panel glass-surface relative flex items-end gap-1.5 overflow-hidden rounded-[26px] px-3 py-2 transition focus-within:border-[#22C55E]/55 focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+        className="glass-panel glass-surface relative flex items-end gap-1 overflow-hidden rounded-[26px] px-2 py-1.5 transition focus-within:border-[#22C55E]/55 focus-within:ring-2 focus-within:ring-[#22C55E]/20 md:gap-1.5 md:px-3 md:py-2"
       >
         {/* Liquid Glass Send Sweep across composer */}
         {sendPulseKey > 0 && (
@@ -373,7 +373,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Attach file or image (uploads to Supabase Storage)"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Paperclip className="h-4 w-4" />
         </button>
@@ -381,7 +381,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         <button
           onClick={() => setShowCodeEditor((v) => !v)}
           title="Attach code snippet"
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
             showCodeEditor
               ? 'bg-emerald-500/20 text-[#22C55E]'
               : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
@@ -401,13 +401,13 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="lem-scrollbar max-h-[130px] min-h-[24px] flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
+          className="lem-scrollbar max-h-[130px] min-h-[24px] min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
         />
 
         <button
           onClick={() => setShowEmoji((v) => !v)}
           title="Insert emoji"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Smile className="h-4 w-4" />
         </button>
@@ -415,7 +415,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         <button
           onClick={() => setShowGif((v) => !v)}
           title="Choose a GIF"
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
             showGif
               ? 'bg-emerald-500/20 text-[#22C55E]'
               : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
@@ -441,7 +441,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             onClick={() => void handleSend()}
             disabled={!canSend}
             title="Send message"
-            className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+            className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all md:h-9 md:w-9 ${
               canSend
                 ? 'bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow hover:brightness-110'
                 : 'bg-black/5 text-emerald-900/30 dark:bg-white/10 dark:text-white/25'
