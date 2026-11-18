@@ -10,6 +10,7 @@ import {
   Tray,
   nativeImage,
   nativeTheme,
+  type NativeImage,
 } from 'electron';
 import fs from 'fs';
 import path from 'path';
@@ -48,7 +49,8 @@ if (process.platform === 'win32') {
 }
 app.setName('SkellyTalk');
 
-function getAppIcon() {
+function getAppIcon(): NativeImage {
+  // Use the higher-contrast logo for the current system theme.
   const filename = nativeTheme.shouldUseDarkColors
     ? 'skellytalk-light-mode.png'
     : 'skellytalk-dark-mode.png';
@@ -144,6 +146,9 @@ function refreshPlatformIcons() {
     }
   }
   tray?.setImage(icon.resize({ width: 32, height: 32 }));
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon);
+  }
 }
 
 function createWindow(profileId = 'default'): BrowserWindow {
