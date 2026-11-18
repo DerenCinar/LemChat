@@ -415,7 +415,7 @@ function registerIpcHandlers() {
 
   ipcMain.on('lemchat:install-update', () => {
     isQuitting = true;
-    autoUpdater.quitAndInstall(false, true);
+    autoUpdater.quitAndInstall(true, true);
   });
 }
 
@@ -455,7 +455,7 @@ function setupAutoUpdater() {
     setTimeout(() => {
       broadcastUpdateStatus({ status: 'installing', version: info.version });
       isQuitting = true;
-      autoUpdater.quitAndInstall(false, true);
+      autoUpdater.quitAndInstall(true, true);
     }, 900);
   });
 

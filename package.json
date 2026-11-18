@@ -74,8 +74,11 @@
       "artifactName": "${productName}-Linux-${version}-${arch}.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": false,
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "portable": {
