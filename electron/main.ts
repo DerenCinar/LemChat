@@ -452,6 +452,11 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     broadcastUpdateStatus({ status: 'downloaded', version: info.version });
+    setTimeout(() => {
+      broadcastUpdateStatus({ status: 'installing', version: info.version });
+      isQuitting = true;
+      autoUpdater.quitAndInstall(false, true);
+    }, 900);
   });
 
   autoUpdater.on('error', (err) => {

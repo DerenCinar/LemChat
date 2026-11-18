@@ -14,6 +14,11 @@ const EMOJI_GRID = [
   '😊', '😇', '😉', '🥰', '😋', '🤩', '🥹', '😏',
   '😴', '🤯', '🥲', '😮', '😢', '🤗', '👋', '🫶',
   '🎊', '🎈', '🥂', '🍀', '🌸', '🦋', '🐼', '🐸',
+  '😆', '😅', '😂', '🤣', '😜', '🤪', '🫠', '🥸',
+  '😌', '😔', '😐', '😑', '😬', '😳', '🥵', '🥶',
+  '🤠', '🤡', '👻', '👽', '🤖', '👑', '💍', '🎩',
+  '🦊', '🐯', '🦁', '🐵', '🐨', '🐻', '🐙', '🦑',
+  '🌻', '🌺', '🌊', '🏖️', '⛰️', '🌍', '🪐', '⭐',
 ];
 
 const GIF_GRID: GifAttachment[] = [
@@ -29,6 +34,16 @@ const GIF_GRID: GifAttachment[] = [
   { name: 'Dancing', url: 'https://media.giphy.com/media/l0HlvtIPzPdt2usKs/giphy.gif' },
   { name: 'Excited', url: 'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif' },
   { name: 'Woohoo', url: 'https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif' },
+  { name: 'Amazing', url: 'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif' },
+  { name: 'So funny', url: 'https://media.giphy.com/media/26gsjCZpPolPr3sBy/giphy.gif' },
+  { name: 'Dance party', url: 'https://media.giphy.com/media/GeimqsH0TLDt4tScGw/giphy.gif' },
+  { name: 'Celebrate', url: 'https://media.giphy.com/media/g5R9dok94mrIvplmZd/giphy.gif' },
+  { name: 'Hello', url: 'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif' },
+  { name: 'Success', url: 'https://media.giphy.com/media/XreQmk7ETCak0/giphy.gif' },
+  { name: 'Great job', url: 'https://media.giphy.com/media/3o7abB06u9bNzA8lu8/giphy.gif' },
+  { name: 'Slow clap', url: 'https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/giphy.gif' },
+  { name: 'No way', url: 'https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif' },
+  { name: 'Nodding', url: 'https://media.giphy.com/media/KmTnUKop0AfFm/giphy.gif' },
 ];
 
 interface FloatingComposerProps {

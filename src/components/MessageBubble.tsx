@@ -20,12 +20,14 @@ interface MessageBubbleProps {
   message: Message;
   showHeader: boolean;
   highlightQuery?: string;
+  highlightMention?: boolean;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   showHeader,
   highlightQuery,
+  highlightMention,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -38,6 +40,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
+  const self = useChatStore((s) => s.self);
 
   const handleCopyCode = () => {
     if (!message.codeBlock) return;
@@ -53,11 +56,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   const renderHighlightedContent = (text: string) => {
-    if (!highlightQuery?.trim()) return text;
-    const escaped = highlightQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const terms = highlightMention
+      ? [self?.handle, self?.name].filter((term): term is string => Boolean(term?.trim()))
+      : [];
+    if (highlightQuery?.trim()) terms.unshift(highlightQuery.trim());
+    const uniqueTerms = [...new Set(terms)].sort((a, b) => b.length - a.length);
+    if (uniqueTerms.length === 0) return text;
+    const escaped = uniqueTerms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
     const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
     return parts.map((part, idx) =>
-      part.toLowerCase() === highlightQuery.toLowerCase() ? (
+      uniqueTerms.some((term) => part.toLowerCase() === term.toLowerCase()) ? (
         <mark
           key={idx}
           className="rounded bg-amber-300/80 px-0.5 text-emerald-950"
@@ -148,6 +156,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <motion.div
+      id={`message-${message.id}`}
+      data-message-id={message.id}
       layout
       initial={{
         opacity: 0,
@@ -223,7 +233,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               message.isMe
                 ? 'glass-bubble-sent rounded-tr-md text-white'
                 : 'glass-bubble-received rounded-tl-md text-emerald-950 dark:text-emerald-50/95'
-            }`}
+            } ${highlightMention ? 'ring-2 ring-[#22C55E] ring-offset-4 ring-offset-transparent animate-pulse' : ''}`}
           >
             <motion.span
               aria-hidden

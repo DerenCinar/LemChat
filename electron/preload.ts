@@ -24,6 +24,7 @@ export interface UpdateStatusPayload {
     | 'not-available'
     | 'downloading'
     | 'downloaded'
+    | 'installing'
     | 'error';
   version?: string;
   progress?: number;

@@ -402,6 +402,30 @@ export const SettingsView: React.FC = () => {
                 </p>
               </div>
             </motion.button>
+
+            {([
+              ['ocean', 'Ocean Glass', 'Deep blue · Cyan glow', 'from-sky-400 to-cyan-400'],
+              ['sunset', 'Sunset Glass', 'Orange · Violet glow', 'from-orange-400 to-violet-500'],
+              ['rose', 'Rose Glass', 'Rose · Pink glow', 'from-rose-400 to-fuchsia-500'],
+            ] as const).map(([mode, title, subtitle, gradient]) => (
+              <motion.button
+                key={mode}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setTheme(mode)}
+                className={`glass-pill flex items-center gap-3 rounded-2xl p-4 text-left transition ${
+                  theme === mode
+                    ? 'border-white/60 bg-white/10 ring-1 ring-white/50'
+                    : 'hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
+              >
+                <span className={`h-5 w-5 shrink-0 rounded-full bg-gradient-to-br ${gradient}`} />
+                <div>
+                  <p className="text-xs font-bold text-emerald-950 dark:text-white">{title}</p>
+                  <p className="text-[11px] text-emerald-800/65 dark:text-emerald-200/55">{subtitle}</p>
+                </div>
+              </motion.button>
+            ))}
           </div>
         </div>
 

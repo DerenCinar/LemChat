@@ -122,6 +122,7 @@ interface ChatStore {
   mobileChatOpen: boolean;
   isWindowFocused: boolean;
   selectedProfileId: string | null;
+  pendingMentionMessageId: string | null;
   selectedAttachment: Attachment | null;
 
   typingConversations: Record<string, TypingState | null>;
@@ -148,6 +149,7 @@ interface ChatStore {
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
   setSelectedProfileId: (userId: string | null) => void;
+  setPendingMentionMessageId: (messageId: string | null) => void;
   getContactName: (userId: string, fallbackName: string) => string;
   setContactName: (userId: string, name: string) => void;
   openAttachment: (attachment: Attachment) => void;
@@ -438,10 +440,13 @@ const savedTheme: ThemeMode =
   savedThemeValue === 'dark' ||
   savedThemeValue === 'light' ||
   savedThemeValue === 'mono' ||
-  savedThemeValue === 'mono-dark'
+  savedThemeValue === 'mono-dark' ||
+  savedThemeValue === 'ocean' ||
+  savedThemeValue === 'sunset' ||
+  savedThemeValue === 'rose'
     ? savedThemeValue
     : 'dark';
-if (savedTheme === 'dark' || savedTheme === 'mono-dark') {
+if (savedTheme === 'dark' || savedTheme === 'mono-dark' || savedTheme === 'ocean' || savedTheme === 'sunset' || savedTheme === 'rose') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
@@ -481,6 +486,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   mobileChatOpen: false,
   isWindowFocused: true,
   selectedProfileId: null,
+  pendingMentionMessageId: null,
   selectedAttachment: null,
 
   typingConversations: {},
@@ -496,7 +502,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setTheme: (theme) => {
     localStorage.setItem('skellytalk_theme', theme);
-    if (theme === 'dark' || theme === 'mono-dark') {
+    if (theme === 'dark' || theme === 'mono-dark' || theme === 'ocean' || theme === 'sunset' || theme === 'rose') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
@@ -523,7 +529,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ? 'mono'
           : cur === 'mono'
             ? 'mono-dark'
-            : 'dark';
+            : cur === 'mono-dark'
+              ? 'ocean'
+              : cur === 'ocean'
+                ? 'sunset'
+                : cur === 'sunset'
+                  ? 'rose'
+                  : 'dark';
     get().setTheme(next);
   },
 
@@ -542,6 +554,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
   setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
+  setPendingMentionMessageId: (pendingMentionMessageId) => set({ pendingMentionMessageId }),
   getContactName: (userId, fallbackName) => {
     const selfId = get().session?.user?.id;
     if (!selfId || selfId === userId) return fallbackName;
@@ -878,7 +891,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             id: msg.id,
             conversationId: msg.conversation_id,
             senderId: msg.sender_id,
-            senderName: profileMap[msg.sender_id]?.displayName ?? 'Member',
+            senderName: profileMap[msg.sender_id]
+              ? get().getContactName(msg.sender_id, profileMap[msg.sender_id].displayName)
+              : 'Member',
             senderAvatar: profileMap[msg.sender_id]?.avatarText ?? 'ST',
             senderRole: profileMap[msg.sender_id]?.role,
             content: '',
@@ -905,7 +920,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           id: msg.id,
           conversationId: msg.conversation_id,
           senderId: msg.sender_id,
-          senderName: sender?.displayName ?? 'Member',
+          senderName: sender
+            ? get().getContactName(sender.id, sender.displayName)
+            : 'Member',
           senderAvatar: sender?.avatarText ?? 'ST',
           senderRole: sender?.role,
           content: decrypted.content,
@@ -1143,7 +1160,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             id: row.id,
             conversationId: row.conversation_id,
             senderId: row.sender_id,
-            senderName: sender?.displayName ?? 'Member',
+            senderName: sender
+              ? get().getContactName(sender.id, sender.displayName)
+              : 'Member',
             senderAvatar: sender?.avatarText ?? 'ST',
             senderRole: sender?.role,
             content: decrypted.content,

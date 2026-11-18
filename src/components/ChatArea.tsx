@@ -65,6 +65,8 @@ export const ChatArea: React.FC = () => {
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
   const openAttachment = useChatStore((s) => s.openAttachment);
   const setMobileChatOpen = useChatStore((s) => s.setMobileChatOpen);
+  const pendingMentionMessageId = useChatStore((s) => s.pendingMentionMessageId);
+  const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
 
   const activeConv =
     conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
@@ -73,6 +75,20 @@ export const ChatArea: React.FC = () => {
   useEffect(() => {
     feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConv?.messages.length, typingState, activeConversationId]);
+
+  useEffect(() => {
+    if (!pendingMentionMessageId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(pendingMentionMessageId)}"]`
+      );
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.setTimeout(() => setPendingMentionMessageId(null), 2400);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingMentionMessageId, activeConversationId, setPendingMentionMessageId]);
 
   useEffect(() => {
     setInviteOpen(false);
@@ -430,6 +446,7 @@ export const ChatArea: React.FC = () => {
                     message={msg}
                     showHeader={showHeader}
                     highlightQuery={inChatSearchQuery}
+                    highlightMention={pendingMentionMessageId === msg.id}
                   />
                 );
               })

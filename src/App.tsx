@@ -25,7 +25,6 @@ export const App: React.FC = () => {
   const setWindowFocused = useChatStore((s) => s.setWindowFocused);
   const updateStatus = useChatStore((s) => s.updateStatus);
   const setUpdateStatus = useChatStore((s) => s.setUpdateStatus);
-  const installUpdate = useChatStore((s) => s.installUpdate);
 
   useEffect(() => {
     void initializeApp();
@@ -65,23 +64,47 @@ export const App: React.FC = () => {
       <AttachmentViewer />
 
       <AnimatePresence>
-        {updateStatus.status === 'downloaded' && (
+        {(updateStatus.status === 'downloading' ||
+          updateStatus.status === 'downloaded' ||
+          updateStatus.status === 'installing') && (
           <motion.div
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            className="glass-panel glass-surface fixed left-1/2 top-12 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-xs ring-1 ring-[#22C55E]/50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#090F0C]/88 backdrop-blur-2xl"
           >
-            <DownloadCloud className="h-4 w-4 text-[#22C55E]" />
-            <span className="font-medium text-emerald-950 dark:text-white">
-              SkellyTalk {updateStatus.version ? `v${updateStatus.version}` : ''} is ready to install
-            </span>
-            <button
-              onClick={installUpdate}
-              className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-3 py-1 text-[11px] font-bold text-white shadow-lem-glow-sm hover:brightness-110"
+            <motion.div
+              initial={{ scale: 0.94, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              className="glass-panel glass-surface mx-4 flex w-full max-w-sm flex-col items-center rounded-3xl px-8 py-10 text-center ring-1 ring-[#22C55E]/35"
             >
-              Restart &amp; Update
-            </button>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+                className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow"
+              >
+                <DownloadCloud className="h-6 w-6" />
+              </motion.div>
+              <h2 className="text-lg font-bold text-emerald-950 dark:text-white">
+                {updateStatus.status === 'installing' ? 'Applying update...' : 'Updating SkellyTalk'}
+              </h2>
+              <p className="mt-2 text-xs text-emerald-800/70 dark:text-emerald-200/65">
+                {updateStatus.version ? `Version ${updateStatus.version}` : 'Downloading the latest version'}
+              </p>
+              {updateStatus.status === 'downloading' && (
+                <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981]"
+                    animate={{ width: `${Math.max(4, updateStatus.progress ?? 0)}%` }}
+                  />
+                </div>
+              )}
+              {updateStatus.status === 'downloading' && (
+                <p className="mt-2 text-[11px] font-semibold text-[#22C55E]">
+                  {Math.round(updateStatus.progress ?? 0)}%
+                </p>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

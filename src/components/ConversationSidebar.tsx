@@ -25,6 +25,7 @@ export const ConversationSidebar: React.FC = () => {
 
   const setSearchQuery = useChatStore((s) => s.setSearchQuery);
   const selectConversation = useChatStore((s) => s.selectConversation);
+  const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
   const togglePinConversation = useChatStore((s) => s.togglePinConversation);
   const setNewConvModalOpen = useChatStore((s) => s.setNewConvModalOpen);
 
@@ -93,7 +94,13 @@ export const ConversationSidebar: React.FC = () => {
         whileHover={{ x: 2 }}
         whileTap={{ scale: 0.985 }}
         transition={{ type: 'spring', stiffness: 440, damping: 30 }}
-        onClick={() => void selectConversation(conv.id)}
+        onClick={() => {
+          if (activeTab === 'mentions') {
+            const mention = [...msgs].reverse().find((message) => message.isMention);
+            if (mention) setPendingMentionMessageId(mention.id);
+          }
+          void selectConversation(conv.id);
+        }}
         className={`group relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 transition-colors ${
           isActive
             ? ''
