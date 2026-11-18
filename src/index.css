@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@media (max-width: 767px) {
+  body {
+    overscroll-behavior: none;
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  .glass-panel {
+    border-radius: 18px;
+  }
+}
+
 html[data-chat-font="system"] { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif !important; }
 html[data-chat-font="inter"] { font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
 html[data-chat-font="rounded"] { font-family: 'Segoe UI Rounded', 'Trebuchet MS', 'Arial Rounded MT Bold', sans-serif !important; }

@@ -78,6 +78,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const [codeLang, setCodeLang] = useState('typescript');
   const [codeText, setCodeText] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [sendPulseKey, setSendPulseKey] = useState(0);
   const [stagedUploads, setStagedUploads] = useState<StagedUpload[]>([]);
   const [recordingMode, setRecordingMode] = useState<'audio' | 'video' | null>(null);
@@ -116,25 +117,33 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     if (!text.trim() && stagedUploads.length === 0 && !hasCode && !selectedGif) return;
 
     setSending(true);
+    setSendError(null);
     setSendPulseKey((k) => k + 1);
-    await sendMessage(
-      text,
-      stagedUploads.length > 0 ? stagedUploads : undefined,
-      hasCode ? { language: codeLang, code: codeText } : undefined,
-      selectedGif ?? undefined
-    );
+    try {
+      await sendMessage(
+        text,
+        stagedUploads.length > 0 ? stagedUploads : undefined,
+        hasCode ? { language: codeLang, code: codeText } : undefined,
+        selectedGif ?? undefined
+      );
 
-    setText('');
-    setStagedUploads([]);
-    setCodeText('');
-    setShowCodeEditor(false);
-    setShowEmoji(false);
-    setShowGif(false);
-    setSelectedGif(null);
-    setSending(false);
+      setText('');
+      setStagedUploads([]);
+      setCodeText('');
+      setShowCodeEditor(false);
+      setShowEmoji(false);
+      setShowGif(false);
+      setSelectedGif(null);
 
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    } catch (error) {
+      setSendError(
+        error instanceof Error ? error.message : 'The message could not be sent. Please try again.'
+      );
+    } finally {
+      setSending(false);
     }
   };
 
@@ -245,6 +254,28 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 
   return (
     <div className="relative px-2.5 pb-2.5 pt-1.5 md:px-4 md:pb-4 md:pt-2">
+      <AnimatePresence>
+        {sendError && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            role="alert"
+            className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200"
+          >
+            <span className="min-w-0">{sendError}</span>
+            <button
+              type="button"
+              onClick={() => setSendError(null)}
+              className="shrink-0 rounded-full p-1 hover:bg-rose-500/10"
+              aria-label="Dismiss send error"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Reply Quote Preview */}
       <AnimatePresence>
         {replyingTo && (
@@ -491,14 +522,14 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             <button
               onClick={() => void startRecording('audio')}
               title="Record audio"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70"
             >
               <Mic className="h-4 w-4" />
             </button>
             <button
               onClick={() => void startRecording('video')}
               title="Record video"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70"
             >
               <Video className="h-4 w-4" />
             </button>
@@ -508,6 +539,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         <textarea
           ref={textareaRef}
           rows={1}
+          maxLength={4000}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -530,7 +562,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         <button
           onClick={() => setShowGif((v) => !v)}
           title="Choose a GIF"
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
+          className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full transition sm:flex md:h-9 md:w-9 ${
             showGif
               ? 'bg-emerald-500/20 text-[#22C55E]'
               : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'

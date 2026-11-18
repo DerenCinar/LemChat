@@ -101,11 +101,24 @@ export const ChatArea: React.FC = () => {
 
   if (workspaceLoading) {
     return (
-      <div className="glass-panel glass-surface flex flex-1 items-center justify-center rounded-2xl">
-        <div className="flex items-center gap-2.5 text-xs font-medium text-emerald-800 dark:text-emerald-200">
-          <Sparkles className="h-4 w-4 animate-spin text-[#22C55E]" />
-          <span>Loading SkellyTalk...</span>
+      <div className="glass-panel glass-surface flex flex-1 flex-col rounded-2xl p-4 md:p-5" aria-label="Loading conversation">
+        <div className="flex items-center gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.09]">
+          <div className="h-10 w-10 animate-pulse rounded-2xl bg-emerald-500/15" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-32 animate-pulse rounded-full bg-emerald-500/15" />
+            <div className="h-2.5 w-20 animate-pulse rounded-full bg-emerald-500/10" />
+          </div>
         </div>
+        <div className="flex flex-1 flex-col justify-end gap-3 py-5">
+          {[52, 76, 42, 68].map((width, index) => (
+            <div
+              key={width}
+              className={`h-12 animate-pulse rounded-2xl bg-emerald-500/10 ${index % 2 === 0 ? 'w-[52%]' : 'ml-auto w-[68%]'}`}
+              style={{ width: `${index % 2 === 0 ? width : width + 12}%`, maxWidth: '82%' }}
+            />
+          ))}
+        </div>
+        <div className="h-12 animate-pulse rounded-[26px] bg-emerald-500/10" />
       </div>
     );
   }
@@ -113,12 +126,17 @@ export const ChatArea: React.FC = () => {
   if (!activeConv) {
     return (
       <div className="glass-panel glass-surface flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl p-6 text-center">
-        <p className="text-sm font-semibold text-emerald-950 dark:text-white">
-          Welcome to SkellyTalk
-        </p>
-        <p className="max-w-xs text-xs text-emerald-800/65 dark:text-emerald-200/60">
-          Create a group and invite people, or start a direct message to begin chatting in real time.
-        </p>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E]/25 to-[#10B981]/15 ring-1 ring-[#22C55E]/25">
+          <Sparkles className="h-6 w-6 text-[#22C55E]" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-emerald-950 dark:text-white">
+            Welcome to SkellyTalk
+          </p>
+          <p className="mt-1 max-w-xs text-xs leading-relaxed text-emerald-800/65 dark:text-emerald-200/60">
+            Create a group and invite people, or start a direct message to begin chatting in real time.
+          </p>
+        </div>
         <button
           onClick={() => setNewConvModalOpen(true)}
           className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-2 text-xs font-semibold text-white shadow-lem-glow-sm transition hover:brightness-110"

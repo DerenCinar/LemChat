@@ -2035,13 +2035,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         attachments: attachments.length > 0 ? attachments : undefined,
       });
     } else {
-      await supabase.from('messages').insert({
+      const { error: insertError } = await supabase.from('messages').insert({
         conversation_id: convId,
         sender_id: user.id,
         content: finalContent,
         code_block: codeBlock ?? null,
         attachments: attachments.length > 0 ? attachments : null,
       });
+      if (insertError) {
+        throw new Error(`Message send failed: ${insertError.message}`);
+      }
     }
 
     set({ replyingTo: null });

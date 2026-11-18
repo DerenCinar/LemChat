@@ -262,8 +262,16 @@ export const ConversationSidebar: React.FC = () => {
           <div className="space-y-1">
             {regularList.map(renderItem)}
             {filtered.length === 0 && (
-              <div className="px-3 py-8 text-center text-xs text-emerald-800/60 dark:text-emerald-200/50">
-                No conversations yet. Click + to create one!
+              <div className="mx-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-500/20 px-4 text-center">
+                <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10">
+                  {searchQuery ? <Search className="h-4 w-4 text-emerald-600" /> : <Plus className="h-4 w-4 text-emerald-600" />}
+                </div>
+                <p className="text-xs font-semibold text-emerald-950 dark:text-white">
+                  {searchQuery ? 'No matches found' : 'No conversations yet'}
+                </p>
+                <p className="mt-1 max-w-44 text-[11px] leading-relaxed text-emerald-800/55 dark:text-emerald-200/50">
+                  {searchQuery ? 'Try a different name or keyword.' : 'Create a group or start a direct message.'}
+                </p>
               </div>
             )}
           </div>
