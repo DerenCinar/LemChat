@@ -2344,7 +2344,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           content: finalContent,
           code_block: codeBlock ?? null,
           attachments: attachments.length > 0 ? attachments : null,
-          metadata: interactive ?? null,
+          // Only send metadata for polls/games so normal messages still work
+          // on databases that haven't applied the metadata column migration yet.
+          ...(interactive ? { metadata: interactive } : {}),
         })
         .select('id')
         .maybeSingle();
