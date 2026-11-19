@@ -94,6 +94,28 @@ export interface CodeBlock {
   code: string;
 }
 
+export interface PollMetadata {
+  kind: 'poll';
+  question: string;
+  options: Array<{
+    id: string;
+    text: string;
+  }>;
+  votes: Record<string, string>;
+}
+
+export interface GameMetadata {
+  kind: 'game';
+  game: 'tic-tac-toe';
+  board: Array<'X' | 'O' | null>;
+  xPlayerId: string;
+  oPlayerId?: string;
+  currentTurn: 'X' | 'O';
+  winner?: 'X' | 'O' | 'draw';
+}
+
+export type InteractiveMetadata = PollMetadata | GameMetadata;
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -114,6 +136,7 @@ export interface Message {
   isMention?: boolean;
   isEdited?: boolean;
   isPinned?: boolean;
+  interactive?: InteractiveMetadata;
 }
 
 export interface Conversation {

@@ -15,6 +15,7 @@ import type {
   CodeBlock,
   Conversation,
   GifAttachment,
+  InteractiveMetadata,
   IncomingCallState,
   Message,
   NavTab,
@@ -107,6 +108,7 @@ interface DbMessageRow {
   ciphertext_type: number | null;
   code_block: CodeBlock | null;
   attachments: Attachment[] | null;
+  metadata: InteractiveMetadata | null;
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
@@ -218,8 +220,13 @@ interface ChatStore {
     content: string,
     uploads?: StagedUpload[],
     codeBlock?: CodeBlock,
-    gif?: GifAttachment
+    gif?: GifAttachment,
+    interactive?: InteractiveMetadata
   ) => Promise<void>;
+  sendPoll: (question: string, options: string[]) => Promise<void>;
+  sendGame: () => Promise<void>;
+  votePoll: (messageId: string, optionId: string) => void;
+  makeGameMove: (messageId: string, position: number) => void;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
@@ -245,6 +252,8 @@ interface ChatStore {
 
 let dbChannel: RealtimeChannel | null = null;
 let presenceChannel: RealtimeChannel | null = null;
+let lastSeenUnloadBound = false;
+let lastSeenTimer: ReturnType<typeof setInterval> | null = null;
 let callsChannel: RealtimeChannel | null = null;
 let peerConnection: RTCPeerConnection | null = null;
 let fetchInFlight = false;
@@ -294,6 +303,7 @@ interface DecryptedMessagePayload {
   content: string;
   codeBlock?: CodeBlock;
   attachments?: Attachment[];
+  interactive?: InteractiveMetadata;
   editedAt?: string;
   isEdited?: boolean;
 }
@@ -400,6 +410,7 @@ async function decryptMessageRow(
         content: row.content.slice(EDITED_MESSAGE_MARKER.length).replace(/^\n/, ''),
         codeBlock: row.code_block ?? undefined,
         attachments: row.attachments ?? undefined,
+        interactive: row.metadata ?? undefined,
         isEdited: true,
       };
     }
@@ -407,6 +418,7 @@ async function decryptMessageRow(
       content: row.content,
       codeBlock: row.code_block ?? undefined,
       attachments: row.attachments ?? undefined,
+      interactive: row.metadata ?? undefined,
     };
   }
   if (!window.lemchat) {
@@ -445,7 +457,7 @@ async function decryptMessageRow(
       );
       try {
         const payload = JSON.parse(decrypted) as DecryptedMessagePayload;
-        return { ...payload, content: payload.content ?? decrypted };
+        return { ...payload, interactive: row.metadata ?? payload.interactive, content: payload.content ?? decrypted };
       } catch {
         return { content: decrypted };
       }
@@ -457,7 +469,7 @@ async function decryptMessageRow(
     );
     try {
       const payload = JSON.parse(decrypted) as DecryptedMessagePayload;
-      return { ...payload, content: payload.content ?? decrypted };
+      return { ...payload, interactive: row.metadata ?? payload.interactive, content: payload.content ?? decrypted };
     } catch {
       return { content: decrypted };
     }
@@ -885,6 +897,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const supabase = getSupabaseClient();
     const self = get().self;
     if (!supabase || !self) return;
+    if (get().liquidGlass.lastSeenPrivacy === false) return;
 
     const lastSeenAt = new Date().toISOString();
     const { error } = await supabase
@@ -1238,6 +1251,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           isEdited: Boolean(msg.edited_at) || Boolean(decrypted.isEdited) || Boolean(decrypted.editedAt),
           codeBlock: decrypted.codeBlock,
           attachments: decrypted.attachments,
+          interactive: decrypted.interactive,
           isPinned: pinnedMessageIds.has(msg.id),
           isMention: selfProfile
             ? decrypted.content.toLowerCase().includes(selfProfile.displayName.toLowerCase()) ||
@@ -1484,6 +1498,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             reactions: [],
             codeBlock: decrypted.codeBlock,
             attachments: decrypted.attachments,
+            interactive: decrypted.interactive,
             isMention: state.self
               ? decrypted.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
                 decrypted.content.toLowerCase().includes(state.self.handle.toLowerCase())
@@ -1582,6 +1597,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                             content: decrypted.content,
                             codeBlock: decrypted.codeBlock,
                             attachments: decrypted.attachments,
+                            interactive: decrypted.interactive,
                             editedAt: row.edited_at ?? decrypted.editedAt,
                             isEdited:
                               Boolean(row.edited_at) || Boolean(decrypted.isEdited),
@@ -1732,7 +1748,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (!presenceChannel) return;
         const state = presenceChannel.presenceState();
         const online = new Set<string>(Object.keys(state));
-        set({ onlineUserIds: online });
+        const previous = get().onlineUserIds;
+        const leftAt = new Date().toISOString();
+        const departed = [...previous].filter((id) => !online.has(id) && id !== user.id);
+        set((current) => {
+          if (departed.length === 0) return { onlineUserIds: online };
+          // Peers who just dropped offline: stamp them locally so "last seen" is
+          // accurate immediately instead of waiting on their profile row to sync.
+          const nextProfiles = { ...current.profiles };
+          for (const id of departed) {
+            if (nextProfiles[id]) nextProfiles[id] = { ...nextProfiles[id], lastSeenAt: leftAt };
+          }
+          return { onlineUserIds: online, profiles: nextProfiles };
+        });
       })
       .on('broadcast', { event: 'conv:invited' }, ({ payload }) => {
         const data = payload as { userIds?: string[] };
@@ -1785,6 +1813,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && presenceChannel) {
+          if (lastSeenTimer) clearInterval(lastSeenTimer);
+          lastSeenTimer = setInterval(() => void get().touchLastSeen(), 60_000);
+          if (typeof window !== 'undefined' && !lastSeenUnloadBound) {
+            lastSeenUnloadBound = true;
+            window.addEventListener('beforeunload', () => void get().touchLastSeen());
+          }
           await presenceChannel.track({
             userId: user.id,
             onlineAt: new Date().toISOString(),
@@ -1932,6 +1966,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     dbChannel = null;
     presenceChannel = null;
     callsChannel = null;
+    if (lastSeenTimer) {
+      clearInterval(lastSeenTimer);
+      lastSeenTimer = null;
+    }
     for (const t of typingTimers.values()) clearTimeout(t);
     typingTimers.clear();
   },
@@ -2111,14 +2149,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  sendMessage: async (content, uploads, codeBlock, gif) => {
+  sendMessage: async (content, uploads, codeBlock, gif, interactive) => {
     const supabase = getSupabaseClient();
     const user = get().session?.user;
     const convId = get().activeConversationId;
     const trimmed = filterProfanity(content.trim(), get().profanityFilter);
 
     if (!supabase || !user || !convId) return;
-    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif) return;
+    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif && !interactive) return;
 
     // Upload any staged files to Supabase Storage bucket 'lemchat-attachments'
     const attachments: Attachment[] = [];
@@ -2186,11 +2224,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       content: finalContent,
       codeBlock: codeBlock ?? null,
       attachments: attachments.length > 0 ? attachments : null,
+      interactive: interactive ?? null,
     });
 
     let insertedId: string | undefined;
 
-    if (window.lemchat?.signalEncryptDirect && conv) {
+    if (window.lemchat?.signalEncryptDirect && conv && !interactive) {
       try {
         if (conv.type === 'dm' && conv.peerUserId) {
           const { data: bundleRow } = await supabase
@@ -2305,6 +2344,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           content: finalContent,
           code_block: codeBlock ?? null,
           attachments: attachments.length > 0 ? attachments : null,
+          metadata: interactive ?? null,
         })
         .select('id')
         .maybeSingle();
@@ -2343,6 +2383,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           reactions: [],
           codeBlock: codeBlock ?? undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
+          interactive,
         };
         set({
           conversations: state.conversations.map((conversation) =>
@@ -2355,6 +2396,91 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     set({ replyingTo: null });
+  },
+
+  sendPoll: async (question, options) => {
+    const q = question.trim();
+    const opts = options.map((o) => o.trim()).filter(Boolean).slice(0, 8);
+    if (!q || opts.length < 2) return;
+    const interactive: InteractiveMetadata = {
+      kind: 'poll',
+      question: q,
+      options: opts.map((text, i) => ({ id: `o${i}`, text })),
+      votes: {},
+    };
+    await get().sendMessage(`📊 Poll: ${q}`, undefined, undefined, undefined, interactive);
+  },
+
+  sendGame: async () => {
+    const self = get().self;
+    if (!self) return;
+    const interactive: InteractiveMetadata = {
+      kind: 'game',
+      game: 'tic-tac-toe',
+      board: Array(9).fill(null),
+      xPlayerId: self.id,
+      currentTurn: 'X',
+    };
+    await get().sendMessage('🎮 Tic-Tac-Toe — join and play!', undefined, undefined, undefined, interactive);
+  },
+
+  votePoll: (messageId, optionId) => {
+    const supabase = getSupabaseClient();
+    const user = get().session?.user;
+    if (!supabase || !user) return;
+    const msg = get().conversations.flatMap((c) => c.messages).find((m) => m.id === messageId);
+    if (!msg || msg.interactive?.kind !== 'poll') return;
+    const poll = msg.interactive;
+    if (!poll.options.some((o) => o.id === optionId)) return;
+    const votes = { ...poll.votes };
+    if (votes[user.id] === optionId) delete votes[user.id];
+    else votes[user.id] = optionId;
+    applyInteractive(messageId, { ...poll, votes });
+    void supabase
+      .rpc('vote_poll', { p_message_id: messageId, p_option_id: optionId })
+      .then(({ error }) => {
+        if (error) {
+          console.error('Poll vote failed:', error);
+          applyInteractive(messageId, poll);
+        }
+      });
+  },
+
+  makeGameMove: (messageId, position) => {
+    const supabase = getSupabaseClient();
+    const user = get().session?.user;
+    if (!supabase || !user) return;
+    const msg = get().conversations.flatMap((c) => c.messages).find((m) => m.id === messageId);
+    if (!msg || msg.interactive?.kind !== 'game') return;
+    const game = msg.interactive;
+    if (game.winner || game.board[position]) return;
+    const mark = game.currentTurn;
+    const expected = mark === 'X' ? game.xPlayerId : game.oPlayerId;
+    let oPlayerId = game.oPlayerId;
+    if (expected) {
+      if (expected !== user.id) return;
+    } else {
+      if (user.id === game.xPlayerId) return;
+      oPlayerId = user.id;
+    }
+    const board = game.board.slice();
+    board[position] = mark;
+    const winner = tttWinner(board);
+    applyInteractive(messageId, {
+      ...game,
+      board,
+      oPlayerId,
+      currentTurn: mark === 'X' ? 'O' : 'X',
+      winner: winner ?? undefined,
+    });
+    void supabase
+      .rpc('game_move', { p_message_id: messageId, p_position: position })
+      .then(({ error }) => {
+        if (error) {
+          console.error('Game move failed:', error);
+          applyInteractive(messageId, game);
+        }
+      });
   },
 
   editMessage: async (messageId, content) => {
@@ -3429,3 +3555,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 }));
+
+function tttWinner(board: Array<'X' | 'O' | null>): 'X' | 'O' | 'draw' | null {
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const [a, b, c] of lines) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+  }
+  return board.every(Boolean) ? 'draw' : null;
+}
+
+function applyInteractive(messageId: string, interactive: InteractiveMetadata) {
+  useChatStore.setState((state) => ({
+    conversations: state.conversations.map((c) => ({
+      ...c,
+      messages: c.messages.map((m) => (m.id === messageId ? { ...m, interactive } : m)),
+    })),
+  }));
+}

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
+import { InteractiveCard } from './InteractiveCard';
 import type { Message } from '../types/chat';
 
 const SpoilerText: React.FC<{ text: string }> = ({ text }) => {
@@ -360,6 +361,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </p>
               )
             )}
+
+            {message.interactive && !message.deletedAt && <InteractiveCard message={message} />}
 
             {message.codeBlock && (
               <div className="mt-2.5 overflow-hidden rounded-xl border border-white/15 bg-[#060C09]/85 text-xs text-emerald-100">

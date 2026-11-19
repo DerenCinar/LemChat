@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square } from 'lucide-react';
+import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import type { GifAttachment, StagedUpload } from '../types/chat';
 
@@ -108,6 +108,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [showPoll, setShowPoll] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
   const [selectedGif, setSelectedGif] = useState<GifAttachment | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [codeLang, setCodeLang] = useState('typescript');
@@ -125,6 +128,8 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const lastTypingSentRef = useRef<number>(0);
 
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const sendPoll = useChatStore((s) => s.sendPoll);
+  const sendGame = useChatStore((s) => s.sendGame);
   const broadcastTyping = useChatStore((s) => s.broadcastTyping);
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
@@ -519,6 +524,61 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showPoll && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 space-y-2 rounded-2xl p-3 sm:left-auto sm:right-4 sm:w-[300px]"
+          >
+            <input
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              maxLength={200}
+              placeholder="Ask a question..."
+              className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-xs outline-none focus:border-emerald-400/60"
+            />
+            {pollOptions.map((opt, i) => (
+              <input
+                key={i}
+                value={opt}
+                onChange={(e) =>
+                  setPollOptions((prev) => prev.map((o, j) => (j === i ? e.target.value : o)))
+                }
+                maxLength={100}
+                placeholder={`Option ${i + 1}`}
+                className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-xs outline-none focus:border-emerald-400/60"
+              />
+            ))}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                disabled={pollOptions.length >= 8}
+                onClick={() => setPollOptions((prev) => [...prev, ''])}
+                className="flex items-center gap-1 text-xs text-emerald-500 disabled:opacity-40"
+              >
+                <Plus className="h-3 w-3" /> Add option
+              </button>
+              <button
+                type="button"
+                disabled={!pollQuestion.trim() || pollOptions.filter((o) => o.trim()).length < 2}
+                onClick={() => {
+                  void sendPoll(pollQuestion, pollOptions);
+                  setShowPoll(false);
+                  setPollQuestion('');
+                  setPollOptions(['', '']);
+                }}
+                className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+              >
+                Send poll
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Pill-shaped Floating Glass Composer */}
       <motion.div
         animate={
@@ -634,6 +694,26 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }`}
         >
           <Film className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => setShowPoll((v) => !v)}
+          title="Create a poll"
+          className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full transition sm:flex md:h-9 md:w-9 ${
+            showPoll
+              ? 'bg-emerald-500/20 text-[#22C55E]'
+              : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
+          }`}
+        >
+          <BarChart3 className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => void sendGame()}
+          title="Start a Tic-Tac-Toe game"
+          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
+        >
+          <Gamepad2 className="h-4 w-4" />
         </button>
 
         <div className="relative shrink-0">
