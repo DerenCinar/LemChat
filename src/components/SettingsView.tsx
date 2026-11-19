@@ -792,7 +792,6 @@ export const SettingsView: React.FC = () => {
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Bubble shape</span>
                 <select value={liquidGlass.bubbleStyle} onChange={(e) => setLiquidGlass({ bubbleStyle: e.target.value as typeof liquidGlass.bubbleStyle })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
                   <option value="imessage">iMessage curved tails</option>
-                  <option value="pill">Modern pill</option>
                   <option value="cyber">Sharp cyber-cut</option>
                   <option value="glass">Floating glass</option>
                 </select>

@@ -43,11 +43,6 @@ html[data-bubble-style="cyber"] [data-message-bubble] {
   border-radius: 10px 18px 10px 18px;
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
 }
-html[data-bubble-style="pill"] [data-message-bubble] {
-  border-radius: 999px;
-  padding-left: 16px;
-  padding-right: 16px;
-}
 html[data-bubble-style="glass"] [data-message-bubble] {
   border-radius: 18px;
   background: linear-gradient(145deg, rgba(255,255,255,.18), rgba(255,255,255,.06));

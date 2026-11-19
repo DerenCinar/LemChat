@@ -172,6 +172,7 @@ function createWindow(profileId = 'default'): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      partition: 'persist:skellytalk',
       additionalArguments: [`--lemchat-profile=${profileId}`],
     },
   };

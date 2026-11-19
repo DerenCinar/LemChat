@@ -30,6 +30,7 @@ import type {
   ProfanityFilter,
   MemberRole,
   LiquidGlassTheme,
+  BubbleStyle,
 } from '../types/chat';
 
 const getContactAliasKey = (userId: string) => `lemchat_contact_aliases_${userId}`;
@@ -563,10 +564,13 @@ const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
   savedReplies: [],
 };
 
+const normalizeBubbleStyle = (value: unknown): BubbleStyle =>
+  value === 'cyber' || value === 'glass' ? value : 'imessage';
+
 const readLiquidGlass = (): LiquidGlassTheme => {
   try {
     const parsed = JSON.parse(localStorage.getItem('skellytalk_liquid_glass') || '{}') as Partial<LiquidGlassTheme>;
-    return { ...DEFAULT_LIQUID_GLASS, ...parsed };
+    return { ...DEFAULT_LIQUID_GLASS, ...parsed, bubbleStyle: normalizeBubbleStyle(parsed.bubbleStyle) };
   } catch {
     return { ...DEFAULT_LIQUID_GLASS };
   }
@@ -684,7 +688,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ liquidGlass: next });
   },
   importLiquidGlass: (theme) => {
-    const next = { ...DEFAULT_LIQUID_GLASS, ...theme };
+    const next = {
+      ...DEFAULT_LIQUID_GLASS,
+      ...theme,
+      bubbleStyle: normalizeBubbleStyle(theme.bubbleStyle),
+    };
     localStorage.setItem('skellytalk_liquid_glass', JSON.stringify(next));
     applyLiquidGlass(next);
     set({ liquidGlass: next });
