@@ -264,7 +264,7 @@ export const ChatArea: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 gap-3 overflow-hidden">
+    <div className="relative flex h-full max-h-full min-h-0 min-w-0 flex-1 items-stretch gap-3 overflow-hidden">
       <section className="glass-panel glass-surface flex h-full min-h-0 min-w-0 basis-0 flex-1 flex-col overflow-hidden rounded-2xl">
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-3 py-2.5 md:px-5 md:py-3.5 dark:border-white/[0.09]">
@@ -670,8 +670,8 @@ export const ChatArea: React.FC = () => {
             animate={{ width: activeConv.type === 'channel' ? 320 : 270, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-            className={`glass-panel glass-surface fixed bottom-2 left-2 right-2 top-12 z-40 flex min-h-0 !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-full md:max-h-full ${
-              activeConv.type === 'channel' ? 'md:!w-[280px]' : 'md:!w-[270px]'
+            className={`glass-panel glass-surface fixed bottom-2 left-2 right-2 top-12 z-40 flex min-h-0 !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-auto md:max-h-full md:self-stretch ${
+              activeConv.type === 'channel' ? 'md:!w-[260px] lg:!w-[280px]' : 'md:!w-[250px] lg:!w-[270px]'
             }`}
           >
             <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5 dark:border-white/[0.09]">

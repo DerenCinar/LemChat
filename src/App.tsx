@@ -121,7 +121,7 @@ export const App: React.FC = () => {
           )}
 
           <div
-            className={`min-h-0 flex-1 ${
+            className={`min-h-0 min-w-0 flex-1 overflow-hidden ${
               activeTab === 'settings' || mobileChatOpen ? 'flex' : 'hidden md:flex'
             }`}
           >
