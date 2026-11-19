@@ -43,8 +43,6 @@ let isApplyingUpdate = false;
 let peerWindowCounter = 1;
 let serverStatus = { hosting: false, port: 4120 };
 let latestUpdateStatus: UpdateStatusPayload = { status: 'idle' };
-let notifiedUpdateVersion: string | null = null;
-
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 if (process.platform === 'win32') {
@@ -441,6 +439,7 @@ function broadcastUpdateStatus(payload: UpdateStatusPayload) {
     latestUpdateStatus.status === 'downloading' ||
     latestUpdateStatus.status === 'downloaded';
 
+  let effectivePayload = payload;
   if (
     updateInProgress &&
     (payload.status === 'checking' || payload.status === 'not-available')
@@ -449,13 +448,14 @@ function broadcastUpdateStatus(payload: UpdateStatusPayload) {
       ...latestUpdateStatus,
       message: payload.message,
     };
+    effectivePayload = latestUpdateStatus;
   } else {
     latestUpdateStatus = payload;
   }
 
   for (const win of allWindows) {
     if (!win.isDestroyed()) {
-      win.webContents.send('lemchat:update-status', payload);
+      win.webContents.send('lemchat:update-status', effectivePayload);
     }
   }
 }
@@ -486,24 +486,6 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     broadcastUpdateStatus({ status: 'available', version: info.version });
-
-    if (app.isPackaged && Notification.isSupported() && notifiedUpdateVersion !== info.version) {
-      notifiedUpdateVersion = info.version;
-      const notification = new Notification({
-        title: 'SkellyTalk update available',
-        body: `v${info.version} is available. SkellyTalk may close briefly while it updates.`,
-        icon: getAppIcon(),
-        silent: currentStatus === 'busy',
-      });
-      notification.on('click', () => {
-        focusWindow(mainWindow);
-        mainWindow?.webContents.send(
-          'lemchat:notification-clicked',
-          'lemchat-update'
-        );
-      });
-      notification.show();
-    }
   });
 
   autoUpdater.on('update-not-available', (info) => {

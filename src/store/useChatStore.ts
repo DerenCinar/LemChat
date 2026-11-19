@@ -781,7 +781,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (window.lemchat) {
         void window.lemchat.sendNotification({
           id: `update-${updateStatus.version ?? 'available'}-${Date.now()}`,
-          conversationId: '',
+          conversationId: 'lemchat-update',
           senderName: title,
           body,
           forceShow: true,
@@ -793,7 +793,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({
         latestToast: {
           id: `update-${updateStatus.version ?? 'available'}-${Date.now()}`,
-          conversationId: '',
+          conversationId: 'lemchat-update',
           senderName: title,
           senderAvatar: 'ST',
           body,

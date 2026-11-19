@@ -14,7 +14,7 @@ export const NotificationToast: React.FC = () => {
     if (!latestToast) return;
     const timer = setTimeout(() => {
       dismissToast();
-    }, 4500);
+    }, latestToast.kind === 'update' ? 8000 : 4500);
     return () => clearTimeout(timer);
   }, [latestToast, dismissToast]);
 
