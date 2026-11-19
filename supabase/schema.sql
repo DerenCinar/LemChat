@@ -389,6 +389,31 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Allow a signed-in user to permanently delete their own auth account.
+-- Cascades remove the profile and all user-owned related records.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'You must be signed in to delete your account.';
+  end if;
+
+  delete from auth.users
+  where id = auth.uid();
+
+  if not found then
+    raise exception 'Account could not be found.';
+  end if;
+end;
+$$;
+
+revoke all on function public.delete_my_account() from public;
+grant execute on function public.delete_my_account() to authenticated;
+
 -- 7. Enable Supabase Realtime publications
 do $$
 begin

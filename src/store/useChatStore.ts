@@ -202,6 +202,7 @@ interface ChatStore {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string, handle: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   fetchWorkspaceData: () => Promise<void>;
   subscribeRealtime: () => void;
   cleanupRealtime: () => void;
@@ -1035,6 +1036,33 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       realtimeConnected: false,
     });
     window.lemchat?.updateBadgeCount(0);
+  },
+
+  deleteAccount: async () => {
+    const supabase = getSupabaseClient();
+    const user = get().session?.user;
+    if (!supabase || !user) {
+      throw new Error('You must be signed in to delete your account.');
+    }
+
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) {
+      set({ authError: error.message });
+      throw new Error(error.message);
+    }
+
+    const localStorageKeys = Object.keys(localStorage);
+    for (const key of localStorageKeys) {
+      if (
+        key.endsWith(`_${user.id}`) ||
+        key.includes(`_${user.id}_`) ||
+        key === `skellytalk_identity_${user.id}`
+      ) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    await get().signOut();
   },
 
   fetchWorkspaceData: async () => {

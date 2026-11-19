@@ -15,6 +15,7 @@ import {
   Download,
   Upload,
   ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import {
@@ -64,6 +65,7 @@ export const SettingsView: React.FC = () => {
   const setChatFontSize = useChatStore((s) => s.setChatFontSize);
   const setProfanityFilter = useChatStore((s) => s.setProfanityFilter);
   const signOut = useChatStore((s) => s.signOut);
+  const deleteAccount = useChatStore((s) => s.deleteAccount);
   const updateSelfProfile = useChatStore((s) => s.updateSelfProfile);
   const uploadAvatar = useChatStore((s) => s.uploadAvatar);
   const notificationsEnabled = useChatStore((s) => s.notificationsEnabled);
@@ -86,6 +88,8 @@ export const SettingsView: React.FC = () => {
   const [role, setRole] = useState(self?.role ?? '');
   const [saved, setSaved] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountDeleteError, setAccountDeleteError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [themeCode, setThemeCode] = useState('');
   const identityKey = self ? `skellytalk_identity_${self.id}` : 'skellytalk_identity';
@@ -124,6 +128,25 @@ export const SettingsView: React.FC = () => {
     await uploadAvatar(file);
     setUploadingAvatar(false);
     e.target.value = '';
+  };
+
+  const handleDeleteAccount = async () => {
+    if (
+      !window.confirm(
+        'Delete your SkellyTalk account permanently? Your profile, messages, memberships, and encryption keys will be deleted. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    setDeletingAccount(true);
+    setAccountDeleteError(null);
+    try {
+      await deleteAccount();
+    } catch (error) {
+      setAccountDeleteError(error instanceof Error ? error.message : 'Unable to delete your account.');
+      setDeletingAccount(false);
+    }
   };
 
   const currentAvatarSpec = self ? parseAvatarSpec(self.avatar, self.name) : null;
@@ -294,6 +317,25 @@ export const SettingsView: React.FC = () => {
                 <LogOut className="h-3.5 w-3.5" />
                 <span>Sign Out</span>
               </button>
+            </div>
+            <div className="mt-4 border-t border-rose-500/15 pt-4">
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => void handleDeleteAccount()}
+                className="flex items-center gap-1.5 rounded-full bg-rose-500/15 px-3.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-300"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{deletingAccount ? 'Deleting account...' : 'Delete Account'}</span>
+              </button>
+              <p className="mt-2 text-[11px] text-emerald-800/60 dark:text-emerald-200/55">
+                Permanently deletes your profile and account data.
+              </p>
+              {accountDeleteError && (
+                <p role="alert" className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-300">
+                  {accountDeleteError}
+                </p>
+              )}
             </div>
 
             {/* Profile Picture Style & Independent Background Color */}
