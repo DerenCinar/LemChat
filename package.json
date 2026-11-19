@@ -56,12 +56,17 @@
     "mac": {
       "icon": "public/assets/icon-512.png",
       "category": "public.app-category.social-networking",
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
       "target": [
         "dmg",
         "zip"
       ],
       "artifactName": "${productName}-Mac-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "sign": false
     },
     "linux": {
       "icon": "public/assets/icon-512.png",

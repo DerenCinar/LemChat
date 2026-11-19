@@ -18,6 +18,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { InfoTooltip } from './InfoTooltip';
+import { LiquidGlassSlider } from './LiquidGlassSlider';
 import {
   UserAvatar,
   AVATAR_BG_PRESETS,
@@ -25,6 +27,47 @@ import {
   serializeAvatarSpec,
   type AvatarMode,
 } from './UserAvatar';
+
+const SettingLabel: React.FC<{ label: string; info: string }> = ({ label, info }) => (
+  <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/70 dark:text-emerald-200/65">
+    <span>{label}</span>
+    <InfoTooltip title={label} description={info} />
+  </span>
+);
+
+const GlassToggle: React.FC<{
+  label: string;
+  info: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}> = ({ label, info, checked, onChange }) => (
+  <div className="glass-pill flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] font-medium text-emerald-950 dark:text-emerald-50">
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span className="truncate">{label}</span>
+      <InfoTooltip title={label} description={info} />
+    </span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 ${
+        checked
+          ? 'bg-gradient-to-r from-[#22C55E] to-[#10B981] shadow-lem-glow-sm'
+          : 'bg-black/20 dark:bg-white/15'
+      }`}
+    >
+      <motion.span
+        layout
+        transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow ${
+          checked ? 'left-[18px]' : 'left-0.5'
+        }`}
+      />
+    </button>
+  </div>
+);
 
 const SettingsSection: React.FC<{
   title: string;
@@ -641,25 +684,21 @@ export const SettingsView: React.FC = () => {
 
           <div className="grid gap-4 sm:grid-cols-2">
             {([
-              ['blur', 'Blur intensity', 0, 48, 'px'],
-              ['opacity', 'Glass opacity', 35, 95, '%'],
-              ['borderGlow', 'Border glow', 0, 50, '%'],
-              ['roundness', 'Corner roundness', 4, 36, 'px'],
-            ] as const).map(([key, label, min, max, unit]) => (
-              <label key={key} className="space-y-1.5">
-                <span className="flex justify-between text-[11px] font-semibold text-emerald-950 dark:text-white">
-                  {label}
-                  <span className="text-[#22C55E]">{liquidGlass[key]}{unit}</span>
-                </span>
-                <input
-                  type="range"
-                  min={min}
-                  max={max}
-                  value={liquidGlass[key]}
-                  onChange={(e) => setLiquidGlass({ [key]: Number(e.target.value) })}
-                  className="accent-[#22C55E] w-full"
-                />
-              </label>
+              ['blur', 'Blur intensity', 0, 48, 'px', 'Controls how strongly backgrounds blur behind frosted Liquid Glass panels.'],
+              ['opacity', 'Glass opacity', 35, 95, '%', 'Adjusts how transparent or solid glass surfaces appear across windows.'],
+              ['borderGlow', 'Border glow', 0, 50, '%', 'Sets the luminous highlight strength around card and panel edges.'],
+              ['roundness', 'Corner roundness', 4, 36, 'px', 'Rounds the corners of panels, cards, and message containers.'],
+            ] as const).map(([key, label, min, max, unit, info]) => (
+              <LiquidGlassSlider
+                key={key}
+                label={label}
+                value={liquidGlass[key]}
+                min={min}
+                max={max}
+                unit={unit}
+                info={info}
+                onChange={(nextValue) => setLiquidGlass({ [key]: nextValue })}
+              />
             ))}
           </div>
 
@@ -783,189 +822,353 @@ export const SettingsView: React.FC = () => {
           title="Personalization"
           description="Customize messages, layout, privacy, emoji, and saved replies."
         >
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="glass-pill space-y-3 rounded-2xl p-4 md:col-span-2">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <label className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Bubble shape</span>
-                <select value={liquidGlass.bubbleStyle} onChange={(e) => setLiquidGlass({ bubbleStyle: e.target.value as typeof liquidGlass.bubbleStyle })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+        <div className="space-y-4">
+          {/* 1. Chat Look & Text */}
+          <div className="glass-pill space-y-4 rounded-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Chat Look &amp; Text
+            </h2>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Bubble shape"
+                  info="Changes message bubble corners and glass surface style in every conversation."
+                />
+                <select
+                  value={liquidGlass.bubbleStyle}
+                  onChange={(e) => setLiquidGlass({ bubbleStyle: e.target.value as typeof liquidGlass.bubbleStyle })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
                   <option value="imessage">iMessage curved tails</option>
                   <option value="cyber">Sharp cyber-cut</option>
                   <option value="glass">Floating glass</option>
                 </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Timestamp</span>
-                <select value={liquidGlass.timestampFormat} onChange={(e) => setLiquidGlass({ timestampFormat: e.target.value as typeof liquidGlass.timestampFormat })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Timestamp"
+                  info="Controls how message send times are formatted next to messages."
+                />
+                <select
+                  value={liquidGlass.timestampFormat}
+                  onChange={(e) => setLiquidGlass({ timestampFormat: e.target.value as typeof liquidGlass.timestampFormat })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
                   <option value="12h">12-hour (4:20 PM)</option>
                   <option value="24h">24-hour (16:20)</option>
                   <option value="relative">Relative (2m ago)</option>
                   <option value="seconds">Always show seconds</option>
                 </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Entrance effect</span>
-                <select value={liquidGlass.entranceEffect} onChange={(e) => setLiquidGlass({ entranceEffect: e.target.value as typeof liquidGlass.entranceEffect })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Entrance effect"
+                  info="Selects the animation played when new messages appear in chat."
+                />
+                <select
+                  value={liquidGlass.entranceEffect}
+                  onChange={(e) => setLiquidGlass({ entranceEffect: e.target.value as typeof liquidGlass.entranceEffect })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
                   <option value="spring">Spring pop</option>
                   <option value="slide">Smooth slide-up</option>
                   <option value="liquid">Liquid fade</option>
                   <option value="instant">Instant / reduced motion</option>
                 </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Sidebar layout</span>
-                <select value={liquidGlass.sidebarLayout} onChange={(e) => setLiquidGlass({ sidebarLayout: e.target.value as typeof liquidGlass.sidebarLayout })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Sidebar layout"
+                  info="Switches the desktop conversation sidebar between icons-only rail, standard list, or wide preview."
+                />
+                <select
+                  value={liquidGlass.sidebarLayout}
+                  onChange={(e) => setLiquidGlass({ sidebarLayout: e.target.value as typeof liquidGlass.sidebarLayout })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
                   <option value="rail">Icons-only rail</option>
                   <option value="standard">Standard list</option>
                   <option value="preview">Expanded preview</option>
                 </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">New messages divider</span>
-                <select value={liquidGlass.unreadDividerStyle} onChange={(e) => setLiquidGlass({ unreadDividerStyle: e.target.value as typeof liquidGlass.unreadDividerStyle })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Unread divider"
+                  info="Styles the New Messages separator bar above unread messages in a chat."
+                />
+                <select
+                  value={liquidGlass.unreadDividerStyle}
+                  onChange={(e) => setLiquidGlass({ unreadDividerStyle: e.target.value as typeof liquidGlass.unreadDividerStyle })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
                   <option value="laser">Glowing neon laser</option>
                   <option value="pill">Frosted glass pill</option>
                   <option value="dotted">Minimal dotted line</option>
                   <option value="rainbow">Rainbow pulse</option>
                 </select>
-              </label>
-            </div>
+              </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              {([
-                ['fontWeight', 'Font weight', 300, 800, ''],
-                ['letterSpacing', 'Letter spacing', -5, 20, ''],
-                ['lineHeight', 'Line height', 110, 220, '%'],
-              ] as const).map(([key, label, min, max, unit]) => (
-                <label key={key} className="space-y-1">
-                  <span className="flex justify-between text-[10px] font-semibold text-emerald-800/70 dark:text-emerald-200/65">
-                    {label}<span>{liquidGlass[key]}{unit}</span>
-                  </span>
-                  <input type="range" min={min} max={max} value={liquidGlass[key]} onChange={(e) => setLiquidGlass({ [key]: Number(e.target.value) })} className="accent-[#22C55E] w-full" />
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">Composer & Privacy</h2>
-            <select value={liquidGlass.enterBehavior} onChange={(e) => setLiquidGlass({ enterBehavior: e.target.value as typeof liquidGlass.enterBehavior })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
-              <option value="enter-send">Enter sends · Shift+Enter newline</option>
-              <option value="ctrl-send">Enter newline · Ctrl/Cmd+Enter sends</option>
-            </select>
-            {([
-              ['fairPlayPrivacy', 'Fair Play privacy'],
-              ['typingPrivacy', 'Hide typing indicators'],
-              ['readReceipts', 'Send read receipts'],
-              ['lastSeenPrivacy', 'Share last seen'],
-              ['cursorGlow', 'Cursor-tracking glow'],
-              ['autoLoadMedia', 'Auto-load media'],
-            ] as const).map(([key, label]) => (
-              <label key={key} className="glass-pill flex items-center justify-between rounded-xl px-3 py-2 text-[11px]">
-                {label}
-                <input type="checkbox" checked={liquidGlass[key]} onChange={(e) => setLiquidGlass({ [key]: e.target.checked })} className="accent-[#22C55E]" />
-              </label>
-            ))}
-          </div>
-
-          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">Emoji & Away</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <select value={liquidGlass.emojiSkinTone} onChange={(e) => setLiquidGlass({ emojiSkinTone: e.target.value as typeof liquidGlass.emojiSkinTone })} className="chat-font-select glass-pill rounded-xl px-2 py-2 text-xs">
-                <option value="default">Default skin</option><option value="light">Light</option><option value="medium-light">Medium-light</option><option value="medium">Medium</option><option value="medium-dark">Medium-dark</option><option value="dark">Dark</option>
-              </select>
-              <select value={liquidGlass.emojiStyle} onChange={(e) => setLiquidGlass({ emojiStyle: e.target.value as typeof liquidGlass.emojiStyle })} className="chat-font-select glass-pill rounded-xl px-2 py-2 text-xs">
-                <option value="native">Native OS</option><option value="twemoji">Twemoji style</option>
-              </select>
-            </div>
-            <input value={liquidGlass.awayReply} onChange={(e) => setLiquidGlass({ awayReply: e.target.value })} placeholder="Away auto-reply" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
-            <div className="flex items-center gap-2 text-[11px]">
-              <span>Cooldown</span>
-              <select value={liquidGlass.awayReplyCooldown} onChange={(e) => setLiquidGlass({ awayReplyCooldown: Number(e.target.value) })} className="chat-font-select glass-pill flex-1 rounded-xl px-2 py-2 text-xs">
-                <option value={15}>15 minutes</option><option value={60}>1 hour</option><option value={480}>8 hours</option><option value={0}>Until turned off</option>
-              </select>
-            </div>
-            <input value={liquidGlass.keywordAlerts} onChange={(e) => setLiquidGlass({ keywordAlerts: e.target.value })} placeholder="Keyword alerts: nickname, gaming, urgent" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
-          </div>
-
-          <div className="glass-pill space-y-2.5 rounded-2xl p-4 md:col-span-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">Text Shortcuts & Saved Replies</h2>
-            <textarea
-              value={Object.entries(liquidGlass.snippets).map(([key, value]) => `${key}=${value}`).join('\n')}
-              onChange={(e) => {
-                const snippets: Record<string, string> = {};
-                e.target.value.split('\n').forEach((line) => {
-                  const separator = line.indexOf('=');
-                  if (separator > 0) snippets[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-                });
-                setLiquidGlass({ snippets });
-              }}
-              rows={3}
-              placeholder="/omw=On my way!&#10;:shrug:=¯_(ツ)_/¯"
-              className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
-            />
-            <textarea
-              value={liquidGlass.savedReplies.join('\n')}
-              onChange={(e) => setLiquidGlass({ savedReplies: e.target.value.split('\n').filter(Boolean) })}
-              rows={3}
-              placeholder="Saved replies (one per line)"
-              className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
-            />
-          </div>
-          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-              Chat Font
-            </h2>
-            <select
-              value={chatFont}
-              onChange={(e) => setChatFont(e.target.value as typeof chatFont)}
-              className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
-            >
-              <option value="system">System</option>
-              <option value="inter">Inter</option>
-              <option value="rounded">Rounded</option>
-              <option value="mono">Monospace</option>
-            </select>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['small', 'medium', 'large'] as const).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => setChatFontSize(size)}
-                  className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize ${
-                    chatFontSize === size ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 dark:text-white' : 'text-emerald-900/70 dark:text-emerald-100/70'
-                  }`}
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Chat font"
+                  info="Changes the global typeface used across the app and message feed."
+                />
+                <select
+                  value={chatFont}
+                  onChange={(e) => setChatFont(e.target.value as typeof chatFont)}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
                 >
-                  {size}
-                </button>
+                  <option value="system">System</option>
+                  <option value="inter">Inter</option>
+                  <option value="rounded">Rounded</option>
+                  <option value="mono">Monospace</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <SettingLabel
+                label="Font size"
+                info="Scales global text and chat bubble typography between Small, Medium, and Large."
+              />
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['small', 'medium', 'large'] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setChatFontSize(size)}
+                    className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize transition ${
+                      chatFontSize === size
+                        ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 ring-1 ring-[#22C55E]/35 dark:text-white'
+                        : 'text-emerald-900/70 hover:bg-black/5 dark:text-emerald-100/70 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 border-t border-black/5 pt-3 sm:grid-cols-3 dark:border-white/10">
+              {([
+                ['fontWeight', 'Font weight', 300, 800, 10, '', 'Adjusts how bold or light message text looks inside chat bubbles.'],
+                ['letterSpacing', 'Letter spacing', -5, 20, 1, '', 'Tightens or widens spacing between characters inside messages.'],
+                ['lineHeight', 'Line height', 110, 220, 5, '%', 'Sets vertical breathing room between lines in multi-line messages.'],
+              ] as const).map(([key, label, min, max, step, unit, info]) => (
+                <LiquidGlassSlider
+                  key={key}
+                  label={label}
+                  value={liquidGlass[key]}
+                  min={min}
+                  max={max}
+                  step={step}
+                  unit={unit}
+                  info={info}
+                  onChange={(nextValue) => setLiquidGlass({ [key]: nextValue })}
+                />
               ))}
             </div>
           </div>
 
-          <div className="glass-pill space-y-2.5 rounded-2xl p-4">
+          {/* 2. Typing, Privacy & Filter */}
+          <div className="glass-pill space-y-4 rounded-2xl p-4">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-              Profanity Filter
+              Typing, Privacy &amp; Filter
             </h2>
-            {([
-              ['off', 'Off', 'Send messages normally'],
-              ['mild', 'Mild', 'Mask part of strong words'],
-              ['strict', 'Strict', 'Replace strong words'],
-            ] as const).map(([mode, title, subtitle]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setProfanityFilter(mode)}
-                className={`glass-pill flex w-full items-center justify-between rounded-xl px-3 py-2 text-left ${
-                  profanityFilter === mode ? 'border-[#22C55E] bg-[#22C55E]/15' : ''
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-semibold text-emerald-950 dark:text-white">{title}</p>
-                  <p className="text-[10px] text-emerald-800/60 dark:text-emerald-200/55">{subtitle}</p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Enter key behavior"
+                  info="Chooses whether pressing Enter sends right away or inserts a newline."
+                />
+                <select
+                  value={liquidGlass.enterBehavior}
+                  onChange={(e) => setLiquidGlass({ enterBehavior: e.target.value as typeof liquidGlass.enterBehavior })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
+                  <option value="enter-send">Enter sends · Shift+Enter newline</option>
+                  <option value="ctrl-send">Enter newline · Ctrl/Cmd+Enter sends</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Profanity filter"
+                  info="Masks or replaces strong language in incoming and displayed messages."
+                />
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['off', 'mild', 'strict'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setProfanityFilter(mode)}
+                      className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize transition ${
+                        profanityFilter === mode
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 ring-1 ring-[#22C55E]/35 dark:text-white'
+                          : 'text-emerald-900/70 hover:bg-black/5 dark:text-emerald-100/70 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
                 </div>
-                {profanityFilter === mode && <Check className="h-3.5 w-3.5 text-[#22C55E]" />}
-              </button>
-            ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {([
+                ['fairPlayPrivacy', 'Fair Play privacy', 'Hides read receipts and live typing status together for symmetric privacy.'],
+                ['typingPrivacy', 'Hide typing indicators', 'Stops broadcasting when you are typing in a chat.'],
+                ['readReceipts', 'Send read receipts', 'Lets others see when you have read their messages.'],
+                ['lastSeenPrivacy', 'Share last seen', 'Displays your online and last-active status in member lists.'],
+                ['cursorGlow', 'Cursor-tracking glow', 'Highlights glass surfaces softly along their border on pointer hover.'],
+                ['autoLoadMedia', 'Auto-load media', 'Automatically displays shared images and GIFs inline instead of blurred previews.'],
+              ] as const).map(([key, label, info]) => (
+                <GlassToggle
+                  key={key}
+                  label={label}
+                  info={info}
+                  checked={liquidGlass[key]}
+                  onChange={(next) => setLiquidGlass({ [key]: next })}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* 3. Emoji, Away & Alerts */}
+          <div className="glass-pill space-y-3 rounded-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Emoji, Away &amp; Alerts
+            </h2>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Skin tone"
+                  info="Applies your preferred skin tone modifier to supported person/hand emojis in the picker."
+                />
+                <select
+                  value={liquidGlass.emojiSkinTone}
+                  onChange={(e) => setLiquidGlass({ emojiSkinTone: e.target.value as typeof liquidGlass.emojiSkinTone })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-2.5 py-2 text-xs"
+                >
+                  <option value="default">Default skin</option>
+                  <option value="light">Light</option>
+                  <option value="medium-light">Medium-light</option>
+                  <option value="medium">Medium</option>
+                  <option value="medium-dark">Medium-dark</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Emoji style"
+                  info="Switches between native OS emojis and crisp Twemoji-styled emoji sizing."
+                />
+                <select
+                  value={liquidGlass.emojiStyle}
+                  onChange={(e) => setLiquidGlass({ emojiStyle: e.target.value as typeof liquidGlass.emojiStyle })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-2.5 py-2 text-xs"
+                >
+                  <option value="native">Native OS</option>
+                  <option value="twemoji">Twemoji style</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Away auto-reply"
+                  info="Automatically replies with this message when someone DMs you while your status is Away."
+                />
+                <input
+                  value={liquidGlass.awayReply}
+                  onChange={(e) => setLiquidGlass({ awayReply: e.target.value })}
+                  placeholder="Away auto-reply message"
+                  className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Away cooldown"
+                  info="Prevents sending repeated away auto-replies to the same person within this window."
+                />
+                <select
+                  value={liquidGlass.awayReplyCooldown}
+                  onChange={(e) => setLiquidGlass({ awayReplyCooldown: Number(e.target.value) })}
+                  className="chat-font-select glass-pill w-full rounded-xl px-2.5 py-2 text-xs"
+                >
+                  <option value={15}>15 minutes</option>
+                  <option value={60}>1 hour</option>
+                  <option value={480}>8 hours</option>
+                  <option value={0}>Until turned off</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <SettingLabel
+                label="Keyword alerts"
+                info="Comma-separated trigger words that notify and highlight incoming messages mentioning them."
+              />
+              <input
+                value={liquidGlass.keywordAlerts}
+                onChange={(e) => setLiquidGlass({ keywordAlerts: e.target.value })}
+                placeholder="nickname, gaming, urgent"
+                className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
+              />
+            </div>
+          </div>
+
+          {/* 4. Text Shortcuts & Saved Replies */}
+          <div className="glass-pill space-y-3 rounded-2xl p-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+              Shortcuts &amp; Saved Replies
+            </h2>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Text shortcuts"
+                  info="One shortcut=expansion per line (for example /omw=On my way!) that auto-expands in the message box."
+                />
+                <textarea
+                  value={Object.entries(liquidGlass.snippets).map(([key, value]) => `${key}=${value}`).join('\n')}
+                  onChange={(e) => {
+                    const snippets: Record<string, string> = {};
+                    e.target.value.split('\n').forEach((line) => {
+                      const separator = line.indexOf('=');
+                      if (separator > 0) snippets[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+                    });
+                    setLiquidGlass({ snippets });
+                  }}
+                  rows={3}
+                  placeholder="/omw=On my way!&#10;:shrug:=¯_(ツ)_/¯"
+                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel
+                  label="Saved replies"
+                  info="Reusable canned responses (one per line) available from the message composer quick replies."
+                />
+                <textarea
+                  value={liquidGlass.savedReplies.join('\n')}
+                  onChange={(e) => setLiquidGlass({ savedReplies: e.target.value.split('\n').filter(Boolean) })}
+                  rows={3}
+                  placeholder="Saved replies (one per line)"
+                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
+                />
+              </div>
+            </div>
           </div>
         </div>
         </SettingsSection>
