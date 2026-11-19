@@ -47,6 +47,7 @@ export function getSupabaseClient(): SupabaseClient | null {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      storage: localStorage,
       storageKey: 'lemchat-auth',
     },
     realtime: {

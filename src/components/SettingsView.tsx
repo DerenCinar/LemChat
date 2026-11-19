@@ -83,7 +83,7 @@ export const SettingsView: React.FC = () => {
   const setLiquidGlass = useChatStore((s) => s.setLiquidGlass);
   const resetLiquidGlass = useChatStore((s) => s.resetLiquidGlass);
   const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
-  const updateSectionRef = useRef<HTMLDetailsElement | null>(null);
+  const updateSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [displayName, setDisplayName] = useState(self?.name ?? '');
   const [role, setRole] = useState(self?.role ?? '');
@@ -246,7 +246,6 @@ export const SettingsView: React.FC = () => {
               onClick={() =>
                 (() => {
                   if (updateSectionRef.current) {
-                    updateSectionRef.current.open = true;
                     updateSectionRef.current.scrollIntoView({
                       behavior: 'smooth',
                       block: 'center',
@@ -1077,11 +1076,19 @@ export const SettingsView: React.FC = () => {
           </div>
         </SettingsSection>
 
-        <SettingsSection
-          sectionRef={updateSectionRef}
-          title="Software Updates"
-          description="Check for the latest version and install downloaded updates."
+        <div
+          ref={updateSectionRef}
+          className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
         >
+          <div className="px-4 py-3.5">
+            <span className="block text-sm font-bold text-emerald-950 dark:text-white">
+              Software Updates
+            </span>
+            <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+              Check for the latest version and install downloaded updates.
+            </span>
+          </div>
+          <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
           <div className="glass-pill flex items-center justify-between gap-4 rounded-2xl p-4 text-xs">
             <div className="flex min-w-0 flex-1 items-start gap-2.5">
               <RefreshCw
@@ -1136,12 +1143,19 @@ export const SettingsView: React.FC = () => {
               </button>
             )}
           </div>
-        </SettingsSection>
+          </div>
+        </div>
 
-        <SettingsSection
-          title="Connection"
-          description="View the current realtime messaging connection status."
-        >
+        <div className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]">
+          <div className="px-4 py-3.5">
+            <span className="block text-sm font-bold text-emerald-950 dark:text-white">
+              Connection
+            </span>
+            <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+              View the current realtime messaging connection status.
+            </span>
+          </div>
+          <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
           <div className="glass-pill space-y-3 rounded-2xl p-4 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-emerald-950 dark:text-white">
@@ -1159,7 +1173,8 @@ export const SettingsView: React.FC = () => {
               </span>
             </div>
           </div>
-        </SettingsSection>
+          </div>
+        </div>
         </div>
     </motion.section>
   );
