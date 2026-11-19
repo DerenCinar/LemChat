@@ -55,6 +55,7 @@ export interface LemChatAPI {
   saveAttachment: (filename: string, dataUrl: string) => Promise<boolean>;
   openNewPeerWindow: () => Promise<void>;
   checkForUpdates: () => Promise<void>;
+  downloadUpdate: () => void;
   installUpdate: () => void;
   onUpdateStatus: (callback: (payload: UpdateStatusPayload) => void) => () => void;
   onNotificationClicked: (callback: (conversationId: string) => void) => () => void;
@@ -97,6 +98,7 @@ const api: LemChatAPI = {
     ipcRenderer.invoke('lemchat:save-attachment', filename, dataUrl),
   openNewPeerWindow: () => ipcRenderer.invoke('lemchat:open-peer-window'),
   checkForUpdates: () => ipcRenderer.invoke('lemchat:check-updates'),
+  downloadUpdate: () => ipcRenderer.send('lemchat:download-update'),
   installUpdate: () => ipcRenderer.send('lemchat:install-update'),
   onUpdateStatus: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: UpdateStatusPayload) => {

@@ -197,6 +197,7 @@ interface ChatStore {
   sendTestNotification: () => Promise<void>;
   setUpdateStatus: (payload: UpdateStatusPayload) => void;
   checkForUpdates: () => Promise<void>;
+  downloadUpdate: () => void;
   installUpdate: () => void;
 
   initializeApp: () => Promise<void>;
@@ -786,7 +787,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     ) {
       const version = updateStatus.version ? `v${updateStatus.version}` : 'the latest version';
       const title = 'SkellyTalk update available';
-      const body = `${version} is ready to download. SkellyTalk may close briefly while it installs.`;
+      const body = `${version} is available. Open Software Updates to download it manually.`;
 
       if (window.lemchat) {
         void window.lemchat.sendNotification({
@@ -815,6 +816,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   checkForUpdates: async () => {
     await window.lemchat?.checkForUpdates?.();
+  },
+
+  downloadUpdate: () => {
+    window.lemchat?.downloadUpdate?.();
   },
 
   installUpdate: () => {

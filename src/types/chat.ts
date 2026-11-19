@@ -237,6 +237,7 @@ export interface LemChatAPI {
   windowClose: () => void;
   isWindowMaximized: () => Promise<boolean>;
   checkForUpdates?: () => Promise<void>;
+  downloadUpdate?: () => void;
   installUpdate?: () => void;
   onUpdateStatus?: (callback: (payload: UpdateStatusPayload) => void) => () => void;
   onNotificationClicked: (callback: (conversationId: string) => void) => () => void;

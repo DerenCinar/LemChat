@@ -77,6 +77,7 @@ export const SettingsView: React.FC = () => {
   const sendTestNotification = useChatStore((s) => s.sendTestNotification);
   const updateStatus = useChatStore((s) => s.updateStatus);
   const checkForUpdates = useChatStore((s) => s.checkForUpdates);
+  const downloadUpdate = useChatStore((s) => s.downloadUpdate);
   const installUpdate = useChatStore((s) => s.installUpdate);
   const liquidGlass = useChatStore((s) => s.liquidGlass);
   const setLiquidGlass = useChatStore((s) => s.setLiquidGlass);
@@ -264,7 +265,6 @@ export const SettingsView: React.FC = () => {
           <SettingsSection
             title="Profile"
             description="Manage your identity, avatar, and profile details."
-            defaultOpen
           >
             <form onSubmit={handleSaveProfile} className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -512,7 +512,6 @@ export const SettingsView: React.FC = () => {
         <SettingsSection
           title="Appearance"
           description="Choose a theme and tune the Liquid Glass look and feel."
-          defaultOpen
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <motion.button
@@ -1105,7 +1104,7 @@ export const SettingsView: React.FC = () => {
                       : updateStatus.status === 'downloaded'
                         ? `Version ${updateStatus.version ?? ''} downloaded and ready.`
                         : updateStatus.status === 'available'
-                          ? `Update v${updateStatus.version ?? ''} found, downloading...`
+                        ? `Update v${updateStatus.version ?? ''} found. Download it manually.`
                           : updateStatus.message ?? 'SkellyTalk checks for updates automatically on launch.'}
                 </p>
               </div>
@@ -1118,6 +1117,14 @@ export const SettingsView: React.FC = () => {
                 className="shrink-0 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white shadow-lem-glow-sm hover:brightness-110"
               >
                 Restart &amp; Install
+              </button>
+            ) : updateStatus.status === 'available' ? (
+              <button
+                type="button"
+                onClick={downloadUpdate}
+                className="shrink-0 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white shadow-lem-glow-sm hover:brightness-110"
+              >
+                Download Update
               </button>
             ) : (
               <button

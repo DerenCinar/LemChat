@@ -43,6 +43,8 @@ let isApplyingUpdate = false;
 let peerWindowCounter = 1;
 let serverStatus = { hosting: false, port: 4120 };
 let latestUpdateStatus: UpdateStatusPayload = { status: 'idle' };
+let startupUpdateCheckPending = true;
+let startupUpdateDownloadPending = false;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 if (process.platform === 'win32') {
@@ -410,6 +412,8 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('lemchat:check-updates', async () => {
+    startupUpdateCheckPending = false;
+    startupUpdateDownloadPending = false;
     if (!app.isPackaged) {
       broadcastUpdateStatus({
         status: 'not-available',
@@ -429,6 +433,18 @@ function registerIpcHandlers() {
 
   ipcMain.on('lemchat:install-update', () => {
     beginUpdateInstallation();
+  });
+
+  ipcMain.on('lemchat:download-update', () => {
+    if (isApplyingUpdate) return;
+    startupUpdateCheckPending = false;
+    startupUpdateDownloadPending = false;
+    void autoUpdater.downloadUpdate().catch((err) => {
+      broadcastUpdateStatus({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Update download failed',
+      });
+    });
   });
 
   ipcMain.handle('lemchat:get-update-status', () => latestUpdateStatus);
@@ -478,8 +494,8 @@ function beginUpdateInstallation(version?: string) {
 }
 
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('checking-for-update', () => {
     broadcastUpdateStatus({ status: 'checking' });
@@ -487,9 +503,16 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     broadcastUpdateStatus({ status: 'available', version: info.version });
+    if (startupUpdateCheckPending) {
+      startupUpdateCheckPending = false;
+      startupUpdateDownloadPending = true;
+      void autoUpdater.downloadUpdate().catch(() => {});
+    }
   });
 
   autoUpdater.on('update-not-available', (info) => {
+    startupUpdateCheckPending = false;
+    startupUpdateDownloadPending = false;
     broadcastUpdateStatus({ status: 'not-available', version: info.version });
   });
 
@@ -502,7 +525,10 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     broadcastUpdateStatus({ status: 'downloaded', version: info.version });
-    setTimeout(() => beginUpdateInstallation(info.version), 2400);
+    if (startupUpdateDownloadPending) {
+      startupUpdateDownloadPending = false;
+      setTimeout(() => beginUpdateInstallation(info.version), 2400);
+    }
   });
 
   autoUpdater.on('error', (err) => {

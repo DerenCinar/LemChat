@@ -68,10 +68,7 @@ export const App: React.FC = () => {
       <AttachmentViewer />
 
       <AnimatePresence>
-        {(updateStatus.status === 'downloading' ||
-          updateStatus.status === 'available' ||
-          updateStatus.status === 'downloaded' ||
-          updateStatus.status === 'installing') && (
+        {updateStatus.status === 'installing' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -91,40 +88,11 @@ export const App: React.FC = () => {
                 <DownloadCloud className="h-6 w-6" />
               </motion.div>
               <h2 className="text-lg font-bold text-emerald-950 dark:text-white">
-                {updateStatus.status === 'installing'
-                  ? 'Applying update...'
-                  : updateStatus.status === 'available'
-                    ? 'Update available'
-                    : updateStatus.status === 'downloaded'
-                      ? 'Update ready'
-                      : 'Updating SkellyTalk'}
+                Applying update...
               </h2>
               <p className="mt-2 text-sm font-medium leading-relaxed text-emerald-950/80 dark:text-emerald-50/90">
-                {updateStatus.status === 'installing'
-                  ? 'SkellyTalk will close briefly, install the update, and reopen. Please wait.'
-                  : updateStatus.status === 'available'
-                    ? updateStatus.version
-                      ? `An update to v${updateStatus.version} is available. SkellyTalk will close briefly while it updates.`
-                      : 'An update is available. SkellyTalk will close briefly while it updates.'
-                    : updateStatus.status === 'downloaded'
-                      ? 'The update has downloaded. SkellyTalk will close briefly and reopen automatically.'
-                      : updateStatus.version
-                        ? `Downloading SkellyTalk v${updateStatus.version}. The app will close briefly during installation.`
-                        : 'Downloading the latest version. The app will close briefly during installation.'}
+                SkellyTalk will close briefly, install the update, and reopen. Please wait.
               </p>
-              {updateStatus.status === 'downloading' && (
-                <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981]"
-                    animate={{ width: `${Math.max(4, updateStatus.progress ?? 0)}%` }}
-                  />
-                </div>
-              )}
-              {updateStatus.status === 'downloading' && (
-                <p className="mt-2 text-[11px] font-semibold text-[#22C55E]">
-                  {Math.round(updateStatus.progress ?? 0)}%
-                </p>
-              )}
             </motion.div>
           </motion.div>
         )}
