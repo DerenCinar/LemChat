@@ -87,6 +87,66 @@ html[data-cursor-glow="true"] .glass-panel:hover {
   box-shadow: 0 10px 34px -16px color-mix(in srgb, var(--glass-accent) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.18);
 }
 
+.unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+  color: var(--glass-accent);
+}
+.unread-divider::before,
+.unread-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+.unread-divider-label {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+html[data-unread-divider-style="laser"] .unread-divider::before,
+html[data-unread-divider-style="laser"] .unread-divider::after {
+  background: linear-gradient(90deg, transparent, var(--glass-accent), transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--glass-accent) 80%, transparent);
+}
+html[data-unread-divider-style="pill"] .unread-divider {
+  justify-content: center;
+}
+html[data-unread-divider-style="pill"] .unread-divider::before,
+html[data-unread-divider-style="pill"] .unread-divider::after {
+  display: none;
+}
+html[data-unread-divider-style="pill"] .unread-divider-label {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(14px);
+}
+html[data-unread-divider-style="dotted"] .unread-divider::before,
+html[data-unread-divider-style="dotted"] .unread-divider::after {
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--glass-accent) 0 3px, transparent 3px 8px);
+  opacity: 0.65;
+}
+html[data-unread-divider-style="rainbow"] .unread-divider::before,
+html[data-unread-divider-style="rainbow"] .unread-divider::after {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22d3ee, #8b5cf6, #f472b6, transparent);
+  background-size: 200% 100%;
+  animation: unread-rainbow 2.4s linear infinite;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.55);
+}
+@keyframes unread-rainbow {
+  to { background-position: 200% 0; }
+}
+
 .chat-font-select {
   appearance: auto;
   background: rgba(255, 255, 255, 0.92);

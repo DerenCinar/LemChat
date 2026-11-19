@@ -547,14 +547,35 @@ export const ChatArea: React.FC = () => {
               visibleMessages.map((msg, index) => {
                 const prev = visibleMessages[index - 1];
                 const showHeader = !prev || prev.senderId !== msg.senderId;
+                const lastReadTime = activeConv.lastReadAt
+                  ? new Date(activeConv.lastReadAt).getTime()
+                  : 0;
+                const messageTime = new Date(msg.createdAt).getTime();
+                const isFirstUnread =
+                  Boolean(activeConv.lastReadAt) &&
+                  !msg.isMe &&
+                  messageTime > lastReadTime &&
+                  (!prev ||
+                    new Date(prev.createdAt).getTime() <= lastReadTime);
                 return (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    showHeader={showHeader}
-                    highlightQuery={inChatSearchQuery}
-                    highlightMention={pendingMentionMessageId === msg.id}
-                  />
+                  <React.Fragment key={msg.id}>
+                    {isFirstUnread && (
+                      <div
+                        data-unread-divider
+                        role="separator"
+                        aria-label="New messages"
+                        className="unread-divider"
+                      >
+                        <span className="unread-divider-label">New messages</span>
+                      </div>
+                    )}
+                    <MessageBubble
+                      message={msg}
+                      showHeader={showHeader}
+                      highlightQuery={inChatSearchQuery}
+                      highlightMention={pendingMentionMessageId === msg.id}
+                    />
+                  </React.Fragment>
                 );
               })
             )}

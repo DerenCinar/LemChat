@@ -548,6 +548,7 @@ const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
   cursorGlow: true,
   sidebarLayout: 'standard',
   enterBehavior: 'enter-send',
+  unreadDividerStyle: 'laser',
   emojiSkinTone: 'default',
   emojiStyle: 'native',
   awayReply: '',
@@ -585,6 +586,7 @@ const applyLiquidGlass = (theme: LiquidGlassTheme) => {
   root.dataset.entranceEffect = theme.entranceEffect;
   root.dataset.sidebarLayout = theme.sidebarLayout;
   root.dataset.cursorGlow = theme.cursorGlow ? 'true' : 'false';
+  root.dataset.unreadDividerStyle = theme.unreadDividerStyle;
   root.style.setProperty('--chat-font-weight', String(theme.fontWeight));
   root.style.setProperty('--chat-letter-spacing', `${theme.letterSpacing / 100}em`);
   root.style.setProperty('--chat-line-height', String(theme.lineHeight / 100));

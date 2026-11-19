@@ -22,6 +22,7 @@ export type TimestampFormat = '12h' | '24h' | 'relative' | 'seconds';
 export type EntranceEffect = 'spring' | 'slide' | 'liquid' | 'instant';
 export type SidebarLayout = 'rail' | 'standard' | 'preview';
 export type EnterBehavior = 'enter-send' | 'ctrl-send';
+export type UnreadDividerStyle = 'laser' | 'pill' | 'dotted' | 'rainbow';
 
 export interface LiquidGlassTheme {
   blur: number;
@@ -43,6 +44,7 @@ export interface LiquidGlassTheme {
   cursorGlow: boolean;
   sidebarLayout: SidebarLayout;
   enterBehavior: EnterBehavior;
+  unreadDividerStyle: UnreadDividerStyle;
   emojiSkinTone: 'default' | 'light' | 'medium-light' | 'medium' | 'medium-dark' | 'dark';
   emojiStyle: 'native' | 'twemoji';
   awayReply: string;

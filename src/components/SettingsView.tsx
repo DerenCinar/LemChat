@@ -787,7 +787,7 @@ export const SettingsView: React.FC = () => {
         >
         <div className="grid gap-3 md:grid-cols-2">
           <div className="glass-pill space-y-3 rounded-2xl p-4 md:col-span-2">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <label className="space-y-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Bubble shape</span>
                 <select value={liquidGlass.bubbleStyle} onChange={(e) => setLiquidGlass({ bubbleStyle: e.target.value as typeof liquidGlass.bubbleStyle })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
@@ -821,6 +821,15 @@ export const SettingsView: React.FC = () => {
                   <option value="rail">Icons-only rail</option>
                   <option value="standard">Standard list</option>
                   <option value="preview">Expanded preview</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">New messages divider</span>
+                <select value={liquidGlass.unreadDividerStyle} onChange={(e) => setLiquidGlass({ unreadDividerStyle: e.target.value as typeof liquidGlass.unreadDividerStyle })} className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs">
+                  <option value="laser">Glowing neon laser</option>
+                  <option value="pill">Frosted glass pill</option>
+                  <option value="dotted">Minimal dotted line</option>
+                  <option value="rainbow">Rainbow pulse</option>
                 </select>
               </label>
             </div>
