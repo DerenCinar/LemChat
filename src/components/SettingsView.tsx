@@ -14,6 +14,7 @@ import {
   Camera,
   Download,
   Upload,
+  ChevronDown,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import {
@@ -23,6 +24,33 @@ import {
   serializeAvatarSpec,
   type AvatarMode,
 } from './UserAvatar';
+
+const SettingsSection: React.FC<{
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  sectionRef?: React.RefObject<HTMLDetailsElement>;
+}> = ({ title, description, children, defaultOpen = false, sectionRef }) => (
+  <details
+    ref={sectionRef}
+    open={defaultOpen}
+    className="group rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
+  >
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3.5 outline-none transition hover:bg-black/[0.03] focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 dark:hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-emerald-950 dark:text-white">{title}</span>
+        <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+          {description}
+        </span>
+      </span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-emerald-700 transition-transform group-open:rotate-180 dark:text-emerald-300" />
+    </summary>
+    <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
+      {children}
+    </div>
+  </details>
+);
 
 export const SettingsView: React.FC = () => {
   const theme = useChatStore((s) => s.theme);
@@ -52,7 +80,7 @@ export const SettingsView: React.FC = () => {
   const setLiquidGlass = useChatStore((s) => s.setLiquidGlass);
   const resetLiquidGlass = useChatStore((s) => s.resetLiquidGlass);
   const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
-  const updateSectionRef = useRef<HTMLDivElement | null>(null);
+  const updateSectionRef = useRef<HTMLDetailsElement | null>(null);
 
   const [displayName, setDisplayName] = useState(self?.name ?? '');
   const [role, setRole] = useState(self?.role ?? '');
@@ -192,10 +220,15 @@ export const SettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() =>
-                updateSectionRef.current?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'center',
-                })
+                (() => {
+                  if (updateSectionRef.current) {
+                    updateSectionRef.current.open = true;
+                    updateSectionRef.current.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'center',
+                    });
+                  }
+                })()
               }
               className="shrink-0 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-2 text-xs font-bold text-white shadow-lem-glow-sm hover:brightness-110"
             >
@@ -204,12 +237,13 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
 
-        {/* Profile Card + Inline Editor */}
         {self && (
-          <form
-            onSubmit={handleSaveProfile}
-            className="glass-pill space-y-4 rounded-2xl p-4"
+          <SettingsSection
+            title="Profile"
+            description="Manage your identity, avatar, and profile details."
+            defaultOpen
           >
+            <form onSubmit={handleSaveProfile} className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3.5">
                 <input
@@ -429,14 +463,15 @@ export const SettingsView: React.FC = () => {
                 <span>{saved ? 'Saved!' : 'Save Profile'}</span>
               </motion.button>
             </div>
-          </form>
+            </form>
+          </SettingsSection>
         )}
 
-        {/* Theme Selection */}
-        <div className="space-y-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-            Liquid Glass Theme
-          </h2>
+        <SettingsSection
+          title="Appearance"
+          description="Choose a theme and tune the Liquid Glass look and feel."
+          defaultOpen
+        >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <motion.button
               whileHover={{ scale: 1.01 }}
@@ -549,9 +584,8 @@ export const SettingsView: React.FC = () => {
               </motion.button>
             ))}
           </div>
-        </div>
 
-        <div className="glass-pill space-y-4 rounded-2xl p-4">
+          <div className="glass-pill space-y-4 rounded-2xl p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
               Live Liquid Glass
@@ -563,7 +597,7 @@ export const SettingsView: React.FC = () => {
             >
               Reset
             </button>
-          </div>
+            </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             {([
@@ -703,12 +737,14 @@ export const SettingsView: React.FC = () => {
             </button>
           </div>
         </div>
+        </SettingsSection>
 
+        <SettingsSection
+          title="Personalization"
+          description="Customize messages, layout, privacy, emoji, and saved replies."
+        >
         <div className="grid gap-3 md:grid-cols-2">
           <div className="glass-pill space-y-3 rounded-2xl p-4 md:col-span-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-              Next-Level Personalization
-            </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="space-y-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Bubble shape</span>
@@ -884,12 +920,12 @@ export const SettingsView: React.FC = () => {
             ))}
           </div>
         </div>
+        </SettingsSection>
 
-        {/* Desktop Notifications & Sound */}
-        <div className="space-y-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-            Notifications &amp; Sound
-          </h2>
+        <SettingsSection
+          title="Notifications & Sound"
+          description="Choose when SkellyTalk alerts you and whether it plays a chime."
+        >
           <div className="glass-pill space-y-3.5 rounded-2xl p-4 text-xs">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-start gap-2.5">
@@ -990,13 +1026,13 @@ export const SettingsView: React.FC = () => {
               </motion.button>
             </div>
           </div>
-        </div>
+        </SettingsSection>
 
-        {/* Auto-Updates */}
-        <div ref={updateSectionRef} className="scroll-mt-6 space-y-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-            Software Updates
-          </h2>
+        <SettingsSection
+          sectionRef={updateSectionRef}
+          title="Software Updates"
+          description="Check for the latest version and install downloaded updates."
+        >
           <div className="glass-pill flex items-center justify-between gap-4 rounded-2xl p-4 text-xs">
             <div className="flex min-w-0 flex-1 items-start gap-2.5">
               <RefreshCw
@@ -1043,13 +1079,12 @@ export const SettingsView: React.FC = () => {
               </button>
             )}
           </div>
-        </div>
+        </SettingsSection>
 
-        {/* Supabase Connection Info */}
-        <div className="space-y-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-            Supabase Backend
-          </h2>
+        <SettingsSection
+          title="Connection"
+          description="View the current realtime messaging connection status."
+        >
           <div className="glass-pill space-y-3 rounded-2xl p-4 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-emerald-950 dark:text-white">
@@ -1067,8 +1102,8 @@ export const SettingsView: React.FC = () => {
               </span>
             </div>
           </div>
+        </SettingsSection>
         </div>
-      </div>
     </motion.section>
   );
 };
