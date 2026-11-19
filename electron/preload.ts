@@ -34,6 +34,7 @@ export interface UpdateStatusPayload {
 export interface LemChatAPI {
   platform: NodeJS.Platform;
   profileId: string;
+  getAppVersion: () => Promise<string>;
   signalInitialize: () => Promise<unknown>;
   signalEncryptDirect: (recipientId: string, recipientBundle: unknown, plaintext: string) => Promise<unknown>;
   signalDecryptDirect: (senderId: string, ciphertext: string, ciphertextType: number) => Promise<string>;
@@ -70,6 +71,7 @@ const profileId = profileArg ? profileArg.split('=')[1] : 'default';
 const api: LemChatAPI = {
   platform: process.platform,
   profileId,
+  getAppVersion: () => ipcRenderer.invoke('lemchat:get-app-version'),
   signalInitialize: () => ipcRenderer.invoke('lemchat:signal-init', profileId),
   signalEncryptDirect: (recipientId, recipientBundle, plaintext) =>
     ipcRenderer.invoke('lemchat:signal-encrypt-direct', profileId, recipientId, recipientBundle, plaintext),

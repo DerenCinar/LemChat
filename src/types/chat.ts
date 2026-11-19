@@ -222,6 +222,7 @@ export interface NotificationPayload {
 
 export interface LemChatAPI {
   platform: NodeJS.Platform;
+  getAppVersion?: () => Promise<string>;
   signalInitialize: () => Promise<unknown>;
   signalEncryptDirect: (recipientId: string, recipientBundle: unknown, plaintext: string) => Promise<unknown>;
   signalDecryptDirect: (senderId: string, ciphertext: string, ciphertextType: number) => Promise<string>;

@@ -411,6 +411,8 @@ function registerIpcHandlers() {
     createWindow(`peer-${peerWindowCounter}`);
   });
 
+  ipcMain.handle('lemchat:get-app-version', () => app.getVersion());
+
   ipcMain.handle('lemchat:check-updates', async () => {
     startupUpdateCheckPending = false;
     startupUpdateDownloadPending = false;

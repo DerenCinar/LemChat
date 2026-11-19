@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import packageInfo from '../../package.json';
 import {
   Moon,
   Sun,
@@ -127,6 +128,21 @@ export const SettingsView: React.FC = () => {
   const resetLiquidGlass = useChatStore((s) => s.resetLiquidGlass);
   const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
   const updateSectionRef = useRef<HTMLDivElement | null>(null);
+  const [appVersion, setAppVersion] = useState(packageInfo.version);
+
+  useEffect(() => {
+    let active = true;
+    if (window.lemchat?.getAppVersion) {
+      void window.lemchat.getAppVersion()
+        .then((version) => {
+          if (active && version) setAppVersion(version);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [displayName, setDisplayName] = useState(self?.name ?? '');
   const [role, setRole] = useState(self?.role ?? '');
@@ -1284,12 +1300,19 @@ export const SettingsView: React.FC = () => {
           className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
         >
           <div className="px-4 py-3.5">
-            <span className="block text-sm font-bold text-emerald-950 dark:text-white">
-              Software Updates
-            </span>
-            <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
-              Check for the latest version and install downloaded updates.
-            </span>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="block text-sm font-bold text-emerald-950 dark:text-white">
+                  Software Updates
+                </span>
+                <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+                  Check for the latest version and install downloaded updates.
+                </span>
+              </div>
+              <span className="glass-pill shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold text-emerald-800/80 dark:text-emerald-100/80">
+                v{appVersion}
+              </span>
+            </div>
           </div>
           <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
           <div className="glass-pill flex items-center justify-between gap-4 rounded-2xl p-4 text-xs">
