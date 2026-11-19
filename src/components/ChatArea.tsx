@@ -101,7 +101,23 @@ export const ChatArea: React.FC = () => {
       setShowScrollToBottom(false);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeConversationId, activeConv?.messages.length, pendingMentionMessageId]);
+  }, [activeConversationId, activeConv?.messages.length, pendingMentionMessageId, workspaceLoading]);
+
+  // Opening a chat: jump to the bottom, and keep doing so briefly while
+  // images/animations settle and change the feed height.
+  useEffect(() => {
+    if (workspaceLoading || pendingMentionMessageId) return;
+    const jump = () => {
+      const feed = feedRef.current;
+      if (feed) feed.scrollTop = feed.scrollHeight;
+      wasNearBottomRef.current = true;
+      setShowScrollToBottom(false);
+    };
+    jump();
+    const timers = [40, 120, 300, 600, 1000].map((ms) => window.setTimeout(jump, ms));
+    return () => timers.forEach((t) => window.clearTimeout(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId, workspaceLoading]);
 
   useEffect(() => {
     if (pendingMentionMessageId) return;

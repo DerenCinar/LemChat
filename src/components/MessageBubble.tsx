@@ -331,25 +331,42 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
             {isEditing ? (
               <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest opacity-80">
+                  <Pencil className="h-3 w-3" />
+                  <span>Editing message</span>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={Math.min(8, Math.max(2, editText.split('\n').length))}
                   value={editText}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.setSelectionRange(editText.length, editText.length)}
                   onChange={(e) => setEditText(e.target.value)}
-                  className="w-full min-w-[220px] resize-none rounded-xl bg-black/20 p-2 text-xs text-white outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setIsEditing(false);
+                    else if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleSaveEdit();
+                    }
+                  }}
+                  className="lem-scrollbar w-full min-w-[240px] resize-none rounded-xl border border-white/25 bg-black/25 px-3 py-2 text-[13px] leading-relaxed text-white outline-none transition placeholder:text-white/40 focus:border-white/60 focus:ring-2 focus:ring-white/20"
                 />
-                <div className="flex justify-end gap-1.5 text-[11px]">
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="rounded-lg bg-white/15 px-2.5 py-1 hover:bg-white/25"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void handleSaveEdit()}
-                    className="rounded-lg bg-white px-2.5 py-1 font-semibold text-emerald-900"
-                  >
-                    Save
-                  </button>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] opacity-65">Enter to save · Esc to cancel</span>
+                  <div className="flex gap-1.5 text-[11px]">
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="rounded-full bg-white/15 px-3 py-1 font-medium transition hover:bg-white/25"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void handleSaveEdit()}
+                      disabled={!editText.trim()}
+                      className="rounded-full bg-white px-3.5 py-1 font-semibold text-emerald-900 shadow-sm transition hover:brightness-95 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

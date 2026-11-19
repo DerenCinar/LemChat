@@ -531,33 +531,71 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 space-y-2 rounded-2xl p-3 sm:left-auto sm:right-4 sm:w-[300px]"
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-[70vh] overflow-y-auto rounded-2xl p-4 sm:left-auto sm:right-4 sm:w-[340px]"
           >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-[#22C55E]">
+                  <BarChart3 className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-bold text-emerald-950 dark:text-white">Create poll</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPoll(false)}
+                className="rounded-full p-1 text-emerald-900/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                aria-label="Close poll"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-800/60 dark:text-emerald-200/55">
+              Question
+            </label>
             <input
               value={pollQuestion}
               onChange={(e) => setPollQuestion(e.target.value)}
               maxLength={200}
-              placeholder="Ask a question..."
-              className="w-full rounded-lg border border-emerald-900/20 bg-transparent px-3 py-2 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none focus:border-emerald-500/70 dark:border-white/15 dark:text-white dark:placeholder-emerald-100/40 dark:focus:border-emerald-400/60"
+              placeholder="What do you want to ask?"
+              className="mb-3 w-full rounded-xl border border-emerald-900/15 bg-white/40 px-3 py-2.5 text-[13px] font-medium text-emerald-950 placeholder-emerald-800/40 outline-none transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-emerald-100/40"
             />
-            {pollOptions.map((opt, i) => (
-              <input
-                key={i}
-                value={opt}
-                onChange={(e) =>
-                  setPollOptions((prev) => prev.map((o, j) => (j === i ? e.target.value : o)))
-                }
-                maxLength={100}
-                placeholder={`Option ${i + 1}`}
-                className="w-full rounded-lg border border-emerald-900/20 bg-transparent px-3 py-2 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none focus:border-emerald-500/70 dark:border-white/15 dark:text-white dark:placeholder-emerald-100/40 dark:focus:border-emerald-400/60"
-              />
-            ))}
-            <div className="flex items-center justify-between">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-emerald-800/60 dark:text-emerald-200/55">
+              Options
+            </label>
+            <div className="space-y-1.5">
+              {pollOptions.map((opt, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    {i + 1}
+                  </span>
+                  <input
+                    value={opt}
+                    onChange={(e) =>
+                      setPollOptions((prev) => prev.map((o, j) => (j === i ? e.target.value : o)))
+                    }
+                    maxLength={100}
+                    placeholder={`Option ${i + 1}`}
+                    className="min-w-0 flex-1 rounded-xl border border-emerald-900/15 bg-white/40 px-3 py-2 text-xs text-emerald-950 placeholder-emerald-800/40 outline-none transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-emerald-100/40"
+                  />
+                  {pollOptions.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions((prev) => prev.filter((_, j) => j !== i))}
+                      className="rounded-full p-1 text-rose-500/80 hover:bg-rose-500/10"
+                      aria-label={`Remove option ${i + 1}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between">
               <button
                 type="button"
                 disabled={pollOptions.length >= 8}
                 onClick={() => setPollOptions((prev) => [...prev, ''])}
-                className="flex items-center gap-1 text-xs text-emerald-500 disabled:opacity-40"
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300"
               >
                 <Plus className="h-3 w-3" /> Add option
               </button>
@@ -566,18 +604,19 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 disabled={!pollQuestion.trim() || pollOptions.filter((o) => o.trim()).length < 2}
                 onClick={() => {
                   setSendError(null);
-                  sendPoll(pollQuestion, pollOptions)
-                    .then(() => {
-                      setShowPoll(false);
-                      setPollQuestion('');
-                      setPollOptions(['', '']);
-                    })
-                    .catch((err: unknown) => {
-                      setShowPoll(false);
-                      setSendError(err instanceof Error ? err.message : 'Could not send poll.');
-                    });
+                  const q = pollQuestion;
+                  const opts = pollOptions;
+                  // Reset immediately so the next poll starts blank.
+                  setShowPoll(false);
+                  setPollQuestion('');
+                  setPollOptions(['', '']);
+                  sendPoll(q, opts).catch((err: unknown) => {
+                    setPollQuestion(q);
+                    setPollOptions(opts);
+                    setSendError(err instanceof Error ? err.message : 'Could not send poll.');
+                  });
                 }}
-                className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white shadow-lem-glow-sm transition hover:brightness-110 disabled:opacity-40"
               >
                 Send poll
               </button>
