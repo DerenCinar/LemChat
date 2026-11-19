@@ -1817,7 +1817,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && presenceChannel) {
           if (lastSeenTimer) clearInterval(lastSeenTimer);
-          lastSeenTimer = setInterval(() => void get().touchLastSeen(), 60_000);
+          lastSeenTimer = setInterval(() => {
+            void get().touchLastSeen();
+            // Refresh peers' last-seen times in case realtime missed an update.
+            void supabase
+              .from('profiles')
+              .select('id,last_seen_at')
+              .then(({ data }) => {
+                if (!data) return;
+                set((state) => {
+                  const next = { ...state.profiles };
+                  for (const row of data as { id: string; last_seen_at: string | null }[]) {
+                    if (row.id === user.id || !next[row.id] || !row.last_seen_at) continue;
+                    const cur = next[row.id].lastSeenAt;
+                    if (!cur || new Date(row.last_seen_at) > new Date(cur)) {
+                      next[row.id] = { ...next[row.id], lastSeenAt: row.last_seen_at };
+                    }
+                  }
+                  return { profiles: next };
+                });
+              });
+          }, 60_000);
           if (typeof window !== 'undefined' && !lastSeenUnloadBound) {
             lastSeenUnloadBound = true;
             window.addEventListener('beforeunload', () => void get().touchLastSeen());
