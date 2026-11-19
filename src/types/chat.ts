@@ -17,6 +17,11 @@ export type ChatFontSize = 'small' | 'medium' | 'large';
 export type ProfanityFilter = 'off' | 'mild' | 'strict';
 export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member';
 export type BubbleDensity = 'cozy' | 'compact' | 'minimal';
+export type BubbleStyle = 'imessage' | 'pill' | 'cyber' | 'glass';
+export type TimestampFormat = '12h' | '24h' | 'relative' | 'seconds';
+export type EntranceEffect = 'spring' | 'slide' | 'liquid' | 'instant';
+export type SidebarLayout = 'rail' | 'standard' | 'preview';
+export type EnterBehavior = 'enter-send' | 'ctrl-send';
 
 export interface LiquidGlassTheme {
   blur: number;
@@ -29,6 +34,27 @@ export interface LiquidGlassTheme {
   ambientMotion: boolean;
   wallpaper: string;
   quickReactions: string[];
+  bubbleStyle: BubbleStyle;
+  fontWeight: number;
+  letterSpacing: number;
+  lineHeight: number;
+  timestampFormat: TimestampFormat;
+  entranceEffect: EntranceEffect;
+  cursorGlow: boolean;
+  sidebarLayout: SidebarLayout;
+  enterBehavior: EnterBehavior;
+  emojiSkinTone: 'default' | 'light' | 'medium-light' | 'medium' | 'medium-dark' | 'dark';
+  emojiStyle: 'native' | 'twemoji';
+  awayReply: string;
+  awayReplyCooldown: number;
+  keywordAlerts: string;
+  fairPlayPrivacy: boolean;
+  typingPrivacy: boolean;
+  readReceipts: boolean;
+  lastSeenPrivacy: boolean;
+  autoLoadMedia: boolean;
+  snippets: Record<string, string>;
+  savedReplies: string[];
 }
 
 export interface Reaction {

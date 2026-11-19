@@ -18,6 +18,7 @@ import {
   Shield,
   Crown,
   ArrowDown,
+  Download,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
@@ -197,6 +198,34 @@ export const ChatArea: React.FC = () => {
 
   const convMembers = activeConv.members ?? [];
   const convMessages = activeConv.messages ?? [];
+  const exportConversation = (format: 'json' | 'txt' | 'html') => {
+    const title = activeConv.type === 'channel' ? `#${activeConv.name}` : activeConv.name;
+    const transcript = convMessages.map((message) => ({
+      sender: message.senderName,
+      timestamp: message.createdAt,
+      content: message.deletedAt ? '[deleted]' : message.content,
+      attachments: message.attachments?.map((attachment) => attachment.name) ?? [],
+    }));
+    let content = '';
+    let mime = 'text/plain';
+    if (format === 'json') {
+      content = JSON.stringify({ title, exportedAt: new Date().toISOString(), messages: transcript }, null, 2);
+      mime = 'application/json';
+    } else if (format === 'html') {
+      content = `<!doctype html><html><body><h1>${title}</h1>${transcript.map((message) =>
+        `<p><strong>${message.sender}</strong> <small>${message.timestamp}</small><br>${message.content.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`
+      ).join('')}</body></html>`;
+      mime = 'text/html';
+    } else {
+      content = transcript.map((message) => `[${message.timestamp}] ${message.sender}: ${message.content}`).join('\n');
+    }
+    const url = URL.createObjectURL(new Blob([content], { type: mime }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'chat'}.${format}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   const visibleMessages = inChatSearchQuery.trim()
     ? convMessages.filter((m) =>
@@ -667,6 +696,20 @@ export const ChatArea: React.FC = () => {
                   {activeConv.pinned ? 'Pinned to Sidebar' : 'Pin Conversation'}
                 </span>
               </button>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['json', 'txt', 'html'] as const).map((format) => (
+                  <button
+                    key={format}
+                    type="button"
+                    onClick={() => exportConversation(format)}
+                    className="glass-pill flex items-center justify-center gap-1 rounded-xl py-2 text-[10px] font-semibold uppercase"
+                  >
+                    <Download className="h-3 w-3" />
+                    {format}
+                  </button>
+                ))}
+              </div>
 
               {activeConv.type === 'channel' && (
                 <div className="space-y-2">

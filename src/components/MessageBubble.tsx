@@ -59,6 +59,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const openAttachment = useChatStore((s) => s.openAttachment);
   const self = useChatStore((s) => s.self);
   const quickReactions = useChatStore((s) => s.liquidGlass.quickReactions);
+  const entranceEffect = useChatStore((s) => s.liquidGlass.entranceEffect);
+
+  const entrance =
+    entranceEffect === 'instant'
+      ? { opacity: 1, y: 0, scale: 1 }
+      : entranceEffect === 'slide'
+        ? { opacity: 0, y: 24, scale: 1 }
+        : entranceEffect === 'liquid'
+          ? { opacity: 0, y: 8, scale: 0.96, filter: 'blur(8px)' }
+          : { opacity: 0, y: 18, scale: 0.84 };
+  const entranceTransition =
+    entranceEffect === 'instant'
+      ? { duration: 0 }
+      : entranceEffect === 'liquid'
+        ? { duration: 0.45, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }
+        : entranceEffect === 'slide'
+          ? { type: 'spring' as const, stiffness: 360, damping: 30 }
+          : { type: 'spring' as const, stiffness: 460, damping: 25, mass: 0.78 };
 
   const handleCopyCode = () => {
     if (!message.codeBlock) return;
@@ -215,22 +233,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       data-message-id={message.id}
       data-message-row
       layout
-      initial={{
-        opacity: 0,
-        y: 18,
-        scale: 0.84,
-      }}
+      initial={entrance}
       animate={{
         opacity: 1,
         y: 0,
         scale: 1,
       }}
-      transition={{
-        type: 'spring',
-        stiffness: 460,
-        damping: 25,
-        mass: 0.78,
-      }}
+      transition={entranceTransition}
       style={{
         transformOrigin: message.isMe ? 'bottom right' : 'bottom left',
       }}

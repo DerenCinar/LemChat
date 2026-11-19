@@ -33,6 +33,9 @@ export const ProfileModal: React.FC = () => {
   const getContactName = useChatStore((s) => s.getContactName);
   const setContactName = useChatStore((s) => s.setContactName);
   const [contactName, setContactNameInput] = useState('');
+  const [privateNote, setPrivateNote] = useState(() => selectedProfileId
+    ? (localStorage.getItem(`skellytalk_private_note_${selectedProfileId}`) ?? '')
+    : '');
 
   const profile = selectedProfileId ? profiles[selectedProfileId] : null;
   const isSelf = Boolean(self && selectedProfileId === self.id);
@@ -61,6 +64,7 @@ export const ProfileModal: React.FC = () => {
   useEffect(() => {
     if (profile && !isSelf) {
       setContactNameInput(getContactName(profile.id, profile.displayName));
+      setPrivateNote(localStorage.getItem(`skellytalk_private_note_${profile.id}`) ?? '');
     } else {
       setContactNameInput('');
     }
@@ -164,6 +168,21 @@ export const ProfileModal: React.FC = () => {
                         Save
                       </button>
                     </div>
+                  </div>
+                  <div className="mt-3 w-full">
+                    <label className="mb-1 block text-left text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">
+                      Private notes
+                    </label>
+                    <textarea
+                      value={privateNote}
+                      onChange={(e) => {
+                        setPrivateNote(e.target.value);
+                        localStorage.setItem(`skellytalk_private_note_${profile.id}`, e.target.value);
+                      }}
+                      placeholder="Birthday, timezone, gamertag..."
+                      rows={3}
+                      className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs text-emerald-950 outline-none dark:text-white"
+                    />
                   </div>
                 </>
               )}

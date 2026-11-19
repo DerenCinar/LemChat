@@ -125,6 +125,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const broadcastTyping = useChatStore((s) => s.broadcastTyping);
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const enterBehavior = useChatStore((s) => s.liquidGlass.enterBehavior);
+  const snippets = useChatStore((s) => s.liquidGlass.snippets);
+  const savedReplies = useChatStore((s) => s.liquidGlass.savedReplies);
 
   const visibleGifs = useMemo(() => {
     const query = gifQuery.trim().toLowerCase();
@@ -161,11 +164,16 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     }
     const hasCode = showCodeEditor && codeText.trim().length > 0;
     if (!text.trim() && stagedUploads.length === 0 && !hasCode && !selectedGif) return;
-    const outgoingText = text.trim() === '/shrug'
-      ? '¯\\_(ツ)_/¯'
-      : text.trim().startsWith('/shrug ')
-        ? `¯\\_(ツ)_/¯ ${text.trim().slice(7)}`
-        : text;
+    const savedReplyMatch = text.trim().match(/^\/(\d+)$/);
+    const savedReplyText = savedReplyMatch
+      ? savedReplies[Math.max(0, Number(savedReplyMatch[1]) - 1)]
+      : undefined;
+    const outgoingText = savedReplyText
+      ?? (text.trim() === '/shrug'
+        ? '¯\\_(ツ)_/¯'
+        : text.trim().startsWith('/shrug ')
+          ? `¯\\_(ツ)_/¯ ${text.trim().slice(7)}`
+          : text);
 
     setSending(true);
     setSendError(null);
@@ -200,7 +208,10 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (enterBehavior === 'enter-send' && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend();
+    } else if (enterBehavior === 'ctrl-send' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void handleSend();
     }
@@ -621,9 +632,15 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           maxLength={4000}
           value={text}
           onChange={(e) => {
-            setText(e.target.value);
+            let next = e.target.value;
+            for (const [shortcut, expansion] of Object.entries(snippets)) {
+              if (next.endsWith(shortcut)) {
+                next = `${next.slice(0, -shortcut.length)}${expansion}`;
+              }
+            }
+            setText(next);
             resizeTextarea();
-            handleTypingPing(e.target.value);
+            handleTypingPing(next);
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}

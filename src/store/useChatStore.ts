@@ -257,13 +257,32 @@ const RTC_CONFIG: RTCConfiguration = {
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
+  let format: LiquidGlassTheme['timestampFormat'] = '12h';
+  try {
+    const parsed = JSON.parse(localStorage.getItem('skellytalk_liquid_glass') || '{}') as Partial<LiquidGlassTheme>;
+    format = parsed.timestampFormat ?? '12h';
+  } catch {
+    format = '12h';
+  }
+  if (format === 'relative') {
+    const diffMinutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
+    if (diffMinutes < 1) return 'now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.round(diffHours / 24)}d ago`;
+  }
   const isToday =
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate();
 
   if (isToday) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], format === '24h'
+      ? { hour: '2-digit', minute: '2-digit', hour12: false }
+      : format === 'seconds'
+        ? { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }
+        : { hour: '2-digit', minute: '2-digit', hour12: true });
   }
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
@@ -519,6 +538,27 @@ const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
   ambientMotion: true,
   wallpaper: '',
   quickReactions: ['💚', '🔥', '🚀', '✨', '👍', '👀'],
+  bubbleStyle: 'imessage',
+  fontWeight: 400,
+  letterSpacing: 0,
+  lineHeight: 150,
+  timestampFormat: '12h',
+  entranceEffect: 'spring',
+  cursorGlow: true,
+  sidebarLayout: 'standard',
+  enterBehavior: 'enter-send',
+  emojiSkinTone: 'default',
+  emojiStyle: 'native',
+  awayReply: '',
+  awayReplyCooldown: 60,
+  keywordAlerts: '',
+  fairPlayPrivacy: false,
+  typingPrivacy: true,
+  readReceipts: true,
+  lastSeenPrivacy: true,
+  autoLoadMedia: true,
+  snippets: {},
+  savedReplies: [],
 };
 
 const readLiquidGlass = (): LiquidGlassTheme => {
@@ -540,6 +580,13 @@ const applyLiquidGlass = (theme: LiquidGlassTheme) => {
   root.style.setProperty('--glass-bubble', theme.bubbleColor);
   root.dataset.bubbleDensity = theme.density;
   root.dataset.ambientMotion = theme.ambientMotion ? 'true' : 'false';
+  root.dataset.bubbleStyle = theme.bubbleStyle;
+  root.dataset.entranceEffect = theme.entranceEffect;
+  root.dataset.sidebarLayout = theme.sidebarLayout;
+  root.dataset.cursorGlow = theme.cursorGlow ? 'true' : 'false';
+  root.style.setProperty('--chat-font-weight', String(theme.fontWeight));
+  root.style.setProperty('--chat-letter-spacing', `${theme.letterSpacing / 100}em`);
+  root.style.setProperty('--chat-line-height', String(theme.lineHeight / 100));
 };
 
 const savedLiquidGlass = readLiquidGlass();

@@ -201,6 +201,7 @@ export const ConversationSidebar: React.FC = () => {
 
   return (
     <aside
+      data-conversation-sidebar
       style={{ '--sidebar-w': `${width}px` } as React.CSSProperties}
       className="glass-panel glass-surface relative z-10 flex w-full flex-1 shrink-0 flex-col rounded-2xl transition-[box-shadow] duration-200 md:w-[var(--sidebar-w)] md:flex-initial"
     >
