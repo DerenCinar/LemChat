@@ -52,6 +52,11 @@ if (process.platform === 'win32') {
 }
 app.setName('SkellyTalk');
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 function getAppIcon(): NativeImage {
   // Use the higher-contrast logo for the current system theme.
   const filename = nativeTheme.shouldUseDarkColors
@@ -83,6 +88,9 @@ function focusWindow(win: BrowserWindow | null) {
     win.show();
   }
   win.focus();
+  if (process.platform === 'win32') {
+    win.moveTop();
+  }
 }
 
 function rebuildTrayMenu() {
@@ -553,57 +561,71 @@ function setupAutoUpdater() {
   }
 }
 
-app.whenReady().then(async () => {
-  nativeTheme.on('updated', refreshPlatformIcons);
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(getAppIcon());
-  }
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
-      const allowed = ['media', 'mediaKeySystem', 'notifications', 'display-capture'];
-      callback(allowed.includes(permission));
-    }
-  );
-
-  session.defaultSession.setDisplayMediaRequestHandler(
-    async (_request, callback) => {
-      try {
-        const sources = await desktopCapturer.getSources({
-          types: ['screen', 'window'],
-        });
-        if (sources.length > 0) {
-          callback({ video: sources[0], audio: 'loopback' });
-        } else {
-          callback({});
-        }
-      } catch {
-        callback({});
-      }
-    }
-  );
-
-  serverStatus = await startRelayServer(4120);
-  registerIpcHandlers();
-  setupAutoUpdater();
-  createTray();
-  createWindow('default');
-
-  app.on('activate', () => {
-    if (allWindows.size === 0) {
+if (gotSingleInstanceLock) {
+  app.on('second-instance', () => {
+    const target =
+      mainWindow && !mainWindow.isDestroyed()
+        ? mainWindow
+        : Array.from(allWindows).find((w) => !w.isDestroyed()) ?? null;
+    if (target) {
+      focusWindow(target);
+    } else if (app.isReady()) {
       createWindow('default');
-    } else {
-      focusWindow(mainWindow);
     }
   });
-});
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  stopRelayServer();
-});
+  app.whenReady().then(async () => {
+    nativeTheme.on('updated', refreshPlatformIcons);
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.setIcon(getAppIcon());
+    }
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, permission, callback) => {
+        const allowed = ['media', 'mediaKeySystem', 'notifications', 'display-capture'];
+        callback(allowed.includes(permission));
+      }
+    );
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+    session.defaultSession.setDisplayMediaRequestHandler(
+      async (_request, callback) => {
+        try {
+          const sources = await desktopCapturer.getSources({
+            types: ['screen', 'window'],
+          });
+          if (sources.length > 0) {
+            callback({ video: sources[0], audio: 'loopback' });
+          } else {
+            callback({});
+          }
+        } catch {
+          callback({});
+        }
+      }
+    );
+
+    serverStatus = await startRelayServer(4120);
+    registerIpcHandlers();
+    setupAutoUpdater();
+    createTray();
+    createWindow('default');
+
+    app.on('activate', () => {
+      if (allWindows.size === 0) {
+        createWindow('default');
+      } else {
+        focusWindow(mainWindow);
+      }
+    });
+  });
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+    stopRelayServer();
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+}
