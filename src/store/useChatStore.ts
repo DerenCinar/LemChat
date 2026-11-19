@@ -253,6 +253,7 @@ interface ChatStore {
 let dbChannel: RealtimeChannel | null = null;
 let presenceChannel: RealtimeChannel | null = null;
 let lastSeenUnloadBound = false;
+let messagePollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSeenTimer: ReturnType<typeof setInterval> | null = null;
 let callsChannel: RealtimeChannel | null = null;
 let peerConnection: RTCPeerConnection | null = null;
@@ -1451,132 +1452,134 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     get().cleanupRealtime();
 
+    // Shared by the realtime INSERT event and the polling fallback below.
+    const ingestMessageRow = async (row: DbMessageRow) => {
+      const state = get();
+      const sender = state.profiles[row.sender_id];
+      const isMe = row.sender_id === user.id;
+      const decrypted = await decryptMessageRow(row, row.sender_id, user.id);
+
+      const existingConv = state.conversations.find(
+        (c) => c.id === row.conversation_id
+      );
+      if (!existingConv) {
+        void get().fetchWorkspaceData();
+        return;
+      }
+
+      // Deduplicate if already added
+      if (existingConv.messages.some((m) => m.id === row.id)) return;
+
+      const newMsg: Message = {
+        id: row.id,
+        conversationId: row.conversation_id,
+        senderId: row.sender_id,
+        senderName: sender
+          ? get().getContactName(sender.id, sender.displayName)
+          : 'Member',
+        senderAvatar: sender?.avatarText ?? 'ST',
+        senderRole: sender?.role,
+        content: decrypted.content,
+        timestamp: formatTimestamp(row.created_at),
+        createdAt: row.created_at,
+        editedAt: row.edited_at ?? decrypted.editedAt,
+        deletedAt:
+          row.deleted_at ??
+          (row.content === DELETED_MESSAGE_MARKER
+            ? row.created_at
+            : readDeletedCache(user.id)[row.id]?.deletedAt),
+        isMe,
+        status: 'read',
+        reactions: [],
+        codeBlock: decrypted.codeBlock,
+        attachments: decrypted.attachments,
+        interactive: decrypted.interactive,
+        isMention: state.self
+          ? decrypted.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
+            decrypted.content.toLowerCase().includes(state.self.handle.toLowerCase())
+          : false,
+        isPinned: false,
+      };
+
+      const isViewing =
+        state.activeConversationId === row.conversation_id &&
+        state.isWindowFocused &&
+        state.activeTab !== 'settings';
+
+      const updatedConvs = state.conversations.map((conv) => {
+        if (conv.id !== row.conversation_id) return conv;
+        return {
+          ...conv,
+          unreadCount: isMe || isViewing ? conv.unreadCount : conv.unreadCount + 1,
+          messages: [...conv.messages, newMsg],
+        };
+      });
+
+      set({
+        conversations: updatedConvs,
+        typingConversations: {
+          ...state.typingConversations,
+          [row.conversation_id]: null,
+        },
+      });
+
+      window.lemchat?.updateBadgeCount(computeTotalUnread(updatedConvs));
+
+      if (!isMe) {
+        if (isViewing) {
+          // Mark read immediately in DB
+          void supabase
+            .from('conversation_members')
+            .update({ last_read_at: new Date().toISOString() })
+            .eq('conversation_id', row.conversation_id)
+            .eq('user_id', user.id);
+        } else {
+          const title =
+            existingConv.type === 'channel'
+              ? `${newMsg.senderName} in #${existingConv.name}`
+              : newMsg.senderName;
+          const bodyText =
+            newMsg.content ||
+            (newMsg.attachments?.length ? `Sent ${newMsg.attachments[0].name}` : 'New message');
+
+          if (state.notificationsEnabled && state.self?.status !== 'busy') {
+            if (state.soundEnabled) {
+              playNotificationChime();
+            }
+
+            if (window.lemchat) {
+              void window.lemchat.sendNotification({
+                id: newMsg.id,
+                conversationId: row.conversation_id,
+                senderName: title,
+                body: bodyText,
+                forceShow: state.notifyWhenFocused,
+              });
+            } else if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification(title, { body: bodyText });
+            }
+
+            set({
+              latestToast: {
+                id: newMsg.id,
+                conversationId: row.conversation_id,
+                senderName: title,
+                senderAvatar: newMsg.senderAvatar,
+                body: bodyText,
+              },
+            });
+          }
+        }
+      }
+    };
+
     // 1. Postgres changes for messages, reactions, profiles, conversations
     dbChannel = supabase
       .channel('lemchat:db-changes')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        async (payload) => {
-          const row = payload.new as DbMessageRow;
-          const state = get();
-          const sender = state.profiles[row.sender_id];
-          const isMe = row.sender_id === user.id;
-          const decrypted = await decryptMessageRow(row, row.sender_id, user.id);
-
-          const existingConv = state.conversations.find(
-            (c) => c.id === row.conversation_id
-          );
-          if (!existingConv) {
-            void get().fetchWorkspaceData();
-            return;
-          }
-
-          // Deduplicate if already added
-          if (existingConv.messages.some((m) => m.id === row.id)) return;
-
-          const newMsg: Message = {
-            id: row.id,
-            conversationId: row.conversation_id,
-            senderId: row.sender_id,
-            senderName: sender
-              ? get().getContactName(sender.id, sender.displayName)
-              : 'Member',
-            senderAvatar: sender?.avatarText ?? 'ST',
-            senderRole: sender?.role,
-            content: decrypted.content,
-            timestamp: formatTimestamp(row.created_at),
-            createdAt: row.created_at,
-            editedAt: row.edited_at ?? decrypted.editedAt,
-            deletedAt:
-              row.deleted_at ??
-              (row.content === DELETED_MESSAGE_MARKER
-                ? row.created_at
-                : readDeletedCache(user.id)[row.id]?.deletedAt),
-            isMe,
-            status: 'read',
-            reactions: [],
-            codeBlock: decrypted.codeBlock,
-            attachments: decrypted.attachments,
-            interactive: decrypted.interactive,
-            isMention: state.self
-              ? decrypted.content.toLowerCase().includes(state.self.name.toLowerCase()) ||
-                decrypted.content.toLowerCase().includes(state.self.handle.toLowerCase())
-              : false,
-            isPinned: false,
-          };
-
-          const isViewing =
-            state.activeConversationId === row.conversation_id &&
-            state.isWindowFocused &&
-            state.activeTab !== 'settings';
-
-          const updatedConvs = state.conversations.map((conv) => {
-            if (conv.id !== row.conversation_id) return conv;
-            return {
-              ...conv,
-              unreadCount: isMe || isViewing ? conv.unreadCount : conv.unreadCount + 1,
-              messages: [...conv.messages, newMsg],
-            };
-          });
-
-          set({
-            conversations: updatedConvs,
-            typingConversations: {
-              ...state.typingConversations,
-              [row.conversation_id]: null,
-            },
-          });
-
-          window.lemchat?.updateBadgeCount(computeTotalUnread(updatedConvs));
-
-          if (!isMe) {
-            if (isViewing) {
-              // Mark read immediately in DB
-              void supabase
-                .from('conversation_members')
-                .update({ last_read_at: new Date().toISOString() })
-                .eq('conversation_id', row.conversation_id)
-                .eq('user_id', user.id);
-            } else {
-              const title =
-                existingConv.type === 'channel'
-                  ? `${newMsg.senderName} in #${existingConv.name}`
-                  : newMsg.senderName;
-              const bodyText =
-                newMsg.content ||
-                (newMsg.attachments?.length ? `Sent ${newMsg.attachments[0].name}` : 'New message');
-
-              if (state.notificationsEnabled && state.self?.status !== 'busy') {
-                if (state.soundEnabled) {
-                  playNotificationChime();
-                }
-
-                if (window.lemchat) {
-                  void window.lemchat.sendNotification({
-                    id: newMsg.id,
-                    conversationId: row.conversation_id,
-                    senderName: title,
-                    body: bodyText,
-                    forceShow: state.notifyWhenFocused,
-                  });
-                } else if ('Notification' in window && Notification.permission === 'granted') {
-                  new Notification(title, { body: bodyText });
-                }
-
-                set({
-                  latestToast: {
-                    id: newMsg.id,
-                    conversationId: row.conversation_id,
-                    senderName: title,
-                    senderAvatar: newMsg.senderAvatar,
-                    body: bodyText,
-                  },
-                });
-              }
-            }
-          }
-        }
+        (payload) => ingestMessageRow(payload.new as DbMessageRow)
       )
       .on(
         'postgres_changes',
@@ -1826,6 +1829,64 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       });
 
+    // Fallback sync: realtime events can be missed (dropped socket, sleeping
+    // laptop, publication hiccup), so also pull anything newer than what we have
+    // and refresh poll/game state every few seconds.
+    if (messagePollTimer) clearInterval(messagePollTimer);
+    let polling = false;
+    messagePollTimer = setInterval(() => {
+      if (polling) return;
+      polling = true;
+      void (async () => {
+        try {
+          const convs = get().conversations;
+          let newest = '';
+          for (const c of convs) {
+            for (const m of c.messages) if (m.createdAt && m.createdAt > newest) newest = m.createdAt;
+          }
+          if (newest) {
+            const { data } = await supabase
+              .from('messages')
+              .select('*')
+              .gt('created_at', newest)
+              .order('created_at', { ascending: true })
+              .limit(100);
+            for (const row of (data ?? []) as DbMessageRow[]) await ingestMessageRow(row);
+          }
+          const { data: live, error: liveErr } = await supabase
+            .from('messages')
+            .select('id,conversation_id,metadata')
+            .not('metadata', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(30);
+          if (!liveErr && live) {
+            const byId = new Map(
+              (live as Array<{ id: string; metadata: InteractiveMetadata }>).map((r) => [r.id, r.metadata])
+            );
+            set((state) => {
+              let changed = false;
+              const conversations = state.conversations.map((c) => ({
+                ...c,
+                messages: c.messages.map((m) => {
+                  const next = byId.get(m.id);
+                  if (next && JSON.stringify(next) !== JSON.stringify(m.interactive)) {
+                    changed = true;
+                    return { ...m, interactive: next };
+                  }
+                  return m;
+                }),
+              }));
+              return changed ? { conversations } : state;
+            });
+          }
+        } catch (err) {
+          console.warn('[SkellyTalk] message poll failed:', err);
+        } finally {
+          polling = false;
+        }
+      })();
+    }, 3000);
+
     // 3. WebRTC Call Signaling Channel
     callsChannel = supabase.channel('skellytalk:calls', {
       config: { broadcast: { self: false } },
@@ -1966,6 +2027,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     dbChannel = null;
     presenceChannel = null;
     callsChannel = null;
+    if (messagePollTimer) {
+      clearInterval(messagePollTimer);
+      messagePollTimer = null;
+    }
     if (lastSeenTimer) {
       clearInterval(lastSeenTimer);
       lastSeenTimer = null;
