@@ -538,7 +538,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
               onChange={(e) => setPollQuestion(e.target.value)}
               maxLength={200}
               placeholder="Ask a question..."
-              className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-xs outline-none focus:border-emerald-400/60"
+              className="w-full rounded-lg border border-emerald-900/20 bg-transparent px-3 py-2 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none focus:border-emerald-500/70 dark:border-white/15 dark:text-white dark:placeholder-emerald-100/40 dark:focus:border-emerald-400/60"
             />
             {pollOptions.map((opt, i) => (
               <input
@@ -549,7 +549,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 }
                 maxLength={100}
                 placeholder={`Option ${i + 1}`}
-                className="w-full rounded-lg border border-white/15 bg-transparent px-3 py-2 text-xs outline-none focus:border-emerald-400/60"
+                className="w-full rounded-lg border border-emerald-900/20 bg-transparent px-3 py-2 text-xs text-emerald-950 placeholder-emerald-800/45 outline-none focus:border-emerald-500/70 dark:border-white/15 dark:text-white dark:placeholder-emerald-100/40 dark:focus:border-emerald-400/60"
               />
             ))}
             <div className="flex items-center justify-between">
@@ -565,10 +565,17 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 type="button"
                 disabled={!pollQuestion.trim() || pollOptions.filter((o) => o.trim()).length < 2}
                 onClick={() => {
-                  void sendPoll(pollQuestion, pollOptions);
-                  setShowPoll(false);
-                  setPollQuestion('');
-                  setPollOptions(['', '']);
+                  setSendError(null);
+                  sendPoll(pollQuestion, pollOptions)
+                    .then(() => {
+                      setShowPoll(false);
+                      setPollQuestion('');
+                      setPollOptions(['', '']);
+                    })
+                    .catch((err: unknown) => {
+                      setShowPoll(false);
+                      setSendError(err instanceof Error ? err.message : 'Could not send poll.');
+                    });
                 }}
                 className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
               >
@@ -709,7 +716,12 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         </button>
 
         <button
-          onClick={() => void sendGame()}
+          onClick={() => {
+            setSendError(null);
+            sendGame().catch((err: unknown) =>
+              setSendError(err instanceof Error ? err.message : 'Could not start game.')
+            );
+          }}
           title="Start a Tic-Tac-Toe game"
           className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
