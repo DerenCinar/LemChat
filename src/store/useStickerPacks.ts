@@ -98,8 +98,15 @@ export const useStickerPacks = create<StickerPackState>((set, get) => ({
 
 /** Convert a sticker data URL into a File for the normal attachment upload path. */
 export const stickerToFile = async (sticker: Sticker): Promise<File> => {
-  const blob = await (await fetch(sticker.dataUrl)).blob();
-  return new File([blob], `${sticker.name.replace(/[^\w-]+/g, '_') || 'sticker'}.png`, {
-    type: 'image/png',
+  // Decode manually: fetch(data:) is blocked by the CSP connect-src ("Failed to fetch").
+  const comma = sticker.dataUrl.indexOf(',');
+  const header = sticker.dataUrl.slice(0, comma);
+  const payload = sticker.dataUrl.slice(comma + 1);
+  const mime = /^data:([^;,]+)/.exec(header)?.[1] ?? 'image/png';
+  const bytes = header.includes(';base64')
+    ? Uint8Array.from(atob(payload), (c) => c.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(payload));
+  return new File([bytes], `${sticker.name.replace(/[^\w-]+/g, '_') || 'sticker'}.png`, {
+    type: mime,
   });
 };
