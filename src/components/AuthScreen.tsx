@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Database, KeyRound, Mail, User, AtSign, ArrowRight, RotateCcw } from 'lucide-react';
+import { KeyRound, Mail, User, AtSign, ArrowRight, RotateCcw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
+import skellytalkLogo from '../assets/skellytalk-logo.png';
 import {
   clearSupabaseConfig,
   getSupabaseConfig,
@@ -73,9 +74,11 @@ export const AuthScreen: React.FC = () => {
         >
           <LiquidGlassLayer variant="modal" />
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm">
-              <Database className="h-5 w-5" />
-            </div>
+            <img
+              src={skellytalkLogo}
+              alt="SkellyTalk logo"
+              className="h-11 w-11 shrink-0 object-contain drop-shadow-[0_6px_14px_rgba(16,185,129,0.35)]"
+            />
             <div>
               <h1 className="text-lg font-bold text-emerald-950 dark:text-white">
                 Connect SkellyTalk to Supabase
@@ -149,9 +152,11 @@ export const AuthScreen: React.FC = () => {
         <LiquidGlassLayer variant="modal" />
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-xl leading-none text-white shadow-lem-glow">
-              💀
-            </div>
+            <img
+              src={skellytalkLogo}
+              alt="SkellyTalk logo"
+              className="h-11 w-11 shrink-0 object-contain drop-shadow-[0_6px_14px_rgba(16,185,129,0.35)]"
+            />
             <div>
               <h1 className="text-lg font-bold text-emerald-950 dark:text-white">
                 {mode === 'signin' ? 'Sign in to SkellyTalk' : 'Create SkellyTalk Account'}
