@@ -272,6 +272,35 @@ jobs:
             gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${runNum}`);
             gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${verName}"`);
             fs.writeFileSync(gradlePath, gradle, "utf8");
+
+            const path = require("path");
+            const resDir = "android/app/src/main/res";
+            const legacyIcon = "public/assets/icon-512.png";
+            const fgIcon = "public/assets/android-icon-foreground.png";
+            if (fs.existsSync(resDir)) {
+              for (const entry of fs.readdirSync(resDir, { withFileTypes: true })) {
+                if (!entry.isDirectory()) continue;
+                const dirPath = path.join(resDir, entry.name);
+                if (entry.name.startsWith("mipmap-")) {
+                  for (const name of ["ic_launcher.png", "ic_launcher_round.png"]) {
+                    const dest = path.join(dirPath, name);
+                    if (fs.existsSync(dest)) fs.copyFileSync(legacyIcon, dest);
+                  }
+                  const fgDest = path.join(dirPath, "ic_launcher_foreground.png");
+                  if (fs.existsSync(fgDest)) fs.copyFileSync(fgIcon, fgDest);
+                } else if (entry.name.startsWith("drawable")) {
+                  const xmlFg = path.join(dirPath, "ic_launcher_foreground.xml");
+                  if (fs.existsSync(xmlFg)) fs.rmSync(xmlFg);
+                }
+              }
+            }
+            const bgXmlPath = path.join(resDir, "values/ic_launcher_background.xml");
+            fs.mkdirSync(path.dirname(bgXmlPath), { recursive: true });
+            fs.writeFileSync(
+              bgXmlPath,
+              `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#090F0C</color>\n</resources>\n`,
+              "utf8"
+            );
           '
           cd android && chmod +x gradlew && ./gradlew assembleDebug
           cd ..

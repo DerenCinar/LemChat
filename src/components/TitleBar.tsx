@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Minus, Square, Copy, X, Wifi, Bell, BellOff, RotateCw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
+import skellytalkLogo from '../assets/skellytalk-logo.png';
 
 export const TitleBar: React.FC = () => {
   const platform = window.lemchat?.platform ?? 'win32';
@@ -53,9 +54,11 @@ export const TitleBar: React.FC = () => {
         )}
 
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#22C55E] to-[#10B981] text-sm leading-none text-white shadow-lem-glow-sm">
-            💀
-          </div>
+          <img
+            src={skellytalkLogo}
+            alt="SkellyTalk logo"
+            className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(16,185,129,0.4)]"
+          />
           <span className="text-xs font-semibold tracking-wide text-emerald-950/90 dark:text-emerald-50/95">
             SkellyTalk
           </span>
