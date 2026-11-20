@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus } from 'lucide-react';
+import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus, Hourglass, ChevronUp, Sticker as StickerIcon, Trash2 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { useStickerPacks, stickerToFile, type Sticker } from '../store/useStickerPacks';
+import { StickerCropper } from './StickerCropper';
 import type { GifAttachment, StagedUpload } from '../types/chat';
+import { VOICE_FILTERS, applyVoiceFilter, type VoiceFilterId } from '../utils/voiceFilters';
 
 const EMOJI_GRID = [
   '💚', '🚀', '✨', '🔥', '👍', '🎉', '⚡', '👀',
@@ -96,6 +99,23 @@ const GIF_GRID: GifAttachment[] = [
   { name: 'Goodnight', url: 'https://media.giphy.com/media/ANbD1CCdA3iI8/giphy.gif' },
 ];
 
+const toLocalInput = (d: Date) => {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+const capsulePresets = () => {
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+  const week = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 9, 0);
+  const newYear = new Date(now.getFullYear() + 1, 0, 1, 0, 0);
+  return [
+    { label: 'Tomorrow 9am', date: tomorrow },
+    { label: 'In a week', date: week },
+    { label: `New Year ${now.getFullYear() + 1}`, date: newYear },
+  ];
+};
+
 interface FloatingComposerProps {
   conversationId: string;
   placeholder: string;
@@ -107,7 +127,14 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 }) => {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [jumboEmoji, setJumboEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [showStickers, setShowStickers] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
+  const [activePackId, setActivePackId] = useState<string | null>(null);
+  const stickerPacks = useStickerPacks((s) => s.packs);
+  const deletePack = useStickerPacks((s) => s.deletePack);
+  const removeSticker = useStickerPacks((s) => s.removeSticker);
   const [showPoll, setShowPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
@@ -115,12 +142,34 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [codeLang, setCodeLang] = useState('typescript');
   const [codeText, setCodeText] = useState('');
+  const [showSendMenu, setShowSendMenu] = useState(false);
+  const [capsuleOpen, setCapsuleOpen] = useState(false);
+  const [capsuleAt, setCapsuleAt] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendPulseKey, setSendPulseKey] = useState(0);
   const [stagedUploads, setStagedUploads] = useState<StagedUpload[]>([]);
   const [recordingMode, setRecordingMode] = useState<'audio' | 'video' | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [voiceFilter, setVoiceFilterState] = useState<VoiceFilterId>(() => {
+    try {
+      const saved = localStorage.getItem('lemchat-voice-filter') as VoiceFilterId | null;
+      return VOICE_FILTERS.some((f) => f.id === saved) ? (saved as VoiceFilterId) : 'none';
+    } catch {
+      return 'none';
+    }
+  });
+  const [showVoiceFilters, setShowVoiceFilters] = useState(false);
+  const [processingVoice, setProcessingVoice] = useState(false);
+  const setVoiceFilter = (id: VoiceFilterId) => {
+    setVoiceFilterState(id);
+    setShowVoiceFilters(false);
+    try {
+      localStorage.setItem('lemchat-voice-filter', id);
+    } catch {
+      /* ignore */
+    }
+  };
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -129,6 +178,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 
   const sendMessage = useChatStore((s) => s.sendMessage);
   const sendPoll = useChatStore((s) => s.sendPoll);
+  const sendCapsule = useChatStore((s) => s.sendCapsule);
   const sendGame = useChatStore((s) => s.sendGame);
   const broadcastTyping = useChatStore((s) => s.broadcastTyping);
   const replyingTo = useChatStore((s) => s.replyingTo);
@@ -208,6 +258,46 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     }
   };
 
+  const handleSendSticker = async (sticker: Sticker) => {
+    if (sending) return;
+    setShowStickers(false);
+    setSendError(null);
+    try {
+      const file = await stickerToFile(sticker);
+      await sendMessage('', [
+        {
+          id: `sticker-${Date.now()}`,
+          file,
+          name: sticker.name,
+          type: 'image',
+          size: 'Sticker',
+          mimeLabel: 'image/png',
+          sticker: true,
+        },
+      ]);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Could not send sticker.');
+    }
+  };
+
+  const handleSendCapsule = async () => {
+    if (sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      await sendCapsule(text, new Date(capsuleAt));
+      setText('');
+      setCapsuleAt('');
+      setCapsuleOpen(false);
+      setShowSendMenu(false);
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Could not send time capsule.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (enterBehavior === 'enter-send' && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -274,10 +364,23 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       };
-      recorder.onstop = () => {
-        const type = mode === 'video' ? 'video/webm' : 'audio/webm';
-        const blob = new Blob(chunks, { type });
-        const extension = mode === 'video' ? 'webm' : 'webm';
+      const activeFilter = mode === 'audio' ? voiceFilter : 'none';
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        let type = mode === 'video' ? 'video/webm' : 'audio/webm';
+        let extension = 'webm';
+        let blob: Blob = new Blob(chunks, { type });
+        if (activeFilter !== 'none') {
+          setProcessingVoice(true);
+          const filtered = await applyVoiceFilter(blob, activeFilter);
+          setProcessingVoice(false);
+          if (filtered !== blob) {
+            blob = filtered;
+            type = 'audio/wav';
+            extension = 'wav';
+          }
+        }
         const file = new File([blob], `${mode}-recording.${extension}`, { type });
         const sizeKb = file.size / 1024;
         setStagedUploads((prev) => [
@@ -291,8 +394,6 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             mimeLabel: type,
           },
         ]);
-        stream.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -475,21 +576,39 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 grid max-h-64 grid-cols-6 gap-1.5 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-16 sm:grid-cols-8"
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-64 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-16"
           >
-            {EMOJI_GRID.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  setText((prev) => prev + emoji);
-                  setShowEmoji(false);
-                  textareaRef.current?.focus();
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-base transition hover:scale-115 hover:bg-emerald-500/20"
-              >
-                {emoji}
-              </button>
-            ))}
+            <label className="mb-2 flex cursor-pointer items-center gap-2 px-1 text-xs font-semibold opacity-80">
+              <input
+                type="checkbox"
+                checked={jumboEmoji}
+                onChange={(e) => setJumboEmoji(e.target.checked)}
+              />
+              Jumbo (send emoji big on its own)
+            </label>
+            <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
+              {EMOJI_GRID.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    setShowEmoji(false);
+                    if (jumboEmoji) {
+                      void sendMessage(emoji).catch((error) =>
+                        setSendError(
+                          error instanceof Error ? error.message : 'The message could not be sent.'
+                        )
+                      );
+                      return;
+                    }
+                    setText((prev) => prev + emoji);
+                    textareaRef.current?.focus();
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-base transition hover:scale-115 hover:bg-emerald-500/20"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -523,6 +642,101 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showStickers && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-72 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[300px]"
+          >
+            {(() => {
+              const pack = stickerPacks.find((p) => p.id === activePackId) ?? stickerPacks[0];
+              return (
+                <>
+                  <div className="mb-2 flex items-center gap-1.5 overflow-x-auto">
+                    {stickerPacks.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setActivePackId(p.id)}
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          pack?.id === p.id
+                            ? 'bg-emerald-500/25 text-[#22C55E]'
+                            : 'text-emerald-900/70 hover:bg-emerald-500/10 dark:text-emerald-100/70'
+                        }`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowCropper(true)}
+                      title="Create a sticker"
+                      className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
+                    >
+                      <Plus className="h-3 w-3" /> New
+                    </button>
+                  </div>
+                  {!pack ? (
+                    <p className="px-2 py-6 text-center text-xs opacity-65">
+                      No stickers yet. Tap New to crop any image into your own sticker.
+                    </p>
+                  ) : pack.stickers.length === 0 ? (
+                    <p className="px-2 py-6 text-center text-xs opacity-65">This pack is empty.</p>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {pack.stickers.map((s) => (
+                        <div key={s.id} className="group relative">
+                          <button
+                            type="button"
+                            onClick={() => void handleSendSticker(s)}
+                            title={`Send ${s.name}`}
+                            className="block w-full rounded-xl p-1 transition hover:scale-105 hover:bg-emerald-500/15"
+                          >
+                            <img src={s.dataUrl} alt={s.name} className="aspect-square w-full object-contain" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSticker(pack.id, s.id)}
+                            aria-label={`Delete ${s.name}`}
+                            className="absolute right-0 top-0 hidden rounded-full bg-black/60 p-0.5 text-white group-hover:block"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pack && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete the pack "${pack.name}" and all its stickers?`)) {
+                          deletePack(pack.id);
+                          setActivePackId(null);
+                        }
+                      }}
+                      className="mt-2 flex items-center gap-1 text-[10px] text-rose-500/80 hover:text-rose-500"
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete pack
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {showCropper && (
+        <StickerCropper
+          initialPackId={activePackId}
+          onClose={() => setShowCropper(false)}
+        />
+      )}
 
       <AnimatePresence>
         {showPoll && (
@@ -684,13 +898,47 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           </button>
         ) : (
           <>
-            <button
-              onClick={() => void startRecording('audio')}
-              title="Record audio"
-              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70"
-            >
-              <Mic className="h-4 w-4" />
-            </button>
+            <div className="relative hidden shrink-0 sm:flex">
+              <button
+                onClick={() => void startRecording('audio')}
+                disabled={processingVoice}
+                title={processingVoice ? 'Applying voice filter…' : 'Record audio'}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 disabled:opacity-50 md:h-9 md:w-9 dark:text-emerald-200/70"
+              >
+                <Mic className={`h-4 w-4 ${processingVoice ? 'animate-pulse' : ''}`} />
+              </button>
+              <button
+                onClick={() => setShowVoiceFilters((v) => !v)}
+                title={`Voice filter: ${VOICE_FILTERS.find((f) => f.id === voiceFilter)?.label}`}
+                className={`absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] ring-1 ring-black/10 ${
+                  voiceFilter === 'none' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'bg-emerald-500 text-white'
+                }`}
+              >
+                {voiceFilter === 'none' ? '♪' : VOICE_FILTERS.find((f) => f.id === voiceFilter)?.emoji}
+              </button>
+              {showVoiceFilters && (
+                <div className="absolute bottom-11 left-0 z-50 w-56 rounded-2xl border border-emerald-500/20 bg-white/95 p-1.5 shadow-xl backdrop-blur dark:bg-zinc-900/95">
+                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/70 dark:text-emerald-300/70">
+                    Voice filter
+                  </p>
+                  {VOICE_FILTERS.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setVoiceFilter(f.id)}
+                      className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm transition hover:bg-emerald-500/10 ${
+                        voiceFilter === f.id ? 'bg-emerald-500/15 font-semibold' : ''
+                      }`}
+                    >
+                      <span className="text-base">{f.emoji}</span>
+                      <span className="flex flex-col leading-tight">
+                        <span>{f.label}</span>
+                        <span className="text-[11px] font-normal opacity-60">{f.hint}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => void startRecording('video')}
               title="Record video"
@@ -743,6 +991,18 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         </button>
 
         <button
+          onClick={() => setShowStickers((v) => !v)}
+          title="Stickers"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
+            showStickers
+              ? 'bg-emerald-500/20 text-[#22C55E]'
+              : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
+          }`}
+        >
+          <StickerIcon className="h-4 w-4" />
+        </button>
+
+        <button
           onClick={() => setShowPoll((v) => !v)}
           title="Create a poll"
           className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full transition sm:flex md:h-9 md:w-9 ${
@@ -767,7 +1027,88 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           <Gamepad2 className="h-4 w-4" />
         </button>
 
-        <div className="relative shrink-0">
+        <div className="relative flex shrink-0 items-center">
+          <AnimatePresence>
+            {showSendMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                className="glass-panel glass-surface absolute bottom-12 right-0 z-30 w-[270px] rounded-2xl p-3"
+              >
+                {!capsuleOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setCapsuleOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left text-xs font-semibold text-emerald-950 hover:bg-emerald-500/10 dark:text-white"
+                  >
+                    <Hourglass className="h-4 w-4 text-[#22C55E]" />
+                    <span>
+                      Send as time capsule
+                      <span className="block text-[10px] font-normal opacity-60">
+                        Locked until a date you choose
+                      </span>
+                    </span>
+                  </button>
+                ) : (
+                  <div>
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-emerald-950 dark:text-white">
+                      <Hourglass className="h-4 w-4 text-[#22C55E]" /> Time capsule
+                    </div>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {capsulePresets().map((p) => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => setCapsuleAt(toLocalInput(p.date))}
+                          className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="datetime-local"
+                      value={capsuleAt}
+                      min={toLocalInput(new Date(Date.now() + 120_000))}
+                      onChange={(e) => setCapsuleAt(e.target.value)}
+                      className="mb-2 w-full rounded-xl border border-emerald-900/15 bg-white/40 px-2.5 py-2 text-xs text-emerald-950 outline-none focus:border-emerald-500/70 dark:border-white/15 dark:bg-white/5 dark:text-white"
+                    />
+                    <p className="mb-2 text-[10px] opacity-60 text-emerald-900 dark:text-emerald-100">
+                      {text.trim()
+                        ? 'Your typed message is sealed. Nobody can open it before then.'
+                        : 'Type your message first, then seal it.'}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={
+                        sending ||
+                        !text.trim() ||
+                        !capsuleAt ||
+                        new Date(capsuleAt).getTime() <= Date.now() + 60_000
+                      }
+                      onClick={() => void handleSendCapsule()}
+                      className="w-full rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-40"
+                    >
+                      Seal capsule
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            type="button"
+            onClick={() => {
+              setShowSendMenu((v) => !v);
+              setCapsuleOpen(false);
+            }}
+            title="More send options"
+            aria-label="More send options"
+            className="mr-0.5 flex h-8 w-5 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 dark:text-emerald-200/70 md:h-9"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
           {sendPulseKey > 0 && (
             <motion.span
               key={`ripple-${sendPulseKey}`}

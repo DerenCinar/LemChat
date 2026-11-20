@@ -16,6 +16,7 @@ import type {
   Conversation,
   GifAttachment,
   InteractiveMetadata,
+  CapsuleMetadata,
   IncomingCallState,
   Message,
   NavTab,
@@ -222,7 +223,9 @@ interface ChatStore {
     codeBlock?: CodeBlock,
     gif?: GifAttachment,
     interactive?: InteractiveMetadata
-  ) => Promise<void>;
+  ) => Promise<string | undefined>;
+  sendCapsule: (text: string, unlockAt: Date) => Promise<void>;
+  openCapsule: (messageId: string, capsule: CapsuleMetadata) => Promise<string>;
   sendPoll: (question: string, options: string[]) => Promise<void>;
   sendGame: () => Promise<void>;
   votePoll: (messageId: string, optionId: string) => void;
@@ -386,6 +389,19 @@ function removeSentCacheEntry(userId: string, messageId: string): void {
   } catch {
     // Ignore storage quota errors
   }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 async function decryptMessageRow(
@@ -2240,8 +2256,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const convId = get().activeConversationId;
     const trimmed = filterProfanity(content.trim(), get().profanityFilter);
 
-    if (!supabase || !user || !convId) return;
-    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif && !interactive) return;
+    if (!supabase || !user || !convId) return undefined;
+    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif && !interactive) return undefined;
 
     // Upload any staged files to Supabase Storage bucket 'lemchat-attachments'
     const attachments: Attachment[] = [];
@@ -2271,6 +2287,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           size: item.size,
           previewUrl: pub.publicUrl,
           mimeLabel: item.mimeLabel,
+          ...(item.sticker ? { sticker: true } : {}),
         });
       }
     }
@@ -2483,6 +2500,68 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     set({ replyingTo: null });
+    return insertedId;
+  },
+
+  sendCapsule: async (text, unlockAt) => {
+    const supabase = getSupabaseClient();
+    const message = text.trim();
+    if (!supabase || !message) return;
+    if (unlockAt.getTime() <= Date.now() + 30_000) {
+      throw new Error('Pick an unlock time at least a minute in the future.');
+    }
+    const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
+      'encrypt',
+    ]);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const sealed = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      new TextEncoder().encode(JSON.stringify({ content: message }))
+    );
+    const rawKey = await crypto.subtle.exportKey('raw', key);
+    const capsule: CapsuleMetadata = {
+      kind: 'capsule',
+      unlockAt: unlockAt.toISOString(),
+      iv: bytesToBase64(iv),
+      data: bytesToBase64(new Uint8Array(sealed)),
+    };
+    const id = await get().sendMessage('⏳ Time capsule', undefined, undefined, undefined, capsule);
+    if (!id) throw new Error('Time capsule could not be sent.');
+    const { error } = await supabase.rpc('seal_capsule', {
+      p_message_id: id,
+      p_key: bytesToBase64(new Uint8Array(rawKey)),
+      p_unlock_at: capsule.unlockAt,
+    });
+    if (error) {
+      // An unsealed capsule can never be opened, so don't leave it in the chat.
+      await supabase.from('messages').delete().eq('id', id);
+      set((state) => ({
+        conversations: state.conversations.map((c) => ({
+          ...c,
+          messages: c.messages.filter((m) => m.id !== id),
+        })),
+      }));
+      throw new Error(`Time capsule could not be sealed: ${error.message}`);
+    }
+  },
+
+  openCapsule: async (messageId, capsule) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) throw new Error('Not connected.');
+    const { data, error } = await supabase.rpc('open_capsule', { p_message_id: messageId });
+    if (error || typeof data !== 'string') {
+      throw new Error(error?.message ?? 'Capsule is still locked.');
+    }
+    const key = await crypto.subtle.importKey('raw', base64ToBytes(data), 'AES-GCM', false, [
+      'decrypt',
+    ]);
+    const plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(capsule.iv) },
+      key,
+      base64ToBytes(capsule.data)
+    );
+    return (JSON.parse(new TextDecoder().decode(plain)) as { content: string }).content;
   },
 
   sendPoll: async (question, options) => {

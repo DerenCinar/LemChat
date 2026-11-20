@@ -373,7 +373,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               message.deletedAt ? (
                 <p className="italic opacity-65">This message was deleted</p>
               ) : bodyContent && (
-                <p className="whitespace-pre-wrap break-words">
+                <p
+                  className={`whitespace-pre-wrap break-words ${
+                    /^(?:\p{Extended_Pictographic}(?:️|‍|\p{Emoji_Modifier})*){1,3}$/u.test(
+                      bodyContent.trim()
+                    )
+                      ? 'text-6xl leading-tight'
+                      : ''
+                  }`}
+                >
                   {renderFormattedContent(bodyContent)}
                 </p>
               )
@@ -406,7 +414,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   const name = att.name.toLowerCase();
                   const isVideo = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
                   const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm)$/i.test(name);
-                  return att.previewUrl && isVideo ? (
+                  return att.sticker && att.previewUrl ? (
+                    <button
+                      type="button"
+                      key={att.id}
+                      onClick={() => openAttachment(att)}
+                      title={att.name}
+                      className="block"
+                    >
+                      <img src={att.previewUrl} alt={att.name} className="h-36 w-36 object-contain" />
+                    </button>
+                  ) : att.previewUrl && isVideo ? (
                     <video
                       key={att.id}
                       src={att.previewUrl}

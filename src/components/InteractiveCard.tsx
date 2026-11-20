@@ -1,7 +1,7 @@
 import React from 'react';
-import { BarChart3, Gamepad2 } from 'lucide-react';
+import { BarChart3, Gamepad2, Lock, Unlock } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
-import type { GameMetadata, Message, PollMetadata } from '../types/chat';
+import type { CapsuleMetadata, GameMetadata, Message, PollMetadata } from '../types/chat';
 
 const PollCard: React.FC<{ message: Message; poll: PollMetadata }> = ({ message, poll }) => {
   const votePoll = useChatStore((s) => s.votePoll);
@@ -128,12 +128,87 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
   );
 };
 
+const formatCountdown = (ms: number) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  return `${m}m ${sec}s`;
+};
+
+const CapsuleCard: React.FC<{ message: Message; capsule: CapsuleMetadata }> = ({
+  message,
+  capsule,
+}) => {
+  const openCapsule = useChatStore((s) => s.openCapsule);
+  const unlockMs = new Date(capsule.unlockAt).getTime();
+  const [now, setNow] = React.useState(Date.now());
+  const [opened, setOpened] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const ready = now >= unlockMs;
+
+  React.useEffect(() => {
+    if (ready) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [ready]);
+
+  const open = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setOpened(await openCapsule(message.id, capsule));
+    } catch (e) {
+      // The server clock is authoritative; a skewed local clock lands here.
+      setError(e instanceof Error ? e.message : 'Could not open capsule.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-1 w-full min-w-[240px] max-w-sm rounded-2xl border border-white/20 bg-black/15 p-3.5 shadow-inner">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest opacity-75">
+        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
+          {opened !== null ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+        </span>
+        <span>Time capsule</span>
+      </div>
+      {opened !== null ? (
+        <p className="whitespace-pre-wrap break-words text-[14px] leading-snug">{opened}</p>
+      ) : ready ? (
+        <>
+          <p className="mb-2.5 text-xs opacity-80">This capsule is ready to open.</p>
+          <button
+            type="button"
+            onClick={() => void open()}
+            disabled={busy}
+            className="rounded-full bg-emerald-400/90 px-4 py-1.5 text-xs font-semibold text-emerald-950 transition hover:brightness-110 disabled:opacity-60"
+          >
+            {busy ? 'Opening…' : 'Open capsule'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-lg font-bold tabular-nums">{formatCountdown(unlockMs - now)}</p>
+          <p className="mt-0.5 text-[11px] opacity-70">
+            Locked until {new Date(unlockMs).toLocaleString()}
+          </p>
+        </>
+      )}
+      {error && <p className="mt-2 text-[11px] text-rose-300">{error}</p>}
+    </div>
+  );
+};
+
 export const InteractiveCard: React.FC<{ message: Message }> = ({ message }) => {
   const data = message.interactive;
   if (!data) return null;
-  return data.kind === 'poll' ? (
-    <PollCard message={message} poll={data} />
-  ) : (
-    <GameCard message={message} game={data} />
-  );
+  if (data.kind === 'poll') return <PollCard message={message} poll={data} />;
+  if (data.kind === 'capsule') return <CapsuleCard message={message} capsule={data} />;
+  return <GameCard message={message} game={data} />;
 };

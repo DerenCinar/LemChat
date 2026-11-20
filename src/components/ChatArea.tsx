@@ -24,6 +24,7 @@ import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
 import { FloatingComposer } from './FloatingComposer';
 import { UserAvatar } from './UserAvatar';
+import { FriendshipStatsPanel } from './FriendshipStats';
 import type { UserPresence } from '../types/chat';
 
 const STATUS_LABEL: Record<UserPresence, string> = {
@@ -747,6 +748,8 @@ export const ChatArea: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              {activeConv.type === 'dm' && <FriendshipStatsPanel messages={convMessages} />}
 
               {activeConv.type === 'channel' && (
                 <div className="space-y-2">

@@ -72,6 +72,8 @@ export interface Attachment {
   size: string;
   previewUrl?: string;
   mimeLabel?: string;
+  /** Custom sticker: rendered bare (no card) in the bubble. */
+  sticker?: boolean;
 }
 
 export interface StagedUpload {
@@ -82,6 +84,7 @@ export interface StagedUpload {
   size: string;
   previewUrl?: string;
   mimeLabel?: string;
+  sticker?: boolean;
 }
 
 export interface GifAttachment {
@@ -114,7 +117,15 @@ export interface GameMetadata {
   winner?: 'X' | 'O' | 'draw';
 }
 
-export type InteractiveMetadata = PollMetadata | GameMetadata;
+/** Sealed message; `data` is AES-GCM ciphertext, the key is released by the server at `unlockAt`. */
+export interface CapsuleMetadata {
+  kind: 'capsule';
+  unlockAt: string;
+  iv: string;
+  data: string;
+}
+
+export type InteractiveMetadata = PollMetadata | GameMetadata | CapsuleMetadata;
 
 export interface Message {
   id: string;
