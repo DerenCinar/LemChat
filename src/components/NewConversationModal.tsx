@@ -165,8 +165,9 @@ export const NewConversationModal: React.FC = () => {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.97 }}
           transition={{ type: 'spring', stiffness: 460, damping: 28 }}
-          className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-emerald-500/20 bg-white/95 p-1 shadow-xl backdrop-blur-xl dark:bg-slate-950/95"
+          className="glass-panel glass-surface absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl p-1 shadow-xl"
         >
+          <LiquidGlassLayer variant="popover" />
           {suggestions.length > 0 ? (
             suggestions.map((profile, idx) => (
               <motion.button
@@ -241,7 +242,7 @@ export const NewConversationModal: React.FC = () => {
             exit={{ opacity: 0, scale: 0.92, y: 18 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="glass-panel glass-surface relative w-full max-w-md overflow-hidden rounded-3xl p-6 ring-1 ring-white/20"
+            className="glass-panel glass-surface relative w-full max-w-md overflow-hidden rounded-3xl p-6"
           >
             <LiquidGlassLayer variant="modal" />
 
@@ -281,7 +282,6 @@ export const NewConversationModal: React.FC = () => {
 
             {/* Morphing Tab Switcher */}
             <div className="glass-pill relative z-10 mb-5 grid grid-cols-2 rounded-2xl p-1">
-              <LiquidGlassLayer variant="pill" cornerRadius={16} />
               <button
                 type="button"
                 onClick={() => setTab('channel')}

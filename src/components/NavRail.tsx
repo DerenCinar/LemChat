@@ -40,7 +40,18 @@ export const NavRail: React.FC = () => {
   const self = useChatStore((s) => s.self);
   const activeTab = useChatStore((s) => s.activeTab);
   const theme = useChatStore((s) => s.theme);
-  const conversations = useChatStore((s) => s.conversations);
+  const dmUnread = useChatStore((s) =>
+    s.conversations.reduce((sum, c) => (c.type === 'dm' ? sum + c.unreadCount : sum), 0)
+  );
+  const channelUnread = useChatStore((s) =>
+    s.conversations.reduce((sum, c) => (c.type === 'channel' ? sum + c.unreadCount : sum), 0)
+  );
+  const mentionCount = useChatStore((s) =>
+    s.conversations.reduce(
+      (sum, c) => sum + c.messages.reduce((mSum, m) => mSum + (m.isMention ? 1 : 0), 0),
+      0
+    )
+  );
   const activePopupId = useChatStore((s) => s.activePopupId);
   const setActivePopupId = useChatStore((s) => s.setActivePopupId);
   const togglePopup = useChatStore((s) => s.togglePopup);
@@ -73,17 +84,6 @@ export const NavRail: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [statusMenuOpen, setActivePopupId]);
-
-  const dmUnread = conversations
-    .filter((c) => c.type === 'dm')
-    .reduce((sum, c) => sum + c.unreadCount, 0);
-  const channelUnread = conversations
-    .filter((c) => c.type === 'channel')
-    .reduce((sum, c) => sum + c.unreadCount, 0);
-  const mentionCount = conversations.reduce(
-    (sum, c) => sum + c.messages.filter((m) => m.isMention).length,
-    0
-  );
 
   const navItems: Array<{
     id: NavTab;
@@ -128,7 +128,7 @@ export const NavRail: React.FC = () => {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -8, scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-              className="glass-panel glass-surface absolute bottom-14 left-0 z-50 w-48 rounded-2xl p-2 md:bottom-auto md:left-14 md:top-0"
+              className="glass-panel glass-surface absolute bottom-14 left-0 z-50 w-48 overflow-hidden rounded-2xl p-2 md:bottom-auto md:left-14 md:top-0"
             >
               <LiquidGlassLayer variant="popover" interactive />
               <button
@@ -231,7 +231,6 @@ export const NavRail: React.FC = () => {
         }
         className="glass-pill relative flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-800 transition hover:border-emerald-400/50 dark:text-emerald-200"
       >
-        <LiquidGlassLayer variant="pill" interactive cornerRadius={16} />
         <motion.div
           key={theme}
           initial={{ rotate: -45, opacity: 0, scale: 0.7 }}

@@ -10,7 +10,7 @@ const PollCard: React.FC<{ message: Message; poll: PollMetadata }> = ({ message,
   const mine = selfId ? poll.votes[selfId] : undefined;
 
   return (
-    <div className="mt-1 w-full min-w-[240px] max-w-sm rounded-2xl border border-white/20 bg-black/15 p-3.5 shadow-inner">
+    <div className="glass-card mt-1 w-full min-w-[240px] max-w-sm rounded-2xl p-3.5">
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest opacity-75">
         <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
           <BarChart3 className="h-3 w-3" />
@@ -94,7 +94,7 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
   else status = `${game.currentTurn === 'X' ? name(game.xPlayerId) : name(game.oPlayerId)}'s turn`;
 
   return (
-    <div className="mt-1 w-fit rounded-xl border border-white/15 bg-black/10 p-3">
+    <div className="glass-card mt-1 w-fit rounded-xl p-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide opacity-70">
         <Gamepad2 className="h-3.5 w-3.5" />
         <span>Tic-Tac-Toe</span>
@@ -171,7 +171,7 @@ const CapsuleCard: React.FC<{ message: Message; capsule: CapsuleMetadata }> = ({
   };
 
   return (
-    <div className="mt-1 w-full min-w-[240px] max-w-sm rounded-2xl border border-white/20 bg-black/15 p-3.5 shadow-inner">
+    <div className="glass-card mt-1 w-full min-w-[240px] max-w-sm rounded-2xl p-3.5">
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest opacity-75">
         <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20">
           {opened !== null ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}

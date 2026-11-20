@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -59,20 +59,24 @@ export const ChatArea: React.FC = () => {
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
 
-  const conversations = useChatStore((s) => s.conversations);
+  const activeConv = useChatStore(
+    (s) => s.conversations.find((c) => c.id === s.activeConversationId) ?? s.conversations[0]
+  );
   const profiles = useChatStore((s) => s.profiles);
   const self = useChatStore((s) => s.self);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isInChatSearchOpen = useChatStore((s) => s.isInChatSearchOpen);
   const inChatSearchQuery = useChatStore((s) => s.inChatSearchQuery);
   const isInfoPanelOpen = useChatStore((s) => s.isInfoPanelOpen);
-  const typingConversations = useChatStore((s) => s.typingConversations);
+  const typingState = useChatStore((s) => {
+    const id = s.activeConversationId ?? s.conversations[0]?.id;
+    return id ? s.typingConversations[id] ?? null : null;
+  });
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
   const workspaceLoading = useChatStore((s) => s.workspaceLoading);
-  const activePopupId = useChatStore((s) => s.activePopupId);
+  const inviteOpen = useChatStore((s) => s.activePopupId === 'chat:invite');
   const setActivePopupId = useChatStore((s) => s.setActivePopupId);
   const togglePopup = useChatStore((s) => s.togglePopup);
-  const inviteOpen = activePopupId === 'chat:invite';
 
   const toggleInChatSearch = useChatStore((s) => s.toggleInChatSearch);
   const setInChatSearchQuery = useChatStore((s) => s.setInChatSearchQuery);
@@ -90,10 +94,6 @@ export const ChatArea: React.FC = () => {
   const setMobileChatOpen = useChatStore((s) => s.setMobileChatOpen);
   const pendingMentionMessageId = useChatStore((s) => s.pendingMentionMessageId);
   const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
-
-  const activeConv =
-    conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
-  const typingState = activeConv ? typingConversations[activeConv.id] : null;
 
   useEffect(() => {
     if (pendingMentionMessageId) return;
@@ -147,12 +147,11 @@ export const ChatArea: React.FC = () => {
   }, [pendingMentionMessageId, activeConversationId, setPendingMentionMessageId]);
 
   useEffect(() => {
-    if (activePopupId === 'chat:invite') {
+    if (useChatStore.getState().activePopupId === 'chat:invite') {
       setActivePopupId(null);
     }
     setSelectedInvites([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversationId]);
+  }, [activeConversationId, setActivePopupId]);
 
   useEffect(() => {
     if (!inviteOpen && !isInChatSearchOpen) return;
@@ -165,9 +164,28 @@ export const ChatArea: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [inviteOpen, isInChatSearchOpen, setActivePopupId, toggleInChatSearch]);
 
+  const visibleMessages = useMemo(() => {
+    const msgs = activeConv?.messages ?? [];
+    const q = inChatSearchQuery.trim().toLowerCase();
+    return q ? msgs.filter((m) => m.content.toLowerCase().includes(q)) : msgs;
+  }, [activeConv?.messages, inChatSearchQuery]);
+
+  const invitableUsers = useMemo(() => {
+    const members = activeConv?.members ?? [];
+    const existingMemberIds = new Set(members.map((m) => m.id));
+    return Object.values(profiles).filter(
+      (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
+    );
+  }, [activeConv?.members, profiles, self?.id]);
+
+  const sharedAttachments = useMemo(
+    () => (activeConv?.messages ?? []).flatMap((m) => m.attachments ?? []),
+    [activeConv?.messages]
+  );
+
   if (workspaceLoading) {
     return (
-      <div className="glass-panel glass-surface relative flex flex-1 flex-col rounded-2xl p-4 md:p-5" aria-label="Loading conversation">
+      <div className="glass-panel glass-surface relative flex flex-1 flex-col overflow-hidden rounded-2xl p-4 md:p-5" aria-label="Loading conversation">
         <LiquidGlassLayer variant="panel" />
         <div className="flex items-center gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.09]">
           <div className="h-10 w-10 animate-pulse rounded-2xl bg-emerald-500/15" />
@@ -196,7 +214,7 @@ export const ChatArea: React.FC = () => {
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        className="glass-panel glass-surface relative flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl p-6 text-center"
+        className="glass-panel glass-surface relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl p-6 text-center"
       >
         <LiquidGlassLayer variant="panel" />
         <motion.div
@@ -274,17 +292,6 @@ export const ChatArea: React.FC = () => {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-
-  const visibleMessages = inChatSearchQuery.trim()
-    ? convMessages.filter((m) =>
-        m.content.toLowerCase().includes(inChatSearchQuery.toLowerCase())
-      )
-    : convMessages;
-
-  const existingMemberIds = new Set(convMembers.map((m) => m.id));
-  const invitableUsers = Object.values(profiles).filter(
-    (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
-  );
 
   const handleConfirmInvites = async () => {
     if (selectedInvites.length === 0 || inviting) return;
@@ -591,9 +598,12 @@ export const ChatArea: React.FC = () => {
             const distanceFromBottom =
               feed.scrollHeight - feed.scrollTop - feed.clientHeight;
             const nearBottom = distanceFromBottom < 120;
-            wasNearBottomRef.current = nearBottom;
-            setShowScrollToBottom(!nearBottom);
+            if (wasNearBottomRef.current !== nearBottom) {
+              wasNearBottomRef.current = nearBottom;
+              setShowScrollToBottom(!nearBottom);
+            }
           }}
+          style={{ transform: 'translateZ(0)' }}
           className="lem-scrollbar flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4"
         >
           <motion.div
@@ -894,10 +904,8 @@ export const ChatArea: React.FC = () => {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
                   Shared Media &amp; Files
                 </p>
-                {convMessages.some((m) => m.attachments?.length) ? (
-                  convMessages
-                    .flatMap((m) => m.attachments ?? [])
-                    .map((att) => (
+                {sharedAttachments.length > 0 ? (
+                  sharedAttachments.map((att) => (
                       <button
                         type="button"
                         key={att.id}

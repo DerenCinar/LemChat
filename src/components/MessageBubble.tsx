@@ -42,7 +42,7 @@ interface MessageBubbleProps {
   highlightMention?: boolean;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   message,
   showHeader,
   isLastInGroup = true,
@@ -66,12 +66,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const entranceEffect = useChatStore((s) => s.liquidGlass.entranceEffect);
   const bubbleStyle = useChatStore((s) => s.liquidGlass.bubbleStyle);
   const density = useChatStore((s) => s.liquidGlass.density);
-  const activePopupId = useChatStore((s) => s.activePopupId);
+  const pickerPopupId = `reaction:${message.id}`;
+  const showPicker = useChatStore((s) => s.activePopupId === pickerPopupId);
   const setActivePopupId = useChatStore((s) => s.setActivePopupId);
   const togglePopup = useChatStore((s) => s.togglePopup);
-
-  const pickerPopupId = `reaction:${message.id}`;
-  const showPicker = activePopupId === pickerPopupId;
   const isTailedStyle =
     (bubbleStyle === 'imessage' || bubbleStyle === 'imessage-classic') &&
     density !== 'minimal';
@@ -192,65 +190,67 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const actionToolbar = (
     <div
       ref={pickerContainerRef}
-      className={`relative flex items-center gap-1 transition-opacity ${
+      className={`relative flex items-center transition-opacity ${
         showPicker ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}
     >
-      <button
-        onClick={() => setReplyingTo(message)}
-        className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
-        title="Reply"
-      >
-        <Reply className="h-3.5 w-3.5" />
-      </button>
+      <div className="glass-pill flex items-center gap-0.5 rounded-full p-0.5">
+        <button
+          onClick={() => setReplyingTo(message)}
+          className="flex h-6 w-6 items-center justify-center rounded-full text-emerald-800 transition hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10"
+          title="Reply"
+        >
+          <Reply className="h-3.5 w-3.5" />
+        </button>
 
-      <button
-        onClick={() => togglePopup(pickerPopupId)}
-        className={`glass-pill flex h-7 w-7 items-center justify-center rounded-full hover:scale-105 ${
-          showPicker
-            ? 'border-[#22C55E]/60 bg-[#22C55E]/20 text-[#22C55E]'
-            : 'text-emerald-800 dark:text-emerald-200'
-        }`}
-        title="Add reaction"
-      >
-        <SmilePlus className="h-3.5 w-3.5" />
-      </button>
+        <button
+          onClick={() => togglePopup(pickerPopupId)}
+          className={`flex h-6 w-6 items-center justify-center rounded-full transition ${
+            showPicker
+              ? 'bg-[#22C55E]/20 text-[#22C55E]'
+              : 'text-emerald-800 hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10'
+          }`}
+          title="Add reaction"
+        >
+          <SmilePlus className="h-3.5 w-3.5" />
+        </button>
 
-      <button
-        onClick={() => void togglePinMessage(message.id)}
-        className={`glass-pill flex h-7 w-7 items-center justify-center rounded-full hover:scale-105 ${
-          message.isPinned
-            ? 'bg-[#22C55E]/25 text-[#22C55E]'
-            : 'text-emerald-800 dark:text-emerald-200'
-        }`}
-        title={message.isPinned ? 'Unpin message' : 'Pin message'}
-      >
-        <Pin className="h-3.5 w-3.5" />
-      </button>
+        <button
+          onClick={() => void togglePinMessage(message.id)}
+          className={`flex h-6 w-6 items-center justify-center rounded-full transition ${
+            message.isPinned
+              ? 'bg-[#22C55E]/25 text-[#22C55E]'
+              : 'text-emerald-800 hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10'
+          }`}
+          title={message.isPinned ? 'Unpin message' : 'Pin message'}
+        >
+          <Pin className="h-3.5 w-3.5" />
+        </button>
 
-      {message.isMe && (
-        <>
-          <button
-            onClick={() => {
-              setEditText(message.content);
-              setIsEditing((v) => !v);
-            }}
-            disabled={Boolean(message.deletedAt)}
-            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
-            title="Edit message"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-          <button
-            onClick={() => void deleteMessage(message.id)}
-            disabled={Boolean(message.deletedAt)}
-            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-rose-500 hover:scale-105"
-            title="Delete message"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </>
-      )}
+        {message.isMe && (
+          <>
+            <button
+              onClick={() => {
+                setEditText(message.content);
+                setIsEditing((v) => !v);
+              }}
+              disabled={Boolean(message.deletedAt)}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-emerald-800 transition hover:bg-black/5 disabled:opacity-40 dark:text-emerald-200 dark:hover:bg-white/10"
+              title="Edit message"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => void deleteMessage(message.id)}
+              disabled={Boolean(message.deletedAt)}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40"
+              title="Delete message"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </>
+        )}
+      </div>
 
       <AnimatePresence>
         {showPicker && (
@@ -287,7 +287,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       id={`message-${message.id}`}
       data-message-id={message.id}
       data-message-row
-      layout
       initial={entrance}
       animate={{
         opacity: 1,
@@ -345,14 +344,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <div className="relative flex items-center gap-2">
           {message.isMe && actionToolbar}
 
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+          <div
             data-message-bubble
             data-is-me={message.isMe ? 'true' : 'false'}
             data-tail={showTail ? 'true' : 'false'}
             data-grouped={!showHeader ? 'true' : 'false'}
-            className={`glass-panel relative px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text ${
+            className={`glass-panel relative px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text transition-transform duration-150 hover:scale-[1.01] ${
               isTailedStyle ? 'rounded-[20px]' : 'overflow-hidden rounded-2xl'
             } ${
               message.isMe
@@ -381,15 +378,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 />
               </svg>
             )}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-              <motion.span
-                aria-hidden
-                initial={{ x: '-130%', opacity: 0.85 }}
-                animate={{ x: '220%', opacity: 0 }}
-                transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
-                className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
-              />
-            </div>
+            {entranceEffect === 'liquid' && (
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+                <motion.span
+                  aria-hidden
+                  initial={{ x: '-130%', opacity: 0.85 }}
+                  animate={{ x: '220%', opacity: 0 }}
+                  transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
+                  className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                />
+              </div>
+            )}
 
             {message.isPinned && (
               <div className="mb-1 flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider text-[#22C55E]">
@@ -586,7 +585,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </span>
               )}
             </div>
-          </motion.div>
+          </div>
 
           {!message.isMe && actionToolbar}
         </div>
@@ -596,7 +595,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             {message.reactions.map((reaction) => (
               <motion.button
                 key={reaction.emoji}
-                layout
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 whileHover={{ scale: 1.12 }}
@@ -620,4 +618,4 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       </div>
     </motion.div>
   );
-};
+});

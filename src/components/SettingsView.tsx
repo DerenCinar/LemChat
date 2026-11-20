@@ -104,7 +104,7 @@ const SettingsSection: React.FC<{
   return (
     <div
       ref={sectionRef}
-      className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
+      className="glass-section rounded-2xl"
     >
       <button
         type="button"
@@ -534,10 +534,14 @@ export const SettingsView: React.FC = () => {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-      className="glass-panel glass-surface lem-scrollbar relative flex flex-1 flex-col overflow-y-auto rounded-2xl p-4 md:p-6"
+      className="glass-panel glass-surface relative flex flex-1 flex-col overflow-hidden rounded-2xl"
     >
       <LiquidGlassLayer variant="panel" />
-      <div className="mx-auto w-full max-w-2xl space-y-6">
+      <div
+        className="lem-scrollbar relative z-10 flex-1 overflow-y-auto p-4 md:p-6"
+        style={{ transform: 'translateZ(0)' }}
+      >
+        <div className="mx-auto w-full max-w-2xl space-y-6">
         <div>
           <h1 className="text-xl font-bold text-emerald-950 dark:text-white">
             SkellyTalk Preferences
@@ -550,7 +554,7 @@ export const SettingsView: React.FC = () => {
         {(updateStatus.status === 'available' ||
           updateStatus.status === 'downloading' ||
           updateStatus.status === 'downloaded') && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#22C55E]/35 bg-[#22C55E]/12 px-4 py-3 ring-1 ring-[#22C55E]/15">
+          <div className="glass-card flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ring-1 ring-[#22C55E]/25">
             <div className="min-w-0">
               <p className="text-sm font-bold text-emerald-950 dark:text-white">
                 Update available
@@ -1040,14 +1044,14 @@ export const SettingsView: React.FC = () => {
                     <div className="space-y-1.5">
                       <SettingLabel
                         label="Performance / Coverage"
-                        info="Controls how many surfaces run real SVG backdrop refraction: Minimal (overlays & composer), Balanced (adds sidebar rail & pills), or All (also messages & panel headers)."
+                        info="Controls how many surfaces run real SVG backdrop refraction: Minimal (overlays & composer), Balanced (full app panels, rail, composer & overlays — recommended), or All (also adds scrolling message bubbles)."
                       />
                       <div className="grid grid-cols-3 gap-1.5">
                         {(
                           [
                             ['minimal', 'Minimal (Fastest)'],
-                            ['balanced', 'Balanced'],
-                            ['all', 'All Surfaces'],
+                            ['balanced', 'Balanced (Full UI)'],
+                            ['all', 'All (+ Bubbles)'],
                           ] as [RealGlassQuality, string][]
                         ).map(([quality, label]) => (
                           <button
@@ -2159,7 +2163,7 @@ export const SettingsView: React.FC = () => {
 
         <div
           ref={updateSectionRef}
-          className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
+          className="glass-section rounded-2xl"
         >
           <div className="px-4 py-3.5">
             <div className="flex items-start justify-between gap-3">
@@ -2234,7 +2238,7 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]">
+        <div className="glass-section rounded-2xl">
           <div className="px-4 py-3.5">
             <span className="block text-sm font-bold text-emerald-950 dark:text-white">
               Connection
@@ -2264,6 +2268,7 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
         </div>
+      </div>
     </motion.section>
   );
 };

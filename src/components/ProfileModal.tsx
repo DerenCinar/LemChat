@@ -111,7 +111,7 @@ export const ProfileModal: React.FC = () => {
             exit={{ opacity: 0, scale: 0.92, y: 14 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="glass-panel glass-surface relative w-full max-w-sm overflow-hidden rounded-3xl p-6 ring-1 ring-white/20"
+            className="glass-panel glass-surface relative w-full max-w-sm overflow-hidden rounded-3xl p-6"
           >
             <LiquidGlassLayer variant="modal" />
             <motion.button

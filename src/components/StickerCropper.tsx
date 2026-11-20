@@ -166,9 +166,10 @@ export const StickerCropper: React.FC<StickerCropperProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 12 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            className="glass-panel glass-surface relative max-h-[92vh] w-full max-w-[360px] overflow-y-auto rounded-3xl p-4 text-emerald-950 dark:text-white"
+            className="glass-panel glass-surface relative w-full max-w-[360px] overflow-hidden rounded-3xl text-emerald-950 dark:text-white"
           >
             <LiquidGlassLayer variant="modal" />
+            <div className="lem-scrollbar relative z-10 max-h-[92vh] overflow-y-auto p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-bold">Create sticker</span>
           <button
@@ -326,6 +327,7 @@ export const StickerCropper: React.FC<StickerCropperProps> = ({
             Save sticker
           </button>
         </div>
+            </div>
           </motion.div>
         </motion.div>
       )}

@@ -825,7 +825,7 @@ export const CallOverlay: React.FC = () => {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
                           onPointerDown={(e) => e.stopPropagation()}
-                          className="glass-panel glass-surface absolute bottom-12 left-0 z-50 w-60 rounded-2xl p-2"
+                          className="glass-panel glass-surface absolute bottom-12 left-0 z-50 w-60 overflow-hidden rounded-2xl p-2"
                         >
                           <LiquidGlassLayer variant="popover" interactive />
                           <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/60 dark:text-emerald-200/60">
@@ -900,10 +900,11 @@ export const CallOverlay: React.FC = () => {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.97 }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="glass-panel glass-surface absolute right-4 top-14 z-50 max-h-[calc(100%-7rem)] w-64 overflow-y-auto rounded-2xl p-2"
+                  className="glass-panel glass-surface absolute right-4 top-14 z-50 flex max-h-[calc(100%-7rem)] w-64 flex-col overflow-hidden rounded-2xl"
                 >
-                  <LiquidGlassLayer variant="popover" interactive />
-                  <SectionLabel>Audio</SectionLabel>
+                  <LiquidGlassLayer variant="popover" />
+                  <div className="lem-scrollbar relative z-10 min-h-0 flex-1 overflow-y-auto p-2">
+                    <SectionLabel>Audio</SectionLabel>
                   <SliderRow
                     accent={accent}
                     label="Call volume"
@@ -920,7 +921,7 @@ export const CallOverlay: React.FC = () => {
                       <select
                         value={prefs.outputDeviceId}
                         onChange={(e) => updatePrefs({ outputDeviceId: e.target.value })}
-                        className="mt-1 w-full rounded-lg bg-black/10 px-2 py-1 text-xs text-emerald-950 outline-none dark:bg-white/10 dark:text-white"
+                        className="chat-font-select glass-pill mt-1 w-full rounded-lg px-2 py-1 text-xs outline-none"
                       >
                         <option value="">System default</option>
                         {speakers.map((d, i) => (
@@ -1045,6 +1046,7 @@ export const CallOverlay: React.FC = () => {
                   >
                     <RotateCcw className="h-3 w-3" /> Reset preferences
                   </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

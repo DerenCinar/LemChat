@@ -69,7 +69,7 @@ export const AuthScreen: React.FC = () => {
           initial={{ opacity: 0, y: 16, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-          className="glass-panel glass-surface relative w-full max-w-md rounded-3xl p-7"
+          className="glass-panel glass-surface relative w-full max-w-md overflow-hidden rounded-3xl p-7"
         >
           <LiquidGlassLayer variant="modal" />
           <div className="mb-5 flex items-center gap-3">
@@ -144,7 +144,7 @@ export const AuthScreen: React.FC = () => {
         initial={{ opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        className="glass-panel glass-surface relative w-full max-w-md rounded-3xl p-7"
+        className="glass-panel glass-surface relative w-full max-w-md overflow-hidden rounded-3xl p-7"
       >
         <LiquidGlassLayer variant="modal" />
         <div className="mb-6 flex items-center justify-between">

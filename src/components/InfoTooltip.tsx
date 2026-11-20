@@ -123,7 +123,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ title, description }) 
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.94, y: coords.below ? -3 : 3 }}
                   transition={{ type: 'spring', stiffness: 460, damping: 28, mass: 0.6 }}
-                  className="liquid-tooltip-box relative rounded-2xl px-3 py-2 text-left"
+                  className="liquid-tooltip-box relative overflow-hidden rounded-2xl px-3 py-2 text-left"
                 >
                   <LiquidGlassLayer variant="popover" />
                   {title && (
