@@ -836,7 +836,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.94 }}
             transition={{ type: 'spring', stiffness: 440, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 overflow-hidden rounded-2xl sm:left-auto sm:right-4 sm:w-[340px]"
+            className="glass-panel glass-surface glass-readable absolute bottom-20 left-2 right-2 z-30 overflow-hidden rounded-2xl sm:left-auto sm:right-4 sm:w-[340px]"
           >
             <LiquidGlassLayer variant="popover" />
             <div className="lem-scrollbar relative z-10 max-h-[70vh] overflow-y-auto p-4">
@@ -1108,7 +1108,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.94 }}
                     transition={{ type: 'spring', stiffness: 440, damping: 28 }}
-                    className="glass-panel glass-surface absolute bottom-12 left-0 z-50 w-56 overflow-hidden rounded-2xl p-1.5"
+                    className="glass-panel glass-surface glass-readable absolute bottom-12 left-0 z-50 w-56 overflow-hidden rounded-2xl p-1.5"
                   >
                     <LiquidGlassLayer variant="popover" />
                     <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
@@ -1253,7 +1253,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.94 }}
                 transition={{ type: 'spring', stiffness: 440, damping: 28 }}
-                className="glass-panel glass-surface absolute bottom-12 right-0 z-30 w-[270px] overflow-hidden rounded-2xl p-3"
+                className="glass-panel glass-surface glass-readable absolute bottom-12 right-0 z-30 w-[270px] overflow-hidden rounded-2xl p-3"
               >
                 <LiquidGlassLayer variant="popover" />
                 {!capsuleOpen ? (
