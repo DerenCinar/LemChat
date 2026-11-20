@@ -13,6 +13,7 @@ import { NewConversationModal } from './components/NewConversationModal';
 import { CallOverlay } from './components/CallOverlay';
 import { ProfileModal } from './components/ProfileModal';
 import { AttachmentViewer } from './components/AttachmentViewer';
+import { AppLockScreen } from './components/AppLockScreen';
 import { useChatStore } from './store/useChatStore';
 
 export const App: React.FC = () => {
@@ -66,6 +67,7 @@ export const App: React.FC = () => {
       <CallOverlay />
       <ProfileModal />
       <AttachmentViewer />
+      <AppLockScreen />
 
       <AnimatePresence>
         {updateStatus.status === 'installing' && (
