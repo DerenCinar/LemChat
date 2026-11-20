@@ -321,6 +321,7 @@ export interface LemChatAPI {
   sendNotification: (payload: NotificationPayload) => Promise<boolean>;
   updateBadgeCount: (count: number) => void;
   updateUserStatus: (status: SelfPresence) => void;
+  setAppLogo?: (id: string) => void;
   windowMinimize: () => void;
   windowMaximize: () => void;
   windowClose: () => void;

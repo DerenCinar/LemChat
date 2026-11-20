@@ -45,6 +45,7 @@ export interface LemChatAPI {
   sendNotification: (payload: NotificationPayload) => Promise<boolean>;
   updateBadgeCount: (count: number) => void;
   updateUserStatus: (status: UserPresence) => void;
+  setAppLogo: (id: string) => void;
   windowMinimize: () => void;
   windowMaximize: () => void;
   windowClose: () => void;
@@ -88,6 +89,7 @@ const api: LemChatAPI = {
   sendNotification: (payload) => ipcRenderer.invoke('lemchat:notify', payload),
   updateBadgeCount: (count) => ipcRenderer.send('lemchat:badge-count', count),
   updateUserStatus: (status) => ipcRenderer.send('lemchat:user-status', status),
+  setAppLogo: (id) => ipcRenderer.send('lemchat:set-app-logo', id),
   windowMinimize: () => ipcRenderer.send('lemchat:window-minimize'),
   windowMaximize: () => ipcRenderer.send('lemchat:window-maximize'),
   windowClose: () => ipcRenderer.send('lemchat:window-close'),

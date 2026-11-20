@@ -18,6 +18,7 @@ import { AppLockScreen } from './components/AppLockScreen';
 import { LiquidGlassLayer } from './components/LiquidGlassLayer';
 import { isAndroidNative } from './lib/updater';
 import { useChatStore } from './store/useChatStore';
+import { applyAppLogo, getSavedAppLogo } from './lib/appLogo';
 
 export const App: React.FC = () => {
   const activeTab = useChatStore((s) => s.activeTab);
@@ -44,6 +45,10 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activePopupId, closeAllPopups]);
+
+  useEffect(() => {
+    applyAppLogo(getSavedAppLogo(), false);
+  }, []);
 
   useEffect(() => {
     void initializeApp();

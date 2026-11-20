@@ -35,6 +35,7 @@ import {
   previewRingtone,
   stopRingtone,
 } from '../lib/sound';
+import { APP_LOGOS, applyAppLogo, getSavedAppLogo, type AppLogoId } from '../lib/appLogo';
 import type {
   GlassDepth,
   NotificationRevealMode,
@@ -355,6 +356,7 @@ const AppLockSettings: React.FC = () => {
 };
 
 export const SettingsView: React.FC = () => {
+  const [appLogo, setAppLogoState] = useState<AppLogoId>(getSavedAppLogo);
   const theme = useChatStore((s) => s.theme);
   const self = useChatStore((s) => s.self);
   const realtimeConnected = useChatStore((s) => s.realtimeConnected);
@@ -947,6 +949,46 @@ export const SettingsView: React.FC = () => {
                 </div>
               </motion.button>
             ))}
+          </div>
+
+          <div className="glass-pill space-y-3 rounded-2xl p-4">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+                App Logo
+              </h2>
+              <p className="mt-1 text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+                Used for the tab icon, window icon and system tray.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {APP_LOGOS.map((logo) => (
+                <motion.button
+                  key={logo.id}
+                  type="button"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    setAppLogoState(logo.id);
+                    applyAppLogo(logo.id);
+                  }}
+                  className={`glass-pill flex flex-col items-center gap-2 rounded-2xl p-3 text-center transition ${
+                    appLogo === logo.id
+                      ? 'border-white/60 bg-white/10 ring-1 ring-white/50'
+                      : 'hover:bg-black/5 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <img
+                    src={`${import.meta.env.BASE_URL}${logo.preview}`}
+                    alt=""
+                    className="h-16 w-16 rounded-xl bg-white/70 object-contain p-1"
+                  />
+                  <span className="text-xs font-bold text-emerald-950 dark:text-white">{logo.label}</span>
+                  <span className="text-[10px] leading-tight text-emerald-800/65 dark:text-emerald-200/55">
+                    {logo.description}
+                  </span>
+                </motion.button>
+              ))}
+            </div>
           </div>
 
           <div className="glass-pill relative space-y-4 rounded-2xl p-4">

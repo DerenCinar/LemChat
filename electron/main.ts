@@ -57,11 +57,27 @@ if (!gotSingleInstanceLock) {
   app.quit();
 }
 
+const APP_LOGO_FILES: Record<string, string> = {
+  gradient: 'logo-gradient.png',
+  red: 'logo-red.png',
+  teal: 'logo-teal.png',
+};
+let appLogoChoice = 'default';
+const appLogoPrefPath = () => path.join(app.getPath('userData'), 'app-logo.txt');
+function loadAppLogoChoice() {
+  try {
+    const v = fs.readFileSync(appLogoPrefPath(), 'utf-8').trim();
+    if (v === 'default' || APP_LOGO_FILES[v]) appLogoChoice = v;
+  } catch {
+    /* no saved preference */
+  }
+}
+
 function getAppIcon(): NativeImage {
-  // Use the higher-contrast logo for the current system theme.
-  const filename = nativeTheme.shouldUseDarkColors
-    ? 'skellytalk-light-mode.png'
-    : 'skellytalk-dark-mode.png';
+  // Use the chosen logo, or (default) the higher-contrast logo for the current system theme.
+  const filename =
+    APP_LOGO_FILES[appLogoChoice] ??
+    (nativeTheme.shouldUseDarkColors ? 'skellytalk-light-mode.png' : 'skellytalk-dark-mode.png');
   const assetPaths = [
     path.join(app.getAppPath(), 'dist', 'assets', filename),
     path.join(app.getAppPath(), 'public', 'assets', filename),
@@ -334,6 +350,18 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.on('lemchat:set-app-logo', (_event, id: string) => {
+    if (id !== 'default' && !APP_LOGO_FILES[id]) return;
+    if (id === appLogoChoice) return;
+    appLogoChoice = id;
+    try {
+      fs.writeFileSync(appLogoPrefPath(), id, 'utf-8');
+    } catch {
+      /* ignore */
+    }
+    refreshPlatformIcons();
+  });
+
   ipcMain.on('lemchat:user-status', (_event, status: UserPresence) => {
     currentStatus = status;
     rebuildTrayMenu();
@@ -577,6 +605,7 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    loadAppLogoChoice();
     nativeTheme.on('updated', refreshPlatformIcons);
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setIcon(getAppIcon());
