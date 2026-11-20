@@ -2201,9 +2201,10 @@ export const SettingsView: React.FC = () => {
                     : updateStatus.status === 'downloading'
                       ? `Downloading update (${updateStatus.progress ?? 0}%)...`
                       : updateStatus.status === 'downloaded'
-                        ? `Version ${updateStatus.version ?? ''} downloaded and ready.`
+                        ? updateStatus.message ??
+                          `Version ${updateStatus.version ?? ''} downloaded and ready.`
                         : updateStatus.status === 'available'
-                        ? `Update v${updateStatus.version ?? ''} found. Download it manually.`
+                          ? updateStatus.message ?? `Update v${updateStatus.version ?? ''} is available.`
                           : updateStatus.message ?? 'SkellyTalk checks for updates automatically on launch.'}
                 </p>
               </div>
@@ -2215,7 +2216,7 @@ export const SettingsView: React.FC = () => {
                 onClick={installUpdate}
                 className="shrink-0 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1.5 text-xs font-semibold text-white shadow-lem-glow-sm hover:brightness-110"
               >
-                Restart &amp; Install
+                {window.lemchat ? 'Restart & Install' : 'Install Update'}
               </button>
             ) : updateStatus.status === 'available' ? (
               <button
@@ -2228,10 +2229,17 @@ export const SettingsView: React.FC = () => {
             ) : (
               <button
                 type="button"
+                disabled={
+                  updateStatus.status === 'checking' || updateStatus.status === 'downloading'
+                }
                 onClick={() => void checkForUpdates()}
-                className="glass-pill shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold text-emerald-900 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
+                className="glass-pill shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold text-emerald-900 transition hover:border-[#22C55E]/50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-emerald-100"
               >
-                Check for Updates
+                {updateStatus.status === 'downloading'
+                  ? 'Downloading...'
+                  : updateStatus.status === 'checking'
+                    ? 'Checking...'
+                    : 'Check for Updates'}
               </button>
             )}
           </div>

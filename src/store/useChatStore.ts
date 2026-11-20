@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
+import packageInfo from '../../package.json';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
+import {
+  checkGitHubLatestRelease,
+  downloadAndInstallAndroidApk,
+  hasNativeAndroidUpdater,
+  installDownloadedAndroidApk,
+  isAndroidNative,
+} from '../lib/updater';
 import { parseAvatarSpec, serializeAvatarSpec } from '../components/UserAvatar';
 import {
   playNotificationChime,
@@ -926,15 +934,145 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   checkForUpdates: async () => {
-    await window.lemchat?.checkForUpdates?.();
+    if (window.lemchat?.checkForUpdates) {
+      await window.lemchat.checkForUpdates();
+      return;
+    }
+
+    const { setUpdateStatus } = get();
+    setUpdateStatus({ status: 'checking', message: 'Checking for updates...' });
+
+    try {
+      const result = await checkGitHubLatestRelease(packageInfo.version);
+      if (result.updateAvailable) {
+        setUpdateStatus({
+          status: 'available',
+          version: result.latestVersion,
+          downloadUrl: result.apkDownloadUrl,
+          releaseUrl: result.releaseUrl,
+          message:
+            isAndroidNative() && !result.apkDownloadUrl
+              ? `Version ${result.latestVersion} is available on GitHub (APK still uploading).`
+              : `Update v${result.latestVersion} is available.`,
+        });
+      } else {
+        setUpdateStatus({
+          status: 'not-available',
+          version: result.currentVersion,
+          releaseUrl: result.releaseUrl,
+          message: `SkellyTalk v${result.currentVersion} is up to date.`,
+        });
+      }
+    } catch (error) {
+      setUpdateStatus({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unable to check for updates.',
+      });
+    }
   },
 
   downloadUpdate: () => {
-    window.lemchat?.downloadUpdate?.();
+    if (window.lemchat?.downloadUpdate) {
+      window.lemchat.downloadUpdate();
+      return;
+    }
+
+    const { updateStatus, setUpdateStatus } = get();
+    if (isAndroidNative()) {
+      if (hasNativeAndroidUpdater() && updateStatus.downloadUrl) {
+        setUpdateStatus({
+          status: 'downloading',
+          version: updateStatus.version,
+          progress: 0,
+          downloadUrl: updateStatus.downloadUrl,
+          releaseUrl: updateStatus.releaseUrl,
+          message: `Downloading update v${updateStatus.version ?? ''}...`,
+        });
+
+        void downloadAndInstallAndroidApk(
+          updateStatus.downloadUrl,
+          updateStatus.version,
+          (progress) => {
+            const current = get().updateStatus;
+            if (current.status === 'downloading') {
+              setUpdateStatus({
+                ...current,
+                status: 'downloading',
+                progress,
+              });
+            }
+          }
+        )
+          .then((res) => {
+            setUpdateStatus({
+              status: 'downloaded',
+              version: updateStatus.version,
+              downloadUrl: updateStatus.downloadUrl,
+              releaseUrl: updateStatus.releaseUrl,
+              message: res?.needsPermission
+                ? 'Allow "Install unknown apps" for SkellyTalk in Android settings, then tap Install Update.'
+                : `Version ${updateStatus.version ?? ''} downloaded. Tap Install Update if the installer did not open.`,
+            });
+          })
+          .catch((error) => {
+            setUpdateStatus({
+              status: 'error',
+              version: updateStatus.version,
+              downloadUrl: updateStatus.downloadUrl,
+              releaseUrl: updateStatus.releaseUrl,
+              message: error instanceof Error ? error.message : 'APK download failed.',
+            });
+          });
+        return;
+      }
+
+      const targetUrl =
+        updateStatus.downloadUrl ||
+        updateStatus.releaseUrl ||
+        'https://github.com/DerenCinar/LemChat/releases/latest';
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const targetUrl =
+      updateStatus.releaseUrl || 'https://github.com/DerenCinar/LemChat/releases/latest';
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   },
 
   installUpdate: () => {
-    window.lemchat?.installUpdate?.();
+    if (window.lemchat?.installUpdate) {
+      window.lemchat.installUpdate();
+      return;
+    }
+
+    const { updateStatus, setUpdateStatus } = get();
+    if (isAndroidNative() && hasNativeAndroidUpdater()) {
+      void installDownloadedAndroidApk()
+        .then((res) => {
+          if (res?.needsPermission) {
+            setUpdateStatus({
+              ...updateStatus,
+              status: 'downloaded',
+              message:
+                'Allow "Install unknown apps" for SkellyTalk in Android settings, then tap Install Update again.',
+            });
+          }
+        })
+        .catch((error) => {
+          setUpdateStatus({
+            status: 'error',
+            version: updateStatus.version,
+            downloadUrl: updateStatus.downloadUrl,
+            releaseUrl: updateStatus.releaseUrl,
+            message: error instanceof Error ? error.message : 'Unable to launch APK installer.',
+          });
+        });
+      return;
+    }
+
+    const targetUrl =
+      updateStatus.releaseUrl || 'https://github.com/DerenCinar/LemChat/releases/latest';
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   },
 
   sendTestNotification: async () => {

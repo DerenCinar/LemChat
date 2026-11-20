@@ -15,6 +15,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { AttachmentViewer } from './components/AttachmentViewer';
 import { AppLockScreen } from './components/AppLockScreen';
 import { LiquidGlassLayer } from './components/LiquidGlassLayer';
+import { isAndroidNative } from './lib/updater';
 import { useChatStore } from './store/useChatStore';
 
 export const App: React.FC = () => {
@@ -66,11 +67,24 @@ export const App: React.FC = () => {
       setUpdateStatus(payload);
     });
 
+    let initialUpdateTimer: number | undefined;
+    let periodicUpdateTimer: number | undefined;
+    if (!window.lemchat && isAndroidNative()) {
+      initialUpdateTimer = window.setTimeout(() => {
+        void useChatStore.getState().checkForUpdates();
+      }, 3000);
+      periodicUpdateTimer = window.setInterval(() => {
+        void useChatStore.getState().checkForUpdates();
+      }, 30 * 60 * 1000);
+    }
+
     return () => {
       unsubNotif?.();
       unsubTrayStatus?.();
       unsubFocus?.();
       unsubUpdate?.();
+      if (initialUpdateTimer !== undefined) window.clearTimeout(initialUpdateTimer);
+      if (periodicUpdateTimer !== undefined) window.clearInterval(periodicUpdateTimer);
     };
   }, [initializeApp, selectConversation, setSelfStatus, setWindowFocused, setUpdateStatus]);
 

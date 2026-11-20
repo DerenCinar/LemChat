@@ -47,16 +47,16 @@ const SPACER_STYLE: React.CSSProperties = {
 
 const syncSvgFilter = (anchor: HTMLDivElement | null, host: HTMLElement | null) => {
   if (!anchor || !host) return;
-  let rawW = host.offsetWidth;
-  let rawH = host.offsetHeight;
+  let rawW = host.clientWidth || host.offsetWidth;
+  let rawH = host.clientHeight || host.offsetHeight;
   if (rawW === 0 || rawH === 0) {
     const rect = host.getBoundingClientRect();
     rawW = rect.width;
     rawH = rect.height;
   }
   if (rawW < 12 || rawH < 12) return;
-  const w = Math.max(1, Math.round(rawW + 2));
-  const h = Math.max(1, Math.round(rawH + 2));
+  const w = Math.max(1, Math.round(rawW));
+  const h = Math.max(1, Math.round(rawH));
 
   const svg = anchor.querySelector('svg');
   if (svg) {
@@ -295,7 +295,7 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
       ref={anchorRef}
       aria-hidden="true"
       data-variant={variant}
-      className={`rdev-lg-layer pointer-events-none absolute -inset-[1px] overflow-hidden ${className}`}
+      className={`rdev-lg-layer pointer-events-none absolute inset-0 overflow-hidden ${className}`}
       style={LAYER_HOST_STYLE}
     >
       {isVisible && size.width >= 12 && size.height >= 12 && (

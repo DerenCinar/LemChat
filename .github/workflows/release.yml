@@ -246,14 +246,17 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
-          node -e '
+          mkdir -p android/app/src/main/java/com/skellytalk/app
+          cp android-native/AndroidUpdaterPlugin.java android-native/MainActivity.java android/app/src/main/java/com/skellytalk/app/
+          RUN_NUM="${{ github.run_number }}" VER="${VER}" node -e '
             const fs = require("fs");
             const p = "android/app/src/main/AndroidManifest.xml";
             let xml = fs.readFileSync(p, "utf8");
             const perms = [
               "android.permission.CAMERA",
               "android.permission.RECORD_AUDIO",
-              "android.permission.MODIFY_AUDIO_SETTINGS"
+              "android.permission.MODIFY_AUDIO_SETTINGS",
+              "android.permission.REQUEST_INSTALL_PACKAGES"
             ];
             for (const perm of perms) {
               if (!xml.includes(perm)) {
@@ -261,6 +264,14 @@ jobs:
               }
             }
             fs.writeFileSync(p, xml, "utf8");
+
+            const gradlePath = "android/app/build.gradle";
+            let gradle = fs.readFileSync(gradlePath, "utf8");
+            const runNum = Number.parseInt(process.env.RUN_NUM || "1", 10) || 1;
+            const verName = process.env.VER || "1.0.0";
+            gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${runNum}`);
+            gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${verName}"`);
+            fs.writeFileSync(gradlePath, gradle, "utf8");
           '
           cd android && chmod +x gradlew && ./gradlew assembleDebug
           cd ..

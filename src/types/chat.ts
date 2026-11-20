@@ -284,6 +284,8 @@ export interface UpdateStatusPayload {
   version?: string;
   progress?: number;
   message?: string;
+  downloadUrl?: string;
+  releaseUrl?: string;
 }
 
 export interface IncomingCallState {
