@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, Copy, X, Wifi, Bell, BellOff } from 'lucide-react';
+import { Minus, Square, Copy, X, Wifi, Bell, BellOff, RotateCw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
 
@@ -64,6 +64,16 @@ export const TitleBar: React.FC = () => {
 
       {/* Right: Notification Bell + Realtime Status Pill + Windows Controls */}
       <div className="app-no-drag flex items-center gap-2">
+        <button
+          onClick={() => window.location.reload()}
+          title="Reload"
+          aria-label="Reload"
+          className="glass-pill relative flex h-7 w-7 items-center justify-center rounded-full text-emerald-900/70 transition hover:scale-105 hover:text-[#22C55E] dark:text-white/70"
+        >
+          <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
+          <RotateCw className="h-3.5 w-3.5" />
+        </button>
+
         {session && (
           <>
             <button
