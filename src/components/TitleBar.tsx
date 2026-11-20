@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Minus, Square, Copy, X, Wifi, Bell, BellOff, RotateCw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
-import skellytalkLogo from '../assets/skellytalk-logo.png';
+import { useAppLogoSrc } from '../lib/appLogo';
 
 export const TitleBar: React.FC = () => {
+  const skellytalkLogo = useAppLogoSrc();
   const platform = window.lemchat?.platform ?? 'win32';
   const isMac = platform === 'darwin';
   const [isMaximized, setIsMaximized] = useState(false);

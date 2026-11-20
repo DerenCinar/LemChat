@@ -35,7 +35,7 @@ import {
   previewRingtone,
   stopRingtone,
 } from '../lib/sound';
-import { APP_LOGOS, applyAppLogo, getSavedAppLogo, type AppLogoId } from '../lib/appLogo';
+import { APP_LOGOS, applyAppLogo, useAppLogoId } from '../lib/appLogo';
 import type {
   GlassDepth,
   NotificationRevealMode,
@@ -356,7 +356,7 @@ const AppLockSettings: React.FC = () => {
 };
 
 export const SettingsView: React.FC = () => {
-  const [appLogo, setAppLogoState] = useState<AppLogoId>(getSavedAppLogo);
+  const appLogo = useAppLogoId();
   const theme = useChatStore((s) => s.theme);
   const self = useChatStore((s) => s.self);
   const realtimeConnected = useChatStore((s) => s.realtimeConnected);
@@ -968,7 +968,6 @@ export const SettingsView: React.FC = () => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => {
-                    setAppLogoState(logo.id);
                     applyAppLogo(logo.id);
                   }}
                   className={`glass-pill flex flex-col items-center gap-2 rounded-2xl p-3 text-center transition ${
@@ -978,7 +977,7 @@ export const SettingsView: React.FC = () => {
                   }`}
                 >
                   <img
-                    src={`${import.meta.env.BASE_URL}${logo.preview}`}
+                    src={logo.src}
                     alt=""
                     className="h-16 w-16 rounded-xl bg-white/70 object-contain p-1"
                   />

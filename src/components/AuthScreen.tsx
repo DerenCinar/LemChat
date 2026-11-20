@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { KeyRound, Mail, User, AtSign, ArrowRight, RotateCcw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
-import skellytalkLogo from '../assets/skellytalk-logo.png';
+import { useAppLogoSrc } from '../lib/appLogo';
 import {
   clearSupabaseConfig,
   getSupabaseConfig,
@@ -11,6 +11,7 @@ import {
 } from '../lib/supabase';
 
 export const AuthScreen: React.FC = () => {
+  const skellytalkLogo = useAppLogoSrc();
   const configured = useChatStore((s) => s.configured);
   const authLoading = useChatStore((s) => s.authLoading);
   const authError = useChatStore((s) => s.authError);
