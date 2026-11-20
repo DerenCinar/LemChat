@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { DownloadCloud } from 'lucide-react';
 import { MeshBackground } from './components/MeshBackground';
+import { BackgroundEffects } from './components/BackgroundEffects';
 import { TitleBar } from './components/TitleBar';
 import { NavRail } from './components/NavRail';
 import { ConversationSidebar } from './components/ConversationSidebar';
@@ -92,6 +93,7 @@ export const App: React.FC = () => {
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
       <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden md:rounded-[14px] md:border md:border-white/15">
         <MeshBackground />
+        <BackgroundEffects />
         <TitleBar />
         <NotificationToast />
         <NewConversationModal />

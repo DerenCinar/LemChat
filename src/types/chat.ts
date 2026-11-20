@@ -57,6 +57,8 @@ export interface LiquidGlassTheme {
   bubbleColor: string;
   density: BubbleDensity;
   ambientMotion: boolean;
+  backgroundEffect: 'none' | 'leaves' | 'snow' | 'rain';
+  showQuickReplies: boolean;
   wallpaper: string;
   quickReactions: string[];
   bubbleStyle: BubbleStyle;

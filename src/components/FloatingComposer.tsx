@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus, Hourglass, ChevronUp, Sticker as StickerIcon, Trash2 } from 'lucide-react';
+import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus, Hourglass, ChevronUp, Sticker as StickerIcon, Trash2, SlidersHorizontal } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { useStickerPacks, stickerToFile, type Sticker } from '../store/useStickerPacks';
 import { StickerCropper } from './StickerCropper';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
+import { GamesMenu } from './GamesMenu';
 import type { GifAttachment, StagedUpload } from '../types/chat';
 import { VOICE_FILTERS, applyVoiceFilter, type VoiceFilterId } from '../utils/voiceFilters';
 
@@ -117,6 +118,8 @@ const capsulePresets = () => {
   ];
 };
 
+const DEFAULT_QUICK_REPLIES = ['👍 Sounds good', 'On my way!', 'Thanks!', 'Be right back', 'Can we talk later?', '😂'];
+
 interface FloatingComposerProps {
   conversationId: string;
   placeholder: string;
@@ -141,6 +144,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
   const [codeText, setCodeText] = useState('');
   const [capsuleOpen, setCapsuleOpen] = useState(false);
   const [capsuleAt, setCapsuleAt] = useState('');
+  const [gamesOpen, setGamesOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendPulseKey, setSendPulseKey] = useState(0);
@@ -236,6 +240,18 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
   const enterBehavior = useChatStore((s) => s.liquidGlass.enterBehavior);
   const snippets = useChatStore((s) => s.liquidGlass.snippets);
   const savedReplies = useChatStore((s) => s.liquidGlass.savedReplies);
+  const showQuickReplies = useChatStore((s) => s.liquidGlass.showQuickReplies);
+  const quickReplies = (savedReplies.length > 0 ? savedReplies : DEFAULT_QUICK_REPLIES).slice(0, 12);
+
+  const sendQuickReply = async (reply: string) => {
+    if (sending) return;
+    setSendError(null);
+    try {
+      await sendMessage(reply);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'The message could not be sent.');
+    }
+  };
 
   useEffect(() => {
     if (useChatStore.getState().activePopupId?.startsWith('composer:')) {
@@ -502,6 +518,18 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
 
   return (
     <div ref={composerRootRef} className="relative px-2.5 pb-2.5 pt-1.5 md:px-4 md:pb-4 md:pt-2">
+      {gamesOpen && (
+        <GamesMenu
+          onClose={() => setGamesOpen(false)}
+          onTicTacToe={() => {
+            setSendError(null);
+            sendGame().catch((err: unknown) =>
+              setSendError(err instanceof Error ? err.message : 'Could not start game.')
+            );
+          }}
+          onShare={(t) => void sendQuickReply(t)}
+        />
+      )}
       <AnimatePresence>
         {sendError && (
           <motion.div
@@ -523,6 +551,22 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showQuickReplies && !recordingMode && !pendingRecording && (
+        <div className="lem-scrollbar mb-1.5 flex gap-1.5 overflow-x-auto pb-0.5" aria-label="Quick replies">
+          {quickReplies.map((reply, i) => (
+            <button
+              key={`${i}-${reply}`}
+              type="button"
+              disabled={sending}
+              onClick={() => void sendQuickReply(reply)}
+              className="glass-pill shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium text-emerald-900 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-50"
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Reply Quote Preview */}
       <AnimatePresence>
@@ -1091,15 +1135,20 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
                 data-compact-target
                 onClick={() => togglePopup('composer:voiceFilters')}
                 title={`Voice filter: ${VOICE_FILTERS.find((f) => f.id === voiceFilter)?.label}`}
-                className={`absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] ring-1 ring-black/10 transition ${
-                  showVoiceFilters
-                    ? 'scale-110 bg-[#22C55E] text-white'
-                    : voiceFilter === 'none'
-                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
-                      : 'bg-emerald-500 text-white'
+                aria-label="Choose voice filter"
+                aria-expanded={showVoiceFilters}
+                className={`ml-0.5 flex h-8 items-center gap-1 rounded-full px-2 text-[11px] font-semibold transition md:h-9 ${
+                  showVoiceFilters || voiceFilter !== 'none'
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-200'
                 }`}
               >
-                {voiceFilter === 'none' ? '♪' : VOICE_FILTERS.find((f) => f.id === voiceFilter)?.emoji}
+                {voiceFilter === 'none' ? (
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                ) : (
+                  <span className="text-sm leading-none">{VOICE_FILTERS.find((f) => f.id === voiceFilter)?.emoji}</span>
+                )}
+                <span className="hidden lg:inline">{voiceFilter === 'none' ? 'Voice FX' : VOICE_FILTERS.find((f) => f.id === voiceFilter)?.label}</span>
               </button>
               <AnimatePresence>
                 {showVoiceFilters && (
@@ -1233,14 +1282,11 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => {
-            setSendError(null);
             setActivePopupId(null);
-            sendGame().catch((err: unknown) =>
-              setSendError(err instanceof Error ? err.message : 'Could not start game.')
-            );
+            setGamesOpen(true);
           }}
-          title="Start a Tic-Tac-Toe game"
-          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
+          title="Games"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Gamepad2 className="h-4 w-4" />
         </motion.button>
@@ -1287,17 +1333,36 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
                         </button>
                       ))}
                     </div>
-                    <input
-                      type="datetime-local"
-                      value={capsuleAt}
-                      min={toLocalInput(new Date(Date.now() + 120_000))}
-                      onChange={(e) => setCapsuleAt(e.target.value)}
-                      className="glass-pill mb-2 w-full rounded-xl px-2.5 py-2 text-xs text-emerald-950 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white"
-                    />
+                    <div className="mb-2 flex gap-1.5">
+                      <input
+                        type="date"
+                        aria-label="Unlock date"
+                        value={capsuleAt.slice(0, 10)}
+                        min={toLocalInput(new Date()).slice(0, 10)}
+                        onChange={(e) =>
+                          setCapsuleAt(e.target.value ? `${e.target.value}T${capsuleAt.slice(11, 16) || '09:00'}` : '')
+                        }
+                        className="glass-pill min-w-0 flex-1 rounded-xl px-2.5 py-2 text-xs text-emerald-950 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white"
+                      />
+                      <input
+                        type="time"
+                        aria-label="Unlock time"
+                        value={capsuleAt.slice(11, 16) || '09:00'}
+                        onChange={(e) => {
+                          const date = capsuleAt.slice(0, 10) || toLocalInput(new Date()).slice(0, 10);
+                          setCapsuleAt(e.target.value ? `${date}T${e.target.value}` : '');
+                        }}
+                        className="glass-pill w-[88px] rounded-xl px-2 py-2 text-xs text-emerald-950 outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20 dark:text-white"
+                      />
+                    </div>
                     <p className="mb-2 text-[10px] opacity-60 text-emerald-900 dark:text-emerald-100">
-                      {text.trim()
-                        ? 'Your typed message is sealed. Nobody can open it before then.'
-                        : 'Type your message first, then seal it.'}
+                      {!text.trim()
+                        ? 'Type your message first, then seal it.'
+                        : !capsuleAt
+                          ? 'Pick an unlock date.'
+                          : new Date(capsuleAt).getTime() <= Date.now() + 60_000
+                            ? 'Pick a date and time at least a minute from now.'
+                            : 'Your typed message is sealed. Nobody can open it before then.'}
                     </p>
                     <button
                       type="button"

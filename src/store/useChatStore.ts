@@ -582,6 +582,8 @@ const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
   bubbleColor: '#10B981',
   density: 'cozy',
   ambientMotion: true,
+  backgroundEffect: 'none',
+  showQuickReplies: true,
   wallpaper: '',
   quickReactions: ['💚', '🔥', '🚀', '✨', '👍', '👀'],
   bubbleStyle: 'imessage',

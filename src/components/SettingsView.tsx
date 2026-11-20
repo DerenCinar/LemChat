@@ -1369,6 +1369,28 @@ export const SettingsView: React.FC = () => {
                 className="accent-[#22C55E]"
               />
             </label>
+            <label className="glass-pill flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] text-emerald-950 dark:text-white">
+              Background effect
+              <select
+                value={liquidGlass.backgroundEffect}
+                onChange={(e) => setLiquidGlass({ backgroundEffect: e.target.value as typeof liquidGlass.backgroundEffect })}
+                className="rounded-lg bg-transparent text-[11px] outline-none"
+              >
+                <option value="none">None</option>
+                <option value="leaves">🍂 Falling leaves</option>
+                <option value="snow">❄️ Snow</option>
+                <option value="rain">🌧️ Rain</option>
+              </select>
+            </label>
+            <label className="glass-pill flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] text-emerald-950 dark:text-white">
+              Quick reply chips
+              <input
+                type="checkbox"
+                checked={liquidGlass.showQuickReplies}
+                onChange={(e) => setLiquidGlass({ showQuickReplies: e.target.checked })}
+                className="accent-[#22C55E]"
+              />
+            </label>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
