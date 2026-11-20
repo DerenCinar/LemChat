@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import LiquidGlass from 'liquid-glass-react';
 import { useChatStore } from '../store/useChatStore';
 
@@ -17,10 +17,27 @@ export interface LiquidGlassLayerProps {
   interactive?: boolean;
   cornerRadius?: number;
   disabled?: boolean;
+  alwaysRender?: boolean;
   className?: string;
 }
 
 const ZERO_POS = { x: 0, y: 0 };
+const MINIMAL_VARIANTS = new Set<LiquidGlassVariant>(['popover', 'modal', 'toast', 'surface']);
+const BALANCED_VARIANTS = new Set<LiquidGlassVariant>([
+  'popover',
+  'modal',
+  'toast',
+  'surface',
+  'rail',
+  'pill',
+]);
+const LAYER_HOST_STYLE: React.CSSProperties = { borderRadius: 'inherit', zIndex: -1 };
+const LIQUID_GLASS_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  pointerEvents: 'none',
+};
 
 interface MeasuredSize {
   width: number;
@@ -28,7 +45,7 @@ interface MeasuredSize {
   radius: number;
 }
 
-const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
+const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
   variant = 'surface',
   interactive = false,
   cornerRadius,
@@ -60,6 +77,7 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     if (!host) return;
 
     host.setAttribute('data-real-glass-host', variant);
+    const isShaderMode = realGlassMode === 'shader';
 
     const measure = (): MeasuredSize => {
       const rect = host.getBoundingClientRect();
@@ -73,6 +91,8 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     };
 
     const initial = measure();
+    let lastCommitted = initial;
+    const hasInitialValidSize = initial.width >= 12 && initial.height >= 12;
     if (initial.width > 0 && initial.height > 0) {
       setSize(initial);
     }
@@ -90,29 +110,57 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     }
 
     let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
+    const needsResizeObserver = isShaderMode || !hasInitialValidSize;
+    if (needsResizeObserver && typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => {
         const next = measure();
-        setSize((prev) => {
-          if (prev.width === 0 || prev.height === 0) {
-            return next;
+        const hadValidSize = lastCommitted.width >= 12 && lastCommitted.height >= 12;
+
+        if (!hadValidSize) {
+          if (next.width > 0 && next.height > 0) {
+            lastCommitted = next;
+            setSize(next);
+            const nextEffectiveShader = isShaderMode && Math.max(next.width, next.height) <= 440;
+            if (!nextEffectiveShader) {
+              ro?.disconnect();
+              ro = null;
+            }
           }
+          return;
+        }
+
+        // For non-shader modes, CSS 100% sizing handles growth without re-measuring or remounting
+        if (!isShaderMode) {
+          ro?.disconnect();
+          ro = null;
+          return;
+        }
+
+        if (
+          Math.abs(next.width - lastCommitted.width) < 96 &&
+          Math.abs(next.height - lastCommitted.height) < 96 &&
+          next.radius === lastCommitted.radius
+        ) {
+          return;
+        }
+
+        if (resizeTimerRef.current !== null) {
+          window.clearTimeout(resizeTimerRef.current);
+        }
+        resizeTimerRef.current = window.setTimeout(() => {
+          resizeTimerRef.current = null;
+          const settled = measure();
           if (
-            Math.abs(next.width - prev.width) < 4 &&
-            Math.abs(next.height - prev.height) < 4 &&
-            next.radius === prev.radius
+            settled.width > 0 &&
+            settled.height > 0 &&
+            (Math.abs(settled.width - lastCommitted.width) >= 96 ||
+              Math.abs(settled.height - lastCommitted.height) >= 96 ||
+              settled.radius !== lastCommitted.radius)
           ) {
-            return prev;
+            lastCommitted = settled;
+            setSize(settled);
           }
-          if (resizeTimerRef.current !== null) {
-            window.clearTimeout(resizeTimerRef.current);
-          }
-          resizeTimerRef.current = window.setTimeout(() => {
-            resizeTimerRef.current = null;
-            setSize(measure());
-          }, 110);
-          return prev;
-        });
+        }, 250);
       });
       ro.observe(host);
     }
@@ -126,7 +174,7 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
         resizeTimerRef.current = null;
       }
     };
-  }, [variant]);
+  }, [variant, realGlassMode]);
 
   const elasticityEnabled =
     interactive &&
@@ -144,12 +192,35 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     }
 
     let pendingEvent: MouseEvent | null = null;
+    let throttleTimer: number | null = null;
+    let lastUpdateMs = 0;
+    let lastClientX = -9999;
+    let lastClientY = -9999;
 
     const flush = () => {
       rafRef.current = null;
       const ev = pendingEvent;
-      pendingEvent = null;
       if (!ev) return;
+
+      const now = performance.now();
+      const elapsed = now - lastUpdateMs;
+      if (lastUpdateMs > 0 && elapsed < 32) {
+        if (throttleTimer === null) {
+          throttleTimer = window.setTimeout(() => {
+            throttleTimer = null;
+            if (pendingEvent && rafRef.current === null) {
+              rafRef.current = window.requestAnimationFrame(flush);
+            }
+          }, 32 - elapsed);
+        }
+        return;
+      }
+
+      pendingEvent = null;
+      lastUpdateMs = now;
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+
       const rect = host.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
       const centerX = rect.left + rect.width / 2;
@@ -164,6 +235,9 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     };
 
     const onMouseMove = (ev: MouseEvent) => {
+      if (lastClientX !== -9999 && Math.hypot(ev.clientX - lastClientX, ev.clientY - lastClientY) < 4) {
+        return;
+      }
       pendingEvent = ev;
       if (rafRef.current === null) {
         rafRef.current = window.requestAnimationFrame(flush);
@@ -172,6 +246,12 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
 
     const onMouseLeave = () => {
       pendingEvent = null;
+      lastClientX = -9999;
+      lastClientY = -9999;
+      if (throttleTimer !== null) {
+        window.clearTimeout(throttleTimer);
+        throttleTimer = null;
+      }
       if (rafRef.current !== null) {
         window.cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -185,6 +265,10 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     return () => {
       host.removeEventListener('mousemove', onMouseMove);
       host.removeEventListener('mouseleave', onMouseLeave);
+      if (throttleTimer !== null) {
+        window.clearTimeout(throttleTimer);
+        throttleTimer = null;
+      }
       if (rafRef.current !== null) {
         window.cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -218,6 +302,18 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
     0,
     Math.min(cornerRadius ?? size.radius, maxAllowedRadius)
   );
+  const effectiveMode =
+    realGlassMode === 'shader' && Math.max(size.width, size.height) > 440
+      ? 'standard'
+      : realGlassMode;
+  const glassKey =
+    effectiveMode === 'shader'
+      ? `shader-${Math.round(size.width / 256)}x${Math.round(size.height / 256)}`
+      : effectiveMode;
+  const spacerStyle = useMemo<React.CSSProperties>(
+    () => ({ width: size.width, height: size.height, pointerEvents: 'none' }),
+    [size.width, size.height]
+  );
 
   return (
     <div
@@ -227,11 +323,11 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
       className={`rdev-lg-layer pointer-events-none absolute inset-0 ${
         effectiveElasticity > 0 ? 'overflow-visible' : 'overflow-hidden'
       } ${className}`}
-      style={{ borderRadius: 'inherit', zIndex: -1 }}
+      style={LAYER_HOST_STYLE}
     >
       {isVisible && size.width >= 12 && size.height >= 12 && (
         <LiquidGlass
-          key={`${Math.round(size.width / 10)}x${Math.round(size.height / 10)}-${realGlassMode}`}
+          key={glassKey}
           displacementScale={effectiveDisplacement}
           blurAmount={effectiveBlur}
           saturation={glassSaturation}
@@ -239,34 +335,42 @@ const LiquidGlassLayerInner: React.FC<LiquidGlassLayerProps> = ({
           elasticity={effectiveElasticity}
           cornerRadius={effectiveRadius}
           overLight={isLightTheme}
-          mode={realGlassMode}
+          mode={effectiveMode}
           padding="0px"
           globalMousePos={pointer.global}
           mouseOffset={pointer.offset}
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            pointerEvents: 'none',
-          }}
+          style={LIQUID_GLASS_STYLE}
         >
-          <div style={{ width: size.width, height: size.height, pointerEvents: 'none' }} />
+          <div style={spacerStyle} />
         </LiquidGlass>
       )}
     </div>
   );
 };
 
-export const LiquidGlassLayer: React.FC<LiquidGlassLayerProps> = ({
-  disabled = false,
-  ...props
-}) => {
-  const useRealLiquidGlass = useChatStore((s) => s.liquidGlass.useRealLiquidGlass);
-  const reduceTransparency = useChatStore((s) => s.liquidGlass.reduceTransparency);
+const LiquidGlassLayerInner = React.memo(LiquidGlassLayerInnerComponent);
 
-  if (!useRealLiquidGlass || reduceTransparency || disabled) {
-    return null;
+export const LiquidGlassLayer: React.FC<LiquidGlassLayerProps> = React.memo(
+  ({ disabled = false, alwaysRender = false, ...props }) => {
+    const useRealLiquidGlass = useChatStore((s) => s.liquidGlass.useRealLiquidGlass);
+    const reduceTransparency = useChatStore((s) => s.liquidGlass.reduceTransparency);
+    const realGlassQuality = useChatStore((s) => s.liquidGlass.realGlassQuality);
+
+    if (!useRealLiquidGlass || reduceTransparency || disabled) {
+      return null;
+    }
+
+    const variant = props.variant ?? 'surface';
+    const variantAllowed =
+      alwaysRender ||
+      realGlassQuality === 'all' ||
+      (realGlassQuality === 'balanced' && BALANCED_VARIANTS.has(variant)) ||
+      MINIMAL_VARIANTS.has(variant);
+
+    if (!variantAllowed) {
+      return null;
+    }
+
+    return <LiquidGlassLayerInner {...props} />;
   }
-
-  return <LiquidGlassLayerInner {...props} />;
-};
+);

@@ -224,7 +224,10 @@ export const AuthScreen: React.FC = () => {
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 className="space-y-3.5 overflow-hidden"
               >
-                <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+                <div
+                  data-input-shell
+                  className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+                >
                   <User className="h-4 w-4 text-[#22C55E]" />
                   <input
                     type="text"
@@ -236,7 +239,10 @@ export const AuthScreen: React.FC = () => {
                   />
                 </div>
 
-                <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+                <div
+                  data-input-shell
+                  className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+                >
                   <AtSign className="h-4 w-4 text-[#22C55E]" />
                   <input
                     type="text"
@@ -255,7 +261,10 @@ export const AuthScreen: React.FC = () => {
             )}
           </AnimatePresence>
 
-          <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+          <div
+            data-input-shell
+            className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+          >
             <Mail className="h-4 w-4 text-[#22C55E]" />
             <input
               type="email"
@@ -267,7 +276,10 @@ export const AuthScreen: React.FC = () => {
             />
           </div>
 
-          <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+          <div
+            data-input-shell
+            className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+          >
             <KeyRound className="h-4 w-4 text-[#22C55E]" />
             <input
               type="password"

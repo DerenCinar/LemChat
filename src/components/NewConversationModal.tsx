@@ -243,7 +243,7 @@ export const NewConversationModal: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
             className="glass-panel glass-surface relative w-full max-w-md overflow-hidden rounded-3xl p-6 ring-1 ring-white/20"
           >
-            <LiquidGlassLayer variant="modal" interactive />
+            <LiquidGlassLayer variant="modal" />
 
             {/* Subtle liquid shimmer sweep on modal entrance */}
             <motion.span
@@ -526,7 +526,10 @@ export const NewConversationModal: React.FC = () => {
                     Username
                   </label>
                   <div className="relative">
-                    <div className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20">
+                    <div
+                      data-input-shell
+                      className="glass-pill flex items-center gap-2 rounded-xl px-3 py-2.5 transition focus-within:border-[#22C55E] focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+                    >
                       <span className="text-sm font-bold text-[#22C55E]">@</span>
                       <input
                         type="text"

@@ -40,6 +40,7 @@ import type {
   NotificationRevealMode,
   NotificationSoundId,
   RealGlassMode,
+  RealGlassQuality,
   RingtoneId,
 } from '../types/chat';
 import {
@@ -797,19 +798,19 @@ export const SettingsView: React.FC = () => {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Pronouns</span>
-                <input value={pronouns} onChange={(e) => setPronouns(e.target.value)} placeholder="they/them" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+                <input value={pronouns} onChange={(e) => setPronouns(e.target.value)} placeholder="they/them" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20" />
               </label>
               <label className="space-y-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Listening / Playing</span>
-                <input value={activity} onChange={(e) => setActivity(e.target.value)} placeholder="Listening to Midnight FM" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+                <input value={activity} onChange={(e) => setActivity(e.target.value)} placeholder="Listening to Midnight FM" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20" />
               </label>
               <label className="space-y-1 sm:col-span-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Short bio</span>
-                <input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="A short profile bio" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+                <input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="A short profile bio" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20" />
               </label>
               <label className="space-y-1 sm:col-span-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/60">Custom status</span>
-                <input value={statusText} onChange={(e) => setStatusText(e.target.value)} placeholder="🎮 Grinding ranked" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none" />
+                <input value={statusText} onChange={(e) => setStatusText(e.target.value)} placeholder="🎮 Grinding ranked" className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20" />
               </label>
             </div>
 
@@ -945,7 +946,6 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="glass-pill relative space-y-4 rounded-2xl p-4">
-            <LiquidGlassLayer variant="surface" />
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
                 Live Liquid Glass
@@ -961,7 +961,6 @@ export const SettingsView: React.FC = () => {
 
             {/* Real Liquid Glass Engine (rdev/liquid-glass-react) */}
             <div className="glass-pill relative space-y-3 rounded-2xl border border-[#22C55E]/25 p-3.5">
-              <LiquidGlassLayer variant="pill" />
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -1035,6 +1034,35 @@ export const SettingsView: React.FC = () => {
                             </button>
                           )
                         )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <SettingLabel
+                        label="Performance / Coverage"
+                        info="Controls how many surfaces run real SVG backdrop refraction: Minimal (overlays & composer), Balanced (adds sidebar rail & pills), or All (also messages & panel headers)."
+                      />
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(
+                          [
+                            ['minimal', 'Minimal (Fastest)'],
+                            ['balanced', 'Balanced'],
+                            ['all', 'All Surfaces'],
+                          ] as [RealGlassQuality, string][]
+                        ).map(([quality, label]) => (
+                          <button
+                            key={quality}
+                            type="button"
+                            onClick={() => setLiquidGlass({ realGlassQuality: quality })}
+                            className={`glass-pill rounded-xl py-1.5 text-[11px] font-semibold transition ${
+                              liquidGlass.realGlassQuality === quality
+                                ? 'border-[#22C55E] bg-[#22C55E]/20 text-emerald-950 ring-1 ring-[#22C55E]/40 dark:text-white'
+                                : 'text-emerald-900/70 hover:bg-black/5 dark:text-emerald-100/70 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -1114,6 +1142,7 @@ export const SettingsView: React.FC = () => {
                     {
                       useRealLiquidGlass: true,
                       realGlassMode: 'standard' as RealGlassMode,
+                      realGlassQuality: 'balanced' as RealGlassQuality,
                       refractionScale: 74,
                       aberrationIntensity: 2.5,
                       glassElasticity: 20,
@@ -1185,7 +1214,7 @@ export const SettingsView: React.FC = () => {
                   Live Preview
                 </span>
                 <span className="glass-pill relative rounded-full px-2.5 py-1 text-[10px] font-semibold text-emerald-950 dark:text-white">
-                  <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
+                  <LiquidGlassLayer variant="pill" interactive alwaysRender cornerRadius={999} />
                   {liquidGlass.useRealLiquidGlass ? 'Real Refraction Active' : 'CSS Frosted Glass'}
                 </span>
               </div>
@@ -1205,6 +1234,7 @@ export const SettingsView: React.FC = () => {
                     <LiquidGlassLayer
                       variant="bubble"
                       interactive
+                      alwaysRender
                       disabled={liquidGlass.bubbleStyle === 'imessage-classic'}
                     />
                     {(liquidGlass.bubbleStyle === 'imessage' ||
@@ -1238,6 +1268,7 @@ export const SettingsView: React.FC = () => {
                     <LiquidGlassLayer
                       variant="bubble"
                       interactive
+                      alwaysRender
                       disabled={liquidGlass.bubbleStyle === 'imessage-classic'}
                     />
                     {(liquidGlass.bubbleStyle === 'imessage' ||
@@ -1400,7 +1431,7 @@ export const SettingsView: React.FC = () => {
               value={themeCode}
               onChange={(e) => setThemeCode(e.target.value)}
               placeholder="Theme code"
-              className="glass-pill min-w-0 rounded-xl px-3 py-2 text-[11px] outline-none"
+              className="glass-pill min-w-0 rounded-xl px-3 py-2 text-[11px] outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20"
             />
             <button
               type="button"
@@ -1696,7 +1727,7 @@ export const SettingsView: React.FC = () => {
                   value={liquidGlass.awayReply}
                   onChange={(e) => setLiquidGlass({ awayReply: e.target.value })}
                   placeholder="Away auto-reply message"
-                  className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
+                  className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20"
                 />
               </div>
 
@@ -1727,7 +1758,7 @@ export const SettingsView: React.FC = () => {
                 value={liquidGlass.keywordAlerts}
                 onChange={(e) => setLiquidGlass({ keywordAlerts: e.target.value })}
                 placeholder="nickname, gaming, urgent"
-                className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none"
+                className="glass-pill w-full rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20"
               />
             </div>
           </div>
@@ -1756,7 +1787,7 @@ export const SettingsView: React.FC = () => {
                   }}
                   rows={3}
                   placeholder="/omw=On my way!&#10;:shrug:=¯_(ツ)_/¯"
-                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
+                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20"
                 />
               </div>
 
@@ -1770,7 +1801,7 @@ export const SettingsView: React.FC = () => {
                   onChange={(e) => setLiquidGlass({ savedReplies: e.target.value.split('\n').filter(Boolean) })}
                   rows={3}
                   placeholder="Saved replies (one per line)"
-                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none"
+                  className="glass-pill lem-scrollbar w-full resize-y rounded-xl px-3 py-2 text-xs outline-none transition focus:border-[#22C55E] focus:ring-2 focus:ring-[#22C55E]/20"
                 />
               </div>
             </div>
@@ -1783,7 +1814,6 @@ export const SettingsView: React.FC = () => {
           description="Choose reveal effects, notification chimes, ringtones, and alert timing."
         >
           <div className="glass-pill relative space-y-4 rounded-2xl p-4 text-xs">
-            <LiquidGlassLayer variant="surface" />
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-start gap-2.5">
                 <Bell className="mt-0.5 h-4 w-4 text-[#22C55E]" />
@@ -2036,7 +2066,6 @@ export const SettingsView: React.FC = () => {
           description="Adjust motion, transparency, contrast, typography, focus rings, and visual alerts."
         >
           <div className="glass-pill relative space-y-4 rounded-2xl p-4">
-            <LiquidGlassLayer variant="surface" />
             <LiquidGlassSlider
               label="Interface & text scale"
               value={liquidGlass.textScale}
@@ -2111,7 +2140,7 @@ export const SettingsView: React.FC = () => {
                     highContrast: false,
                     dyslexiaFont: false,
                     textScale: 100,
-                    focusOutlines: true,
+                    focusOutlines: false,
                     underlineLinks: false,
                     largeClickTargets: false,
                     screenFlashAlerts: false,

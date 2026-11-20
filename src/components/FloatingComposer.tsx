@@ -895,9 +895,10 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             : undefined
         }
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        data-input-shell
         className="glass-panel glass-surface relative flex items-end gap-1 overflow-visible rounded-[26px] px-2 py-1.5 transition focus-within:border-[#22C55E]/55 focus-within:ring-2 focus-within:ring-[#22C55E]/20 md:gap-1.5 md:px-3 md:py-2"
       >
-        <LiquidGlassLayer variant="surface" interactive cornerRadius={26} />
+        <LiquidGlassLayer variant="surface" cornerRadius={26} />
         {/* Liquid Glass Send Sweep across composer */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
           {sendPulseKey > 0 && (

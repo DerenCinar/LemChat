@@ -551,28 +551,33 @@ export const ChatArea: React.FC = () => {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden border-b border-black/[0.06] px-5 dark:border-white/[0.08]"
             >
-              <div className="flex items-center gap-2 py-2">
-                <Search className="h-3.5 w-3.5 text-[#22C55E]" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={inChatSearchQuery}
-                  onChange={(e) => setInChatSearchQuery(e.target.value)}
-                  placeholder="Filter messages in this thread..."
-                  className="flex-1 bg-transparent text-xs text-emerald-950 placeholder-emerald-800/50 outline-none dark:text-white dark:placeholder-emerald-100/40"
-                />
-                {inChatSearchQuery && (
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                    {visibleMessages.length} match
-                    {visibleMessages.length === 1 ? '' : 'es'}
-                  </span>
-                )}
-                <button
-                  onClick={toggleInChatSearch}
-                  className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+              <div className="py-2">
+                <div
+                  data-input-shell
+                  className="glass-pill flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20"
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  <Search className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={inChatSearchQuery}
+                    onChange={(e) => setInChatSearchQuery(e.target.value)}
+                    placeholder="Filter messages in this thread..."
+                    className="flex-1 bg-transparent text-xs text-emerald-950 placeholder-emerald-800/50 outline-none dark:text-white dark:placeholder-emerald-100/40"
+                  />
+                  {inChatSearchQuery && (
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                      {visibleMessages.length} match
+                      {visibleMessages.length === 1 ? '' : 'es'}
+                    </span>
+                  )}
+                  <button
+                    onClick={toggleInChatSearch}
+                    className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

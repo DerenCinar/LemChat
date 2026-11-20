@@ -848,6 +848,14 @@ html[data-glass-depth="floating"] .glass-rail {
   position: relative;
   z-index: 0;
 }
+.rdev-lg-layer {
+  transform: translateZ(0);
+}
+.rdev-lg-layer.overflow-hidden {
+  contain: layout paint;
+}
+.rdev-lg-layer > div,
+.rdev-lg-layer > span,
 .rdev-lg-layer .glass {
   display: block !important;
   width: 100% !important;
@@ -859,6 +867,12 @@ html[data-glass-depth="floating"] .glass-rail {
 }
 .rdev-lg-layer svg {
   pointer-events: none;
+}
+
+/* Pause continuous background mesh animation in real glass mode to keep Chromium SVG backdrop cache warm */
+html[data-real-liquid-glass="true"] .animate-mesh-slow,
+html[data-real-liquid-glass="true"] .animate-mesh-slow-rev {
+  animation: none !important;
 }
 
 html[data-real-liquid-glass="true"] [data-real-glass-host].glass-panel,
@@ -1049,7 +1063,31 @@ html[data-dyslexia-font="true"] button {
   line-height: 1.65;
 }
 
-html[data-strong-focus="true"] :focus-visible {
+[data-input-shell] input,
+[data-input-shell] textarea,
+input.bg-transparent,
+textarea.bg-transparent {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+[data-input-shell]:focus-within {
+  border-color: color-mix(in srgb, var(--glass-accent) 65%, transparent);
+}
+
+html[data-strong-focus="true"] [data-input-shell]:focus-within {
+  border-color: var(--glass-accent) !important;
+  box-shadow: 0 0 0 2.5px var(--glass-accent) !important;
+}
+
+html[data-strong-focus="true"] input:not([data-input-shell] input):not(.bg-transparent):focus-visible,
+html[data-strong-focus="true"] textarea:not([data-input-shell] textarea):not(.bg-transparent):focus-visible,
+html[data-strong-focus="true"] select:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2.5px var(--glass-accent) !important;
+}
+
+html[data-strong-focus="true"] :focus-visible:not(input):not(textarea):not(select) {
   outline: 2.5px solid var(--glass-accent) !important;
   outline-offset: 2px !important;
 }

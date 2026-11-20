@@ -245,8 +245,11 @@ export const ConversationSidebar: React.FC = () => {
           </motion.button>
         </div>
 
-        <div className="glass-pill relative flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20">
-          <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
+        <div
+          data-input-shell
+          className="glass-pill relative flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+        >
+          <LiquidGlassLayer variant="pill" cornerRadius={999} />
           <Search className="h-3.5 w-3.5 shrink-0 text-emerald-700/60 dark:text-emerald-200/50" />
           <input
             type="text"

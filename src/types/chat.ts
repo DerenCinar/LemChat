@@ -24,6 +24,7 @@ export type SidebarLayout = 'rail' | 'standard' | 'preview';
 export type EnterBehavior = 'enter-send' | 'ctrl-send';
 export type UnreadDividerStyle = 'laser' | 'pill' | 'dotted' | 'rainbow';
 export type RealGlassMode = 'standard' | 'polar' | 'prominent' | 'shader';
+export type RealGlassQuality = 'minimal' | 'balanced' | 'all';
 export type GlassDepth = 'flat' | 'elevated' | 'floating';
 export type NotificationRevealMode = 'classic' | 'liquid-reveal' | 'liquid-privacy';
 export type NotificationSoundId =
@@ -83,6 +84,7 @@ export interface LiquidGlassTheme {
   // Real Liquid Glass (rdev/liquid-glass-react) & surface settings
   useRealLiquidGlass: boolean;
   realGlassMode: RealGlassMode;
+  realGlassQuality: RealGlassQuality;
   refractionScale: number;
   aberrationIntensity: number;
   glassElasticity: number;
