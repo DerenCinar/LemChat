@@ -45,16 +45,47 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Electron and electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: Set build version
         run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
 
       - name: Build Windows Installer & Portable EXE
         env:
+          NODE_OPTIONS: --dns-result-order=ipv4first
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           npm run build
-          npx electron-builder --win --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $electronVer = node -p "require('electron/package.json').version"
+          $cacheDir = Join-Path $env:LOCALAPPDATA "electron\Cache"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          $shasumsPath = Join-Path $cacheDir "SHASUMS256.txt-$electronVer"
+          curl.exe -fsSL --retry 5 --retry-delay 3 "https://github.com/electron/electron/releases/download/v$electronVer/SHASUMS256.txt" -o $shasumsPath
+          if ($LASTEXITCODE -ne 0) { Remove-Item -Force -ErrorAction SilentlyContinue $shasumsPath }
+          $built = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npx electron-builder --win --publish never
+            if ($LASTEXITCODE -eq 0) {
+              $built = $true
+              break
+            }
+            Write-Warning "electron-builder attempt $attempt failed (exit $LASTEXITCODE)"
+            if ($attempt -lt 3) {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue release
+              Start-Sleep -Seconds ($attempt * 10)
+            }
+          }
+          if (-not $built) { exit 1 }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -81,17 +112,48 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Electron and electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: Set build version
         run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
 
       - name: Build macOS DMG & ZIP
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          NODE_OPTIONS: --dns-result-order=ipv4first
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           npm run build
-          npx electron-builder --mac dmg zip --arm64 --x64 --publish never
+          ELECTRON_VER=$(node -p "require('electron/package.json').version")
+          mkdir -p "$HOME/Library/Caches/electron"
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+            "https://github.com/electron/electron/releases/download/v${ELECTRON_VER}/SHASUMS256.txt" \
+            -o "$HOME/Library/Caches/electron/SHASUMS256.txt-${ELECTRON_VER}" \
+            || rm -f "$HOME/Library/Caches/electron/SHASUMS256.txt-${ELECTRON_VER}"
+          built=0
+          for attempt in 1 2 3; do
+            if npx electron-builder --mac dmg zip --arm64 --x64 --publish never; then
+              built=1
+              break
+            fi
+            echo "electron-builder attempt ${attempt} failed"
+            if [ "$attempt" -lt 3 ]; then
+              rm -rf release
+              sleep $((attempt * 10))
+            fi
+          done
+          if [ "$built" -ne 1 ]; then
+            exit 1
+          fi
           for app in release/mac*/SkellyTalk.app; do
             codesign --verify --deep --strict --verbose=2 "$app"
           done
@@ -128,6 +190,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Electron and electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: Set build version
         run: npm version "${{ needs.prepare-version.outputs.version }}" --no-git-tag-version
 
@@ -138,8 +210,30 @@ jobs:
         run: npm run build
 
       - name: Build Linux AppImage, DEB & ChromeOS Edition
+        env:
+          NODE_OPTIONS: --dns-result-order=ipv4first
         run: |
-          npx electron-builder --linux AppImage deb --publish never
+          ELECTRON_VER=$(node -p "require('electron/package.json').version")
+          mkdir -p "$HOME/.cache/electron"
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+            "https://github.com/electron/electron/releases/download/v${ELECTRON_VER}/SHASUMS256.txt" \
+            -o "$HOME/.cache/electron/SHASUMS256.txt-${ELECTRON_VER}" \
+            || rm -f "$HOME/.cache/electron/SHASUMS256.txt-${ELECTRON_VER}"
+          built=0
+          for attempt in 1 2 3; do
+            if npx electron-builder --linux AppImage deb --publish never; then
+              built=1
+              break
+            fi
+            echo "electron-builder attempt ${attempt} failed"
+            if [ "$attempt" -lt 3 ]; then
+              rm -rf release
+              sleep $((attempt * 10))
+            fi
+          done
+          if [ "$built" -ne 1 ]; then
+            exit 1
+          fi
           VER="${{ needs.prepare-version.outputs.version }}"
           cp release/*.deb "release/SkellyTalk-ChromeOS-${VER}-amd64.deb"
           (cd dist && zip -r "../release/SkellyTalk-ChromeOS-Web-${VER}.zip" .)
