@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Lock } from 'lucide-react';
 import { useAppLock } from '../store/useAppLock';
 import { useChatStore } from '../store/useChatStore';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 export const LOCK_SHORTCUT_LABEL = 'Ctrl+Shift+L';
 
@@ -132,8 +133,9 @@ export const AppLockScreen: React.FC = () => {
             onSubmit={(e) => void submit(e)}
             initial={{ scale: 0.95, y: 10 }}
             animate={{ scale: 1, y: 0 }}
-            className="glass-panel glass-surface mx-4 flex w-full max-w-xs flex-col items-center rounded-3xl px-7 py-8 text-center"
+            className="glass-panel glass-surface relative mx-4 flex w-full max-w-xs flex-col items-center rounded-3xl px-7 py-8 text-center"
           >
+            <LiquidGlassLayer variant="modal" />
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow">
               <Lock className="h-6 w-6" />
             </div>

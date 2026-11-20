@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Database, KeyRound, Mail, User, AtSign, ArrowRight, RotateCcw } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import {
   clearSupabaseConfig,
   getSupabaseConfig,
@@ -68,8 +69,9 @@ export const AuthScreen: React.FC = () => {
           initial={{ opacity: 0, y: 16, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-          className="glass-panel glass-surface w-full max-w-md rounded-3xl p-7"
+          className="glass-panel glass-surface relative w-full max-w-md rounded-3xl p-7"
         >
+          <LiquidGlassLayer variant="modal" />
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm">
               <Database className="h-5 w-5" />
@@ -142,8 +144,9 @@ export const AuthScreen: React.FC = () => {
         initial={{ opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        className="glass-panel glass-surface w-full max-w-md rounded-3xl p-7"
+        className="glass-panel glass-surface relative w-full max-w-md rounded-3xl p-7"
       >
+        <LiquidGlassLayer variant="modal" />
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#10B981] text-xl leading-none text-white shadow-lem-glow">
@@ -176,59 +179,81 @@ export const AuthScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => setMode('signin')}
-            className={`rounded-xl py-1.5 text-xs font-semibold transition ${
+            className={`relative rounded-xl py-1.5 text-xs font-semibold transition-colors ${
               mode === 'signin'
-                ? 'bg-gradient-to-r from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm'
+                ? 'text-white'
                 : 'text-emerald-900/70 dark:text-emerald-200/70'
             }`}
           >
-            Sign In
+            {mode === 'signin' && (
+              <motion.div
+                layoutId="auth-mode-pill"
+                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#22C55E] to-[#10B981] shadow-lem-glow-sm"
+              />
+            )}
+            <span className="relative z-10">Sign In</span>
           </button>
           <button
             type="button"
             onClick={() => setMode('signup')}
-            className={`rounded-xl py-1.5 text-xs font-semibold transition ${
+            className={`relative rounded-xl py-1.5 text-xs font-semibold transition-colors ${
               mode === 'signup'
-                ? 'bg-gradient-to-r from-[#22C55E] to-[#10B981] text-white shadow-lem-glow-sm'
+                ? 'text-white'
                 : 'text-emerald-900/70 dark:text-emerald-200/70'
             }`}
           >
-            Create Account
+            {mode === 'signup' && (
+              <motion.div
+                layoutId="auth-mode-pill"
+                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#22C55E] to-[#10B981] shadow-lem-glow-sm"
+              />
+            )}
+            <span className="relative z-10">Create Account</span>
           </button>
         </div>
 
         <form onSubmit={handleAuthSubmit} className="space-y-3.5">
-          {mode === 'signup' && (
-            <>
-              <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
-                <User className="h-4 w-4 text-[#22C55E]" />
-                <input
-                  type="text"
-                  required
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Display Name (e.g. Maya Lin)"
-                  className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
-                />
-              </div>
+          <AnimatePresence initial={false}>
+            {mode === 'signup' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                className="space-y-3.5 overflow-hidden"
+              >
+                <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+                  <User className="h-4 w-4 text-[#22C55E]" />
+                  <input
+                    type="text"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Display Name (e.g. Maya Lin)"
+                    className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
+                  />
+                </div>
 
-              <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
-                <AtSign className="h-4 w-4 text-[#22C55E]" />
-                <input
-                  type="text"
-                  required
-                  minLength={3}
-                  maxLength={24}
-                  pattern="@?[A-Za-z0-9_]+"
-                  title="Use 3-24 letters, numbers, or underscores"
-                  value={handle}
-                  onChange={(e) => setHandle(e.target.value)}
-                  placeholder="Handle (e.g. mayalin)"
-                  className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
-                />
-              </div>
-            </>
-          )}
+                <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
+                  <AtSign className="h-4 w-4 text-[#22C55E]" />
+                  <input
+                    type="text"
+                    required
+                    minLength={3}
+                    maxLength={24}
+                    pattern="@?[A-Za-z0-9_]+"
+                    title="Use 3-24 letters, numbers, or underscores"
+                    value={handle}
+                    onChange={(e) => setHandle(e.target.value)}
+                    placeholder="Handle (e.g. mayalin)"
+                    className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="glass-pill flex items-center gap-2.5 rounded-xl px-3.5 py-2.5">
             <Mail className="h-4 w-4 text-[#22C55E]" />

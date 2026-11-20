@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 function formatDuration(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -217,8 +218,11 @@ export const CallOverlay: React.FC = () => {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [speakers, setSpeakers] = useState<MediaDeviceInfo[]>([]);
-  const [showCameraMenu, setShowCameraMenu] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const activePopupId = useChatStore((s) => s.activePopupId);
+  const setActivePopupId = useChatStore((s) => s.setActivePopupId);
+  const togglePopup = useChatStore((s) => s.togglePopup);
+  const showCameraMenu = activePopupId === 'call:camera';
+  const showSettings = activePopupId === 'call:settings';
   const [prefs, setPrefs] = useState<CallPrefs>(loadPrefs);
   const [rect, setRect] = useState<Rect>(loadRect);
   const [miniPos, setMiniPos] = useState<{ x: number; y: number }>(() => ({
@@ -261,10 +265,11 @@ export const CallOverlay: React.FC = () => {
   useEffect(() => {
     if (!activeCall) {
       setViewMode('normal');
-      setShowCameraMenu(false);
-      setShowSettings(false);
+      if (activePopupId === 'call:camera' || activePopupId === 'call:settings') {
+        setActivePopupId(null);
+      }
     }
-  }, [activeCall]);
+  }, [activeCall, activePopupId, setActivePopupId]);
 
   useEffect(() => {
     if (!activeCall?.startedAt) {
@@ -339,14 +344,15 @@ export const CallOverlay: React.FC = () => {
       else if (k === 'd') updatePrefs({ deafened: !prefs.deafened });
       else if (k === 'f') setViewMode((m) => (m === 'maximized' ? 'normal' : 'maximized'));
       else if (k === 'escape') {
-        setShowSettings(false);
-        setShowCameraMenu(false);
+        if (activePopupId === 'call:camera' || activePopupId === 'call:settings') {
+          setActivePopupId(null);
+        }
         setViewMode((m) => (m === 'maximized' ? 'normal' : m));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeCall, prefs.shortcuts, prefs.deafened, toggleMute, toggleCamera, updatePrefs]);
+  }, [activeCall, activePopupId, prefs.shortcuts, prefs.deafened, toggleMute, toggleCamera, updatePrefs, setActivePopupId]);
 
   const loadDevices = async () => {
     try {
@@ -510,6 +516,7 @@ export const CallOverlay: React.FC = () => {
             transition={{ type: 'spring', stiffness: 420, damping: 26 }}
             className="glass-panel glass-surface fixed left-1/2 top-14 z-50 flex w-[360px] -translate-x-1/2 items-center justify-between gap-3 overflow-hidden rounded-3xl p-4 ring-1 ring-[#22C55E]/50"
           >
+            <LiquidGlassLayer variant="toast" interactive />
             <motion.span
               aria-hidden
               initial={{ x: '-120%', opacity: 0.8 }}
@@ -570,11 +577,15 @@ export const CallOverlay: React.FC = () => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.92 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            onPointerDown={() => {
+              if (showCameraMenu || showSettings) setActivePopupId(null);
+            }}
             style={containerStyle as React.ComponentProps<typeof motion.div>["style"]}
             className={`glass-panel glass-surface fixed z-50 overflow-hidden ${containerClass} ${
               interacting ? 'select-none' : ''
             }`}
           >
+            <LiquidGlassLayer variant="modal" />
             {/* Header = drag handle */}
             <div
               onPointerDown={startDrag}
@@ -612,10 +623,10 @@ export const CallOverlay: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 {viewMode !== 'minimized' && (
                   <button
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       void loadDevices();
-                      setShowSettings((v) => !v);
-                      setShowCameraMenu(false);
+                      togglePopup('call:settings');
                     }}
                     className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 dark:text-emerald-200"
                     title="Call settings"
@@ -796,10 +807,10 @@ export const CallOverlay: React.FC = () => {
                     </motion.button>
 
                     <button
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={() => {
                         void loadDevices();
-                        setShowCameraMenu((v) => !v);
-                        setShowSettings(false);
+                        togglePopup('call:camera');
                       }}
                       title="Select camera"
                       className="glass-pill flex h-10 items-center justify-center rounded-r-full border-l-0 px-2 text-emerald-900 hover:bg-black/5 dark:text-white dark:hover:bg-white/10"
@@ -813,8 +824,10 @@ export const CallOverlay: React.FC = () => {
                           initial={{ opacity: 0, y: 8, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          onPointerDown={(e) => e.stopPropagation()}
                           className="glass-panel glass-surface absolute bottom-12 left-0 z-50 w-60 rounded-2xl p-2"
                         >
+                          <LiquidGlassLayer variant="popover" interactive />
                           <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/60 dark:text-emerald-200/60">
                             Select Camera
                           </p>
@@ -830,7 +843,7 @@ export const CallOverlay: React.FC = () => {
                                   key={cam.deviceId || idx}
                                   onClick={() => {
                                     void switchCamera(cam.deviceId);
-                                    setShowCameraMenu(false);
+                                    setActivePopupId(null);
                                   }}
                                   className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left text-xs text-emerald-950 transition hover:bg-emerald-500/15 dark:text-white"
                                 >
@@ -889,6 +902,7 @@ export const CallOverlay: React.FC = () => {
                   onPointerDown={(e) => e.stopPropagation()}
                   className="glass-panel glass-surface absolute right-4 top-14 z-50 max-h-[calc(100%-7rem)] w-64 overflow-y-auto rounded-2xl p-2"
                 >
+                  <LiquidGlassLayer variant="popover" interactive />
                   <SectionLabel>Audio</SectionLabel>
                   <SliderRow
                     accent={accent}

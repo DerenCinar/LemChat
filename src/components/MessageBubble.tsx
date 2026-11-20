@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
   CheckCheck,
@@ -14,6 +14,7 @@ import {
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
 import { InteractiveCard } from './InteractiveCard';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { Message } from '../types/chat';
 
 const SpoilerText: React.FC<{ text: string }> = ({ text }) => {
@@ -36,6 +37,7 @@ const SpoilerText: React.FC<{ text: string }> = ({ text }) => {
 interface MessageBubbleProps {
   message: Message;
   showHeader: boolean;
+  isLastInGroup?: boolean;
   highlightQuery?: string;
   highlightMention?: boolean;
 }
@@ -43,13 +45,14 @@ interface MessageBubbleProps {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   showHeader,
+  isLastInGroup = true,
   highlightQuery,
   highlightMention,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
+  const pickerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
@@ -61,6 +64,41 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const self = useChatStore((s) => s.self);
   const quickReactions = useChatStore((s) => s.liquidGlass.quickReactions);
   const entranceEffect = useChatStore((s) => s.liquidGlass.entranceEffect);
+  const bubbleStyle = useChatStore((s) => s.liquidGlass.bubbleStyle);
+  const density = useChatStore((s) => s.liquidGlass.density);
+  const activePopupId = useChatStore((s) => s.activePopupId);
+  const setActivePopupId = useChatStore((s) => s.setActivePopupId);
+  const togglePopup = useChatStore((s) => s.togglePopup);
+
+  const pickerPopupId = `reaction:${message.id}`;
+  const showPicker = activePopupId === pickerPopupId;
+  const isTailedStyle =
+    (bubbleStyle === 'imessage' || bubbleStyle === 'imessage-classic') &&
+    density !== 'minimal';
+  const showTail = isTailedStyle && isLastInGroup;
+
+  useEffect(() => {
+    if (!showPicker) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        pickerContainerRef.current &&
+        !pickerContainerRef.current.contains(event.target as Node)
+      ) {
+        setActivePopupId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActivePopupId(null);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showPicker, setActivePopupId]);
 
   const entrance =
     entranceEffect === 'instant'
@@ -152,7 +190,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }
 
   const actionToolbar = (
-    <div className="relative flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+    <div
+      ref={pickerContainerRef}
+      className={`relative flex items-center gap-1 transition-opacity ${
+        showPicker ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+      }`}
+    >
       <button
         onClick={() => setReplyingTo(message)}
         className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
@@ -162,8 +205,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       </button>
 
       <button
-        onClick={() => setShowPicker((v) => !v)}
-        className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-800 hover:scale-105 dark:text-emerald-200"
+        onClick={() => togglePopup(pickerPopupId)}
+        className={`glass-pill flex h-7 w-7 items-center justify-center rounded-full hover:scale-105 ${
+          showPicker
+            ? 'border-[#22C55E]/60 bg-[#22C55E]/20 text-[#22C55E]'
+            : 'text-emerald-800 dark:text-emerald-200'
+        }`}
         title="Add reaction"
       >
         <SmilePlus className="h-3.5 w-3.5" />
@@ -205,26 +252,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </>
       )}
 
-      {showPicker && (
-        <div
-          className={`glass-panel glass-surface absolute bottom-8 z-30 flex items-center gap-1 rounded-full px-2 py-1 ${
-            message.isMe ? 'right-0' : 'left-0'
-          }`}
-        >
-          {quickReactions.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => {
-                void toggleReaction(message.conversationId, message.id, emoji);
-                setShowPicker(false);
-              }}
-              className="rounded-full p-1 text-sm transition hover:scale-125"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {showPicker && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 460, damping: 28 }}
+            className={`glass-panel glass-surface absolute bottom-8 z-30 flex items-center gap-1 rounded-full px-2 py-1 ${
+              message.isMe ? 'right-0' : 'left-0'
+            }`}
+          >
+            <LiquidGlassLayer variant="popover" interactive cornerRadius={999} />
+            {quickReactions.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => {
+                  void toggleReaction(message.conversationId, message.id, emoji);
+                  setActivePopupId(null);
+                }}
+                className="rounded-full p-1 text-sm transition hover:scale-125"
+              >
+                {emoji}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 
@@ -245,7 +299,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         transformOrigin: message.isMe ? 'bottom right' : 'bottom left',
       }}
       className={`group flex gap-2.5 ${message.isMe ? 'flex-row-reverse' : 'flex-row'}`}
-      onMouseLeave={() => setShowPicker(false)}
     >
       {!message.isMe && (
         <div className="w-8 shrink-0 pt-0.5">
@@ -296,19 +349,47 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             whileHover={{ scale: 1.01 }}
             transition={{ type: 'spring', stiffness: 500, damping: 32 }}
             data-message-bubble
-            className={`glass-panel relative overflow-hidden rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text ${
+            data-is-me={message.isMe ? 'true' : 'false'}
+            data-tail={showTail ? 'true' : 'false'}
+            data-grouped={!showHeader ? 'true' : 'false'}
+            className={`glass-panel relative px-3.5 py-2.5 text-[13.5px] leading-relaxed select-text ${
+              isTailedStyle ? 'rounded-[20px]' : 'overflow-hidden rounded-2xl'
+            } ${
               message.isMe
-                ? 'glass-bubble-sent rounded-tr-md text-white'
-                : 'glass-bubble-received rounded-tl-md text-emerald-950 dark:text-emerald-50/95'
+                ? `glass-bubble-sent ${isTailedStyle ? '' : 'rounded-tr-md'} text-white`
+                : `glass-bubble-received ${isTailedStyle ? '' : 'rounded-tl-md'} text-emerald-950 dark:text-emerald-50/95`
             } ${highlightMention ? 'ring-2 ring-[#22C55E] ring-offset-4 ring-offset-transparent animate-pulse' : ''}`}
           >
-            <motion.span
-              aria-hidden
-              initial={{ x: '-130%', opacity: 0.85 }}
-              animate={{ x: '220%', opacity: 0 }}
-              transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
-              className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+            <LiquidGlassLayer
+              variant="bubble"
+              interactive
+              disabled={bubbleStyle === 'imessage-classic' || density === 'minimal'}
             />
+            {showTail && (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 16 16"
+                className={`pointer-events-none absolute bottom-0 h-4 w-4 ${
+                  message.isMe
+                    ? 'bubble-tail-sent -right-[5.8px]'
+                    : 'bubble-tail-received -left-[5.8px] -scale-x-100'
+                }`}
+              >
+                <path
+                  d="M 9.8 2 C 9.8 9.2 12.1 13.5 15.8 15.7 C 11.2 16.1 6.9 14.9 3.8 13.3 A 14 14 0 0 0 9.8 2 Z"
+                  fill="currentColor"
+                />
+              </svg>
+            )}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+              <motion.span
+                aria-hidden
+                initial={{ x: '-130%', opacity: 0.85 }}
+                animate={{ x: '220%', opacity: 0 }}
+                transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
+                className="pointer-events-none absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+              />
+            </div>
 
             {message.isPinned && (
               <div className="mb-1 flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider text-[#22C55E]">
@@ -486,7 +567,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
                 message.isMe
                   ? 'text-white/80'
-                  : 'text-emerald-900/50 dark:text-emerald-200/45'
+                  : bubbleStyle === 'imessage-classic'
+                    ? 'text-zinc-500 dark:text-zinc-400'
+                    : 'text-emerald-900/50 dark:text-emerald-200/45'
               }`}
             >
               <span>{message.timestamp}</span>

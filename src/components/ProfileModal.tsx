@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, MessageSquare, Phone, Video, Settings } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { UserPresence } from '../types/chat';
 
 const STATUS_META: Record<UserPresence, { label: string; dot: string }> = {
@@ -70,6 +71,15 @@ export const ProfileModal: React.FC = () => {
     }
   }, [profile, isSelf, getContactName]);
 
+  useEffect(() => {
+    if (!profile) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedProfileId(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [profile, setSelectedProfileId]);
+
   const handleMessage = async () => {
     if (!profile) return;
     setSelectedProfileId(null);
@@ -103,12 +113,16 @@ export const ProfileModal: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
             className="glass-panel glass-surface relative w-full max-w-sm overflow-hidden rounded-3xl p-6 ring-1 ring-white/20"
           >
-            <button
+            <LiquidGlassLayer variant="modal" />
+            <motion.button
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => setSelectedProfileId(null)}
               className="glass-pill absolute right-4 top-4 rounded-full p-1.5 text-emerald-900/60 hover:text-emerald-950 dark:text-white/60 dark:hover:text-white"
             >
               <X className="h-4 w-4" />
-            </button>
+            </motion.button>
 
             <div className="flex flex-col items-center text-center">
               <div className="relative">
@@ -190,7 +204,9 @@ export const ProfileModal: React.FC = () => {
 
             <div className="mt-6 flex items-center justify-center gap-2">
               {isSelf ? (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => {
                     setSelectedProfileId(null);
                     setActiveTab('settings');
@@ -199,30 +215,36 @@ export const ProfileModal: React.FC = () => {
                 >
                   <Settings className="h-3.5 w-3.5" />
                   <span>Edit Profile &amp; Photo</span>
-                </button>
+                </motion.button>
               ) : (
                 <>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => void handleMessage()}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-[#22C55E] to-[#10B981] py-2.5 text-xs font-bold text-white shadow-lem-glow-sm transition hover:brightness-110"
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span>Message</span>
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
                     onClick={() => void handleCall('audio')}
                     title="Voice Call"
-                    className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-900 transition hover:scale-105 dark:text-white"
+                    className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-900 transition dark:text-white"
                   >
                     <Phone className="h-4 w-4" />
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
                     onClick={() => void handleCall('video')}
                     title="Video Call"
-                    className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-900 transition hover:scale-105 dark:text-white"
+                    className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-900 transition dark:text-white"
                   >
                     <Video className="h-4 w-4" />
-                  </button>
+                  </motion.button>
                 </>
               )}
             </div>

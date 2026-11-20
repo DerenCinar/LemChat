@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { NavTab, SelfPresence } from '../types/chat';
 
 const STATUS_CONFIG: Record<
@@ -34,16 +35,44 @@ const STATUS_CONFIG: Record<
 };
 
 export const NavRail: React.FC = () => {
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const statusContainerRef = useRef<HTMLDivElement | null>(null);
 
   const self = useChatStore((s) => s.self);
   const activeTab = useChatStore((s) => s.activeTab);
   const theme = useChatStore((s) => s.theme);
   const conversations = useChatStore((s) => s.conversations);
+  const activePopupId = useChatStore((s) => s.activePopupId);
+  const setActivePopupId = useChatStore((s) => s.setActivePopupId);
+  const togglePopup = useChatStore((s) => s.togglePopup);
   const setActiveTab = useChatStore((s) => s.setActiveTab);
   const setSelfStatus = useChatStore((s) => s.setSelfStatus);
   const toggleTheme = useChatStore((s) => s.toggleTheme);
   const setSelectedProfileId = useChatStore((s) => s.setSelectedProfileId);
+
+  const statusMenuOpen = activePopupId === 'nav:status';
+
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        statusContainerRef.current &&
+        !statusContainerRef.current.contains(event.target as Node)
+      ) {
+        setActivePopupId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActivePopupId(null);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [statusMenuOpen, setActivePopupId]);
 
   const dmUnread = conversations
     .filter((c) => c.type === 'dm')
@@ -73,10 +102,11 @@ export const NavRail: React.FC = () => {
 
   return (
     <aside className="glass-panel glass-rail relative z-20 flex w-full shrink-0 flex-row items-center justify-around rounded-2xl px-3 py-2 md:w-[68px] md:flex-col md:justify-between md:px-0 md:py-3.5">
+      <LiquidGlassLayer variant="rail" />
       {/* Top: User Avatar + Live Status Dot */}
-      <div className="relative flex flex-col items-center">
+      <div ref={statusContainerRef} className="relative flex flex-col items-center">
         <button
-          onClick={() => setStatusMenuOpen((v) => !v)}
+          onClick={() => togglePopup('nav:status')}
           title={`${self?.name ?? 'User'} (${statusMeta.label}) — Click to change status`}
           className="group relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E] to-[#059669] text-sm font-bold text-white shadow-lem-glow-sm transition-transform hover:scale-105 active:scale-95"
         >
@@ -100,10 +130,11 @@ export const NavRail: React.FC = () => {
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
               className="glass-panel glass-surface absolute bottom-14 left-0 z-50 w-48 rounded-2xl p-2 md:bottom-auto md:left-14 md:top-0"
             >
+              <LiquidGlassLayer variant="popover" interactive />
               <button
                 onClick={() => {
                   setSelectedProfileId(self.id);
-                  setStatusMenuOpen(false);
+                  setActivePopupId(null);
                 }}
                 className="mb-1.5 w-full rounded-xl px-2.5 py-1.5 text-left transition hover:bg-black/5 dark:hover:bg-white/10"
               >
@@ -124,7 +155,7 @@ export const NavRail: React.FC = () => {
                       key={st}
                       onClick={() => {
                         void setSelfStatus(st, true);
-                        setStatusMenuOpen(false);
+                        setActivePopupId(null);
                       }}
                       className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition ${
                         active
@@ -149,8 +180,10 @@ export const NavRail: React.FC = () => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
-            <button
+            <motion.button
               key={item.id}
+              whileHover={{ scale: 1.07 }}
+              whileTap={{ scale: 0.92 }}
               onClick={() => setActiveTab(item.id)}
               title={item.label}
               className={`group relative flex h-11 w-11 items-center justify-center rounded-2xl transition-colors ${
@@ -169,17 +202,23 @@ export const NavRail: React.FC = () => {
               <Icon className="relative z-10 h-5 w-5" />
 
               {item.badge !== undefined && item.badge > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 z-20 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#22C55E] px-1 text-[9px] font-bold text-white shadow-lem-glow-sm ring-2 ring-[#090F0C]/60">
+                <motion.span
+                  initial={{ scale: 0.6 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -right-0.5 -top-0.5 z-20 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#22C55E] px-1 text-[9px] font-bold text-white shadow-lem-glow-sm ring-2 ring-[#090F0C]/60"
+                >
                   {item.badge > 9 ? '9+' : item.badge}
-                </span>
+                </motion.span>
               )}
-            </button>
+            </motion.button>
           );
         })}
       </nav>
 
       {/* Bottom: Theme Toggle */}
-      <button
+      <motion.button
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
         onClick={toggleTheme}
         title={
           theme === 'dark'
@@ -190,8 +229,9 @@ export const NavRail: React.FC = () => {
                 ? 'Switch to Black & White Dark Mode'
                 : 'Switch to Forest-Slate Dark Mode'
         }
-        className="glass-pill flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-800 transition hover:scale-105 hover:border-emerald-400/50 dark:text-emerald-200"
+        className="glass-pill relative flex h-10 w-10 items-center justify-center rounded-2xl text-emerald-800 transition hover:border-emerald-400/50 dark:text-emerald-200"
       >
+        <LiquidGlassLayer variant="pill" interactive cornerRadius={16} />
         <motion.div
           key={theme}
           initial={{ rotate: -45, opacity: 0, scale: 0.7 }}
@@ -204,7 +244,7 @@ export const NavRail: React.FC = () => {
             <Moon className="h-4 w-4 text-emerald-700" />
           )}
         </motion.div>
-      </button>
+      </motion.button>
     </aside>
   );
 };

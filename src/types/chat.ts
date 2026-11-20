@@ -17,12 +17,35 @@ export type ChatFontSize = 'small' | 'medium' | 'large';
 export type ProfanityFilter = 'off' | 'mild' | 'strict';
 export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member';
 export type BubbleDensity = 'cozy' | 'compact' | 'minimal';
-export type BubbleStyle = 'imessage' | 'cyber' | 'glass';
+export type BubbleStyle = 'imessage' | 'imessage-classic' | 'cyber' | 'glass';
 export type TimestampFormat = '12h' | '24h' | 'relative' | 'seconds';
 export type EntranceEffect = 'spring' | 'slide' | 'liquid' | 'instant';
 export type SidebarLayout = 'rail' | 'standard' | 'preview';
 export type EnterBehavior = 'enter-send' | 'ctrl-send';
 export type UnreadDividerStyle = 'laser' | 'pill' | 'dotted' | 'rainbow';
+export type RealGlassMode = 'standard' | 'polar' | 'prominent' | 'shader';
+export type GlassDepth = 'flat' | 'elevated' | 'floating';
+export type NotificationRevealMode = 'classic' | 'liquid-reveal' | 'liquid-privacy';
+export type NotificationSoundId =
+  | 'emerald-chime'
+  | 'liquid-drop'
+  | 'crystal-triad'
+  | 'aurora-bell'
+  | 'soft-pop'
+  | 'zen-gong'
+  | 'sonar-ping'
+  | 'pixel-spark'
+  | 'velvet-chord'
+  | 'frost-tinkle';
+export type RingtoneId =
+  | 'skelly-arpeggio'
+  | 'liquid-marimba'
+  | 'glass-harp'
+  | 'cosmic-pulse'
+  | 'classic-ring'
+  | 'ocean-waves'
+  | 'neon-synth'
+  | 'minimal-beacon';
 
 export interface LiquidGlassTheme {
   blur: number;
@@ -57,6 +80,31 @@ export interface LiquidGlassTheme {
   autoLoadMedia: boolean;
   snippets: Record<string, string>;
   savedReplies: string[];
+  // Real Liquid Glass (rdev/liquid-glass-react) & surface settings
+  useRealLiquidGlass: boolean;
+  realGlassMode: RealGlassMode;
+  refractionScale: number;
+  aberrationIntensity: number;
+  glassElasticity: number;
+  glassSaturation: number;
+  specularSheen: number;
+  glassTintStrength: number;
+  glassDepth: GlassDepth;
+  // Notification reveal & sound preferences
+  notificationReveal: NotificationRevealMode;
+  notificationSound: NotificationSoundId;
+  ringtone: RingtoneId;
+  soundVolume: number;
+  // Accessibility settings
+  reduceMotion: boolean;
+  reduceTransparency: boolean;
+  highContrast: boolean;
+  dyslexiaFont: boolean;
+  textScale: number;
+  focusOutlines: boolean;
+  underlineLinks: boolean;
+  largeClickTargets: boolean;
+  screenFlashAlerts: boolean;
 }
 
 export interface Reaction {

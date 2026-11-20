@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus, Hourglass, ChevronUp, Sticker as StickerIcon, Trash2 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { useStickerPacks, stickerToFile, type Sticker } from '../store/useStickerPacks';
 import { StickerCropper } from './StickerCropper';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { GifAttachment, StagedUpload } from '../types/chat';
 import { VOICE_FILTERS, applyVoiceFilter, type VoiceFilterId } from '../utils/voiceFilters';
 
@@ -126,23 +127,18 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   placeholder,
 }) => {
   const [text, setText] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
   const [jumboEmoji, setJumboEmoji] = useState(false);
-  const [showGif, setShowGif] = useState(false);
-  const [showStickers, setShowStickers] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
   const [activePackId, setActivePackId] = useState<string | null>(null);
   const stickerPacks = useStickerPacks((s) => s.packs);
   const deletePack = useStickerPacks((s) => s.deletePack);
   const removeSticker = useStickerPacks((s) => s.removeSticker);
-  const [showPoll, setShowPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [selectedGif, setSelectedGif] = useState<GifAttachment | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [codeLang, setCodeLang] = useState('typescript');
   const [codeText, setCodeText] = useState('');
-  const [showSendMenu, setShowSendMenu] = useState(false);
   const [capsuleOpen, setCapsuleOpen] = useState(false);
   const [capsuleAt, setCapsuleAt] = useState('');
   const [sending, setSending] = useState(false);
@@ -159,11 +155,22 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       return 'none';
     }
   });
-  const [showVoiceFilters, setShowVoiceFilters] = useState(false);
   const [processingVoice, setProcessingVoice] = useState(false);
+
+  const activePopupId = useChatStore((s) => s.activePopupId);
+  const setActivePopupId = useChatStore((s) => s.setActivePopupId);
+  const togglePopup = useChatStore((s) => s.togglePopup);
+
+  const showEmoji = activePopupId === 'composer:emoji';
+  const showGif = activePopupId === 'composer:gif';
+  const showStickers = activePopupId === 'composer:stickers';
+  const showPoll = activePopupId === 'composer:poll';
+  const showSendMenu = activePopupId === 'composer:sendMenu';
+  const showVoiceFilters = activePopupId === 'composer:voiceFilters';
+
   const setVoiceFilter = (id: VoiceFilterId) => {
     setVoiceFilterState(id);
-    setShowVoiceFilters(false);
+    setActivePopupId(null);
     try {
       localStorage.setItem('lemchat-voice-filter', id);
     } catch {
@@ -172,6 +179,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   };
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
+  const composerRootRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastTypingSentRef = useRef<number>(0);
@@ -186,6 +194,39 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
   const enterBehavior = useChatStore((s) => s.liquidGlass.enterBehavior);
   const snippets = useChatStore((s) => s.liquidGlass.snippets);
   const savedReplies = useChatStore((s) => s.liquidGlass.savedReplies);
+
+  useEffect(() => {
+    if (activePopupId?.startsWith('composer:')) {
+      setActivePopupId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!activePopupId?.startsWith('composer:')) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        composerRootRef.current &&
+        !composerRootRef.current.contains(event.target as Node)
+      ) {
+        setActivePopupId(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActivePopupId(null);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activePopupId, setActivePopupId]);
 
   const resizeTextarea = () => {
     const el = textareaRef.current;
@@ -242,8 +283,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       setStagedUploads([]);
       setCodeText('');
       setShowCodeEditor(false);
-      setShowEmoji(false);
-      setShowGif(false);
+      setActivePopupId(null);
       setSelectedGif(null);
 
       if (textareaRef.current) {
@@ -260,7 +300,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
 
   const handleSendSticker = async (sticker: Sticker) => {
     if (sending) return;
-    setShowStickers(false);
+    setActivePopupId(null);
     setSendError(null);
     try {
       const file = await stickerToFile(sticker);
@@ -289,7 +329,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       setText('');
       setCapsuleAt('');
       setCapsuleOpen(false);
-      setShowSendMenu(false);
+      setActivePopupId(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'Could not send time capsule.');
@@ -418,7 +458,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       selectedGif !== null);
 
   return (
-    <div className="relative px-2.5 pb-2.5 pt-1.5 md:px-4 md:pb-4 md:pt-2">
+    <div ref={composerRootRef} className="relative px-2.5 pb-2.5 pt-1.5 md:px-4 md:pb-4 md:pt-2">
       <AnimatePresence>
         {sendError && (
           <motion.div
@@ -449,8 +489,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-pill mb-2 flex items-center justify-between gap-2 rounded-2xl border-l-2 border-l-[#22C55E] px-3 py-2 text-xs"
+            className="glass-panel glass-pill relative mb-2 flex items-center justify-between gap-2 rounded-2xl border-l-2 border-l-[#22C55E] px-3 py-2 text-xs"
           >
+            <LiquidGlassLayer variant="pill" interactive />
             <div className="flex min-w-0 items-center gap-2">
               <Reply className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" />
               <div className="min-w-0">
@@ -540,8 +581,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            className="glass-panel glass-surface mb-2 overflow-hidden rounded-2xl p-3"
+            className="glass-panel glass-surface relative mb-2 overflow-hidden rounded-2xl p-3"
           >
+            <LiquidGlassLayer variant="surface" />
             <div className="mb-2 flex items-center justify-between">
               <input
                 type="text"
@@ -568,21 +610,24 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Emoji Picker Popover */}
-      <AnimatePresence>
+      {/* Coordinated Composer Popovers (only one open at a time) */}
+      <AnimatePresence mode="wait">
         {showEmoji && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            key="composer:emoji"
+            initial={{ opacity: 0, y: 12, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-64 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-16"
+            exit={{ opacity: 0, y: 8, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 440, damping: 28 }}
+            className="glass-panel glass-surface lem-scrollbar absolute bottom-20 left-2 right-2 z-30 max-h-64 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-16 sm:w-[300px]"
           >
-            <label className="mb-2 flex cursor-pointer items-center gap-2 px-1 text-xs font-semibold opacity-80">
+            <LiquidGlassLayer variant="popover" interactive />
+            <label className="mb-2 flex cursor-pointer items-center gap-2 px-1 text-xs font-semibold text-emerald-950 dark:text-emerald-50">
               <input
                 type="checkbox"
                 checked={jumboEmoji}
                 onChange={(e) => setJumboEmoji(e.target.checked)}
+                className="accent-[#22C55E]"
               />
               Jumbo (send emoji big on its own)
             </label>
@@ -591,7 +636,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                 <button
                   key={emoji}
                   onClick={() => {
-                    setShowEmoji(false);
+                    setActivePopupId(null);
                     if (jumboEmoji) {
                       void sendMessage(emoji).catch((error) =>
                         setSendError(
@@ -611,47 +656,47 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      <AnimatePresence>
         {showGif && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            key="composer:gif"
+            initial={{ opacity: 0, y: 12, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 grid max-h-72 grid-cols-2 gap-2 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[280px]"
+            exit={{ opacity: 0, y: 8, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 440, damping: 28 }}
+            className="glass-panel glass-surface lem-scrollbar absolute bottom-20 left-2 right-2 z-30 grid max-h-72 grid-cols-2 gap-2 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[290px]"
           >
+            <LiquidGlassLayer variant="popover" interactive />
             {GIF_GRID.map((gif) => (
               <button
                 key={gif.url}
                 onClick={() => {
                   setSelectedGif(gif);
-                  setShowGif(false);
+                  setActivePopupId(null);
                   textareaRef.current?.focus();
                 }}
                 className="group overflow-hidden rounded-xl border border-white/10 bg-black/10 text-left transition hover:scale-[1.03] hover:border-emerald-400/60"
                 title={`Use ${gif.name} GIF`}
               >
                 <img src={gif.url} alt="" className="h-20 w-full object-cover" loading="lazy" />
-                <span className="block truncate px-2 py-1 text-[10px] text-emerald-900/70 dark:text-emerald-100/70">
+                <span className="block truncate px-2 py-1 text-[10px] text-emerald-950/80 dark:text-emerald-100/80">
                   {gif.name}
                 </span>
               </button>
             ))}
           </motion.div>
         )}
-      </AnimatePresence>
 
-      <AnimatePresence>
         {showStickers && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            key="composer:stickers"
+            initial={{ opacity: 0, y: 12, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-72 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[300px]"
+            exit={{ opacity: 0, y: 8, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 440, damping: 28 }}
+            className="glass-panel glass-surface lem-scrollbar absolute bottom-20 left-2 right-2 z-30 max-h-72 overflow-y-auto rounded-2xl p-2.5 sm:left-auto sm:right-4 sm:w-[300px]"
           >
+            <LiquidGlassLayer variant="popover" interactive />
             {(() => {
               const pack = stickerPacks.find((p) => p.id === activePackId) ?? stickerPacks[0];
               return (
@@ -665,7 +710,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                         className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                           pack?.id === p.id
                             ? 'bg-emerald-500/25 text-[#22C55E]'
-                            : 'text-emerald-900/70 hover:bg-emerald-500/10 dark:text-emerald-100/70'
+                            : 'text-emerald-900/75 hover:bg-emerald-500/10 dark:text-emerald-100/75'
                         }`}
                       >
                         {p.name}
@@ -673,7 +718,10 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                     ))}
                     <button
                       type="button"
-                      onClick={() => setShowCropper(true)}
+                      onClick={() => {
+                        setActivePopupId(null);
+                        setShowCropper(true);
+                      }}
                       title="Create a sticker"
                       className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
                     >
@@ -681,11 +729,13 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                     </button>
                   </div>
                   {!pack ? (
-                    <p className="px-2 py-6 text-center text-xs opacity-65">
+                    <p className="px-2 py-6 text-center text-xs text-emerald-950/75 dark:text-emerald-100/75">
                       No stickers yet. Tap New to crop any image into your own sticker.
                     </p>
                   ) : pack.stickers.length === 0 ? (
-                    <p className="px-2 py-6 text-center text-xs opacity-65">This pack is empty.</p>
+                    <p className="px-2 py-6 text-center text-xs text-emerald-950/75 dark:text-emerald-100/75">
+                      This pack is empty.
+                    </p>
                   ) : (
                     <div className="grid grid-cols-4 gap-1.5">
                       {pack.stickers.map((s) => (
@@ -729,24 +779,17 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             })()}
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {showCropper && (
-        <StickerCropper
-          initialPackId={activePackId}
-          onClose={() => setShowCropper(false)}
-        />
-      )}
-
-      <AnimatePresence>
         {showPoll && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            key="composer:poll"
+            initial={{ opacity: 0, y: 12, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="glass-panel glass-surface absolute bottom-20 left-2 right-2 z-30 max-h-[70vh] overflow-y-auto rounded-2xl p-4 sm:left-auto sm:right-4 sm:w-[340px]"
+            exit={{ opacity: 0, y: 8, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 440, damping: 28 }}
+            className="glass-panel glass-surface lem-scrollbar absolute bottom-20 left-2 right-2 z-30 max-h-[70vh] overflow-y-auto rounded-2xl p-4 sm:left-auto sm:right-4 sm:w-[340px]"
           >
+            <LiquidGlassLayer variant="popover" interactive />
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-[#22C55E]">
@@ -756,7 +799,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setShowPoll(false)}
+                onClick={() => setActivePopupId(null)}
                 className="rounded-full p-1 text-emerald-900/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
                 aria-label="Close poll"
               >
@@ -820,8 +863,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
                   setSendError(null);
                   const q = pollQuestion;
                   const opts = pollOptions;
-                  // Reset immediately so the next poll starts blank.
-                  setShowPoll(false);
+                  setActivePopupId(null);
                   setPollQuestion('');
                   setPollOptions(['', '']);
                   sendPoll(q, opts).catch((err: unknown) => {
@@ -839,6 +881,12 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         )}
       </AnimatePresence>
 
+      <StickerCropper
+        isOpen={showCropper}
+        initialPackId={activePackId}
+        onClose={() => setShowCropper(false)}
+      />
+
       {/* Pill-shaped Floating Glass Composer */}
       <motion.div
         animate={
@@ -847,19 +895,22 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
             : undefined
         }
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-panel glass-surface relative flex items-end gap-1 overflow-hidden rounded-[26px] px-2 py-1.5 transition focus-within:border-[#22C55E]/55 focus-within:ring-2 focus-within:ring-[#22C55E]/20 md:gap-1.5 md:px-3 md:py-2"
+        className="glass-panel glass-surface relative flex items-end gap-1 overflow-visible rounded-[26px] px-2 py-1.5 transition focus-within:border-[#22C55E]/55 focus-within:ring-2 focus-within:ring-[#22C55E]/20 md:gap-1.5 md:px-3 md:py-2"
       >
+        <LiquidGlassLayer variant="surface" interactive cornerRadius={26} />
         {/* Liquid Glass Send Sweep across composer */}
-        {sendPulseKey > 0 && (
-          <motion.span
-            key={`sweep-${sendPulseKey}`}
-            aria-hidden
-            initial={{ x: '-100%', opacity: 0.7 }}
-            animate={{ x: '200%', opacity: 0 }}
-            transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-[#22C55E]/25 to-transparent"
-          />
-        )}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+          {sendPulseKey > 0 && (
+            <motion.span
+              key={`sweep-${sendPulseKey}`}
+              aria-hidden
+              initial={{ x: '-100%', opacity: 0.7 }}
+              animate={{ x: '200%', opacity: 0 }}
+              transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+              className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-[#22C55E]/25 to-transparent"
+            />
+          )}
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -868,15 +919,21 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           onChange={handleFileChange}
         />
 
-        <button
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => fileInputRef.current?.click()}
           title="Attach file or image (uploads to Supabase Storage)"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Paperclip className="h-4 w-4" />
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => setShowCodeEditor((v) => !v)}
           title="Attach code snippet"
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
@@ -886,66 +943,102 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }`}
         >
           <Code2 className="h-4 w-4" />
-        </button>
+        </motion.button>
 
         {recordingMode ? (
-          <button
-            onClick={stopRecording}
-            title={`Stop ${recordingMode} recording`}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-rose-500 md:h-9 md:w-9"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <motion.button
+              data-composer-btn
+              whileTap={{ scale: 0.9 }}
+              onClick={stopRecording}
+              title={`Stop ${recordingMode} recording`}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-rose-500 md:h-9 md:w-9"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+            </motion.button>
+            <span className="flex items-center gap-0.5 pr-1" aria-hidden>
+              {[0, 1, 2].map((bar) => (
+                <motion.span
+                  key={bar}
+                  animate={{ scaleY: [0.4, 1.15, 0.4] }}
+                  transition={{ duration: 0.65, repeat: Infinity, delay: bar * 0.14 }}
+                  className="h-3 w-0.5 rounded-full bg-rose-500"
+                />
+              ))}
+            </span>
+          </div>
         ) : (
           <>
             <div className="relative hidden shrink-0 sm:flex">
-              <button
+              <motion.button
+                data-composer-btn
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => void startRecording('audio')}
                 disabled={processingVoice}
                 title={processingVoice ? 'Applying voice filter…' : 'Record audio'}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 disabled:opacity-50 md:h-9 md:w-9 dark:text-emerald-200/70"
               >
                 <Mic className={`h-4 w-4 ${processingVoice ? 'animate-pulse' : ''}`} />
-              </button>
+              </motion.button>
               <button
-                onClick={() => setShowVoiceFilters((v) => !v)}
+                type="button"
+                data-compact-target
+                onClick={() => togglePopup('composer:voiceFilters')}
                 title={`Voice filter: ${VOICE_FILTERS.find((f) => f.id === voiceFilter)?.label}`}
-                className={`absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] ring-1 ring-black/10 ${
-                  voiceFilter === 'none' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'bg-emerald-500 text-white'
+                className={`absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] ring-1 ring-black/10 transition ${
+                  showVoiceFilters
+                    ? 'scale-110 bg-[#22C55E] text-white'
+                    : voiceFilter === 'none'
+                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200'
+                      : 'bg-emerald-500 text-white'
                 }`}
               >
                 {voiceFilter === 'none' ? '♪' : VOICE_FILTERS.find((f) => f.id === voiceFilter)?.emoji}
               </button>
-              {showVoiceFilters && (
-                <div className="absolute bottom-11 left-0 z-50 w-56 rounded-2xl border border-emerald-500/20 bg-white/95 p-1.5 shadow-xl backdrop-blur dark:bg-zinc-900/95">
-                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/70 dark:text-emerald-300/70">
-                    Voice filter
-                  </p>
-                  {VOICE_FILTERS.map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setVoiceFilter(f.id)}
-                      className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm transition hover:bg-emerald-500/10 ${
-                        voiceFilter === f.id ? 'bg-emerald-500/15 font-semibold' : ''
-                      }`}
-                    >
-                      <span className="text-base">{f.emoji}</span>
-                      <span className="flex flex-col leading-tight">
-                        <span>{f.label}</span>
-                        <span className="text-[11px] font-normal opacity-60">{f.hint}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <AnimatePresence>
+                {showVoiceFilters && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.94 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.94 }}
+                    transition={{ type: 'spring', stiffness: 440, damping: 28 }}
+                    className="glass-panel glass-surface absolute bottom-12 left-0 z-50 w-56 rounded-2xl p-1.5"
+                  >
+                    <LiquidGlassLayer variant="popover" interactive />
+                    <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
+                      Voice filter
+                    </p>
+                    {VOICE_FILTERS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setVoiceFilter(f.id)}
+                        className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-sm text-emerald-950 transition hover:bg-emerald-500/10 dark:text-emerald-50 ${
+                          voiceFilter === f.id ? 'bg-emerald-500/15 font-semibold' : ''
+                        }`}
+                      >
+                        <span className="text-base">{f.emoji}</span>
+                        <span className="flex flex-col leading-tight">
+                          <span>{f.label}</span>
+                          <span className="text-[11px] font-normal opacity-60">{f.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <button
+            <motion.button
+              data-composer-btn
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => void startRecording('video')}
               title="Record video"
               className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70"
             >
               <Video className="h-4 w-4" />
-            </button>
+            </motion.button>
           </>
         )}
 
@@ -970,16 +1063,26 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           className="lem-scrollbar max-h-[130px] min-h-[24px] min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[13.5px] leading-relaxed text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
         />
 
-        <button
-          onClick={() => setShowEmoji((v) => !v)}
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => togglePopup('composer:emoji')}
           title="Insert emoji"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
+            showEmoji
+              ? 'bg-emerald-500/20 text-[#22C55E]'
+              : 'text-emerald-800/70 hover:bg-emerald-500/15 hover:text-emerald-600 dark:text-emerald-200/70 dark:hover:text-emerald-300'
+          }`}
         >
           <Smile className="h-4 w-4" />
-        </button>
+        </motion.button>
 
-        <button
-          onClick={() => setShowGif((v) => !v)}
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => togglePopup('composer:gif')}
           title="Choose a GIF"
           className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full transition sm:flex md:h-9 md:w-9 ${
             showGif
@@ -988,10 +1091,13 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }`}
         >
           <Film className="h-4 w-4" />
-        </button>
+        </motion.button>
 
-        <button
-          onClick={() => setShowStickers((v) => !v)}
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => togglePopup('composer:stickers')}
           title="Stickers"
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition md:h-9 md:w-9 ${
             showStickers
@@ -1000,10 +1106,13 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }`}
         >
           <StickerIcon className="h-4 w-4" />
-        </button>
+        </motion.button>
 
-        <button
-          onClick={() => setShowPoll((v) => !v)}
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => togglePopup('composer:poll')}
           title="Create a poll"
           className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full transition sm:flex md:h-9 md:w-9 ${
             showPoll
@@ -1012,11 +1121,15 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           }`}
         >
           <BarChart3 className="h-4 w-4" />
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          data-composer-btn
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => {
             setSendError(null);
+            setActivePopupId(null);
             sendGame().catch((err: unknown) =>
               setSendError(err instanceof Error ? err.message : 'Could not start game.')
             );
@@ -1025,17 +1138,19 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 hover:text-emerald-600 sm:flex md:h-9 md:w-9 dark:text-emerald-200/70 dark:hover:text-emerald-300"
         >
           <Gamepad2 className="h-4 w-4" />
-        </button>
+        </motion.button>
 
         <div className="relative flex shrink-0 items-center">
           <AnimatePresence>
             {showSendMenu && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                initial={{ opacity: 0, y: 10, scale: 0.94 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                exit={{ opacity: 0, y: 8, scale: 0.94 }}
+                transition={{ type: 'spring', stiffness: 440, damping: 28 }}
                 className="glass-panel glass-surface absolute bottom-12 right-0 z-30 w-[270px] rounded-2xl p-3"
               >
+                <LiquidGlassLayer variant="popover" interactive />
                 {!capsuleOpen ? (
                   <button
                     type="button"
@@ -1099,15 +1214,20 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           </AnimatePresence>
           <button
             type="button"
+            data-composer-btn
             onClick={() => {
-              setShowSendMenu((v) => !v);
+              togglePopup('composer:sendMenu');
               setCapsuleOpen(false);
             }}
             title="More send options"
             aria-label="More send options"
-            className="mr-0.5 flex h-8 w-5 items-center justify-center rounded-full text-emerald-800/70 transition hover:bg-emerald-500/15 dark:text-emerald-200/70 md:h-9"
+            className={`mr-0.5 flex h-8 w-5 items-center justify-center rounded-full transition md:h-9 ${
+              showSendMenu
+                ? 'bg-emerald-500/20 text-[#22C55E]'
+                : 'text-emerald-800/70 hover:bg-emerald-500/15 dark:text-emerald-200/70'
+            }`}
           >
-            <ChevronUp className="h-3.5 w-3.5" />
+            <ChevronUp className={`h-3.5 w-3.5 transition-transform duration-200 ${showSendMenu ? 'rotate-180' : ''}`} />
           </button>
           {sendPulseKey > 0 && (
             <motion.span

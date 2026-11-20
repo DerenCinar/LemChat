@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Flame, MessageCircle, Smile, CalendarHeart, Lock } from 'lucide-react';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { Message } from '../types/chat';
 
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
@@ -117,7 +118,8 @@ export const FriendshipStatsPanel: React.FC<{ messages: Message[] }> = ({ messag
         Friendship Stats
         <Lock className="h-2.5 w-2.5 opacity-70" aria-label="Private to you" />
       </p>
-      <div className="glass-pill space-y-2 rounded-xl px-3 py-2.5">
+      <div className="glass-pill relative space-y-2 rounded-xl px-3 py-2.5">
+        <LiquidGlassLayer variant="pill" cornerRadius={12} />
         <Row
           icon={<Flame className="h-3 w-3 text-orange-500" />}
           label="Longest streak"

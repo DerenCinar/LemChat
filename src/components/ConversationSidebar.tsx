@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Pin, Hash, X, Plus } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { Conversation, UserPresence } from '../types/chat';
 
 const PRESENCE_DOT: Record<UserPresence, string> = {
@@ -205,27 +206,47 @@ export const ConversationSidebar: React.FC = () => {
       style={{ '--sidebar-w': `${width}px` } as React.CSSProperties}
       className="glass-panel glass-surface relative z-10 flex w-full flex-1 shrink-0 flex-col rounded-2xl transition-[box-shadow] duration-200 md:w-[var(--sidebar-w)] md:flex-initial"
     >
+      <LiquidGlassLayer variant="panel" />
       <div className="px-3.5 pb-2 pt-3.5">
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold tracking-tight text-emerald-950 dark:text-white">
-              {headerLabel}
-            </h2>
-            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.h2
+                key={headerLabel}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.16 }}
+                className="text-base font-bold tracking-tight text-emerald-950 dark:text-white"
+              >
+                {headerLabel}
+              </motion.h2>
+            </AnimatePresence>
+            <motion.span
+              key={filtered.length}
+              initial={{ scale: 0.85 }}
+              animate={{ scale: 1 }}
+              className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+            >
               {filtered.length}
-            </span>
+            </motion.span>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
             onClick={() => setNewConvModalOpen(true)}
             title="New channel or direct message"
-            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-700 transition hover:scale-105 hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-300"
+            className="glass-pill relative flex h-7 w-7 items-center justify-center rounded-full text-emerald-700 transition hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-300"
           >
+            <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
             <Plus className="h-3.5 w-3.5" />
-          </button>
+          </motion.button>
         </div>
 
-        <div className="glass-pill flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20">
+        <div className="glass-pill relative flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20">
+          <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
           <Search className="h-3.5 w-3.5 shrink-0 text-emerald-700/60 dark:text-emerald-200/50" />
           <input
             type="text"
@@ -234,14 +255,19 @@ export const ConversationSidebar: React.FC = () => {
             placeholder="Search SkellyTalk..."
             className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-emerald-700/60 hover:text-emerald-950 dark:text-white/50 dark:hover:text-white"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+          <AnimatePresence>
+            {searchQuery && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                onClick={() => setSearchQuery('')}
+                className="text-emerald-700/60 hover:text-emerald-950 dark:text-white/50 dark:hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -263,7 +289,12 @@ export const ConversationSidebar: React.FC = () => {
           <div className="space-y-1">
             {regularList.map(renderItem)}
             {filtered.length === 0 && (
-              <div className="mx-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-500/20 px-4 text-center">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                className="mx-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-500/20 px-4 text-center"
+              >
                 <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10">
                   {searchQuery ? <Search className="h-4 w-4 text-emerald-600" /> : <Plus className="h-4 w-4 text-emerald-600" />}
                 </div>
@@ -273,7 +304,7 @@ export const ConversationSidebar: React.FC = () => {
                 <p className="mt-1 max-w-44 text-[11px] leading-relaxed text-emerald-800/55 dark:text-emerald-200/50">
                   {searchQuery ? 'Try a different name or keyword.' : 'Create a group or start a direct message.'}
                 </p>
-              </div>
+              </motion.div>
             )}
           </div>
         </div>

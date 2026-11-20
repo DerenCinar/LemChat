@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import packageInfo from '../../package.json';
 import {
   Moon,
@@ -18,12 +18,30 @@ import {
   ChevronDown,
   Trash2,
   Lock,
+  Play,
+  Square,
+  RotateCcw,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { useAppLock, MIN_SECRET_LENGTH } from '../store/useAppLock';
 import { LOCK_SHORTCUT_LABEL } from './AppLockScreen';
 import { InfoTooltip } from './InfoTooltip';
 import { LiquidGlassSlider } from './LiquidGlassSlider';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
+import {
+  NOTIFICATION_SOUNDS,
+  RINGTONES,
+  playNotificationChime,
+  previewRingtone,
+  stopRingtone,
+} from '../lib/sound';
+import type {
+  GlassDepth,
+  NotificationRevealMode,
+  NotificationSoundId,
+  RealGlassMode,
+  RingtoneId,
+} from '../types/chat';
 import {
   UserAvatar,
   AVATAR_BG_PRESETS,
@@ -78,27 +96,51 @@ const SettingsSection: React.FC<{
   description: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
-  sectionRef?: React.RefObject<HTMLDetailsElement>;
-}> = ({ title, description, children, defaultOpen = false, sectionRef }) => (
-  <details
-    ref={sectionRef}
-    open={defaultOpen}
-    className="group rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
-  >
-    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3.5 outline-none transition hover:bg-black/[0.03] focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 dark:hover:bg-white/[0.04] [&::-webkit-details-marker]:hidden">
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-emerald-950 dark:text-white">{title}</span>
-        <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
-          {description}
+  sectionRef?: React.RefObject<HTMLDivElement>;
+}> = ({ title, description, children, defaultOpen = false, sectionRef }) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div
+      ref={sectionRef}
+      className="rounded-2xl border border-black/5 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-2xl px-4 py-3.5 text-left outline-none transition hover:bg-black/[0.03] focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 dark:hover:bg-white/[0.04]"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-emerald-950 dark:text-white">{title}</span>
+          <span className="mt-0.5 block text-[11px] text-emerald-800/65 dark:text-emerald-200/55">
+            {description}
+          </span>
         </span>
-      </span>
-      <ChevronDown className="h-4 w-4 shrink-0 text-emerald-700 transition-transform group-open:rotate-180 dark:text-emerald-300" />
-    </summary>
-    <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
-      {children}
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-emerald-700 transition-transform duration-200 dark:text-emerald-300 ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-4 border-t border-black/5 px-4 pb-4 pt-4 dark:border-white/10">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
-  </details>
-);
+  );
+};
 
 const AppLockSettings: React.FC = () => {
   const enabled = useAppLock((s) => s.enabled);
@@ -343,6 +385,9 @@ export const SettingsView: React.FC = () => {
   const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
   const updateSectionRef = useRef<HTMLDivElement | null>(null);
   const [appVersion, setAppVersion] = useState(packageInfo.version);
+  const [previewingRingtone, setPreviewingRingtone] = useState(false);
+
+  useEffect(() => () => stopRingtone(), []);
 
   useEffect(() => {
     let active = true;
@@ -488,8 +533,9 @@ export const SettingsView: React.FC = () => {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-      className="glass-panel glass-surface lem-scrollbar flex flex-1 flex-col overflow-y-auto rounded-2xl p-4 md:p-6"
+      className="glass-panel glass-surface lem-scrollbar relative flex flex-1 flex-col overflow-y-auto rounded-2xl p-4 md:p-6"
     >
+      <LiquidGlassLayer variant="panel" />
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <div>
           <h1 className="text-xl font-bold text-emerald-950 dark:text-white">
@@ -898,18 +944,319 @@ export const SettingsView: React.FC = () => {
             ))}
           </div>
 
-          <div className="glass-pill space-y-4 rounded-2xl p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
-              Live Liquid Glass
-            </h2>
-            <button
-              type="button"
-              onClick={resetLiquidGlass}
-              className="text-[10px] font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
-            >
-              Reset
-            </button>
+          <div className="glass-pill relative space-y-4 rounded-2xl p-4">
+            <LiquidGlassLayer variant="surface" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-800/65 dark:text-emerald-200/55">
+                Live Liquid Glass
+              </h2>
+              <button
+                type="button"
+                onClick={resetLiquidGlass}
+                className="text-[10px] font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Real Liquid Glass Engine (rdev/liquid-glass-react) */}
+            <div className="glass-pill relative space-y-3 rounded-2xl border border-[#22C55E]/25 p-3.5">
+              <LiquidGlassLayer variant="pill" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" />
+                    <span className="text-xs font-bold text-emerald-950 dark:text-white">
+                      Real Liquid Glass Engine (liquid-glass-react)
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-emerald-800/70 dark:text-emerald-200/65">
+                    Uses live SVG backdrop refraction, chromatic edge aberration, and elastic pointer physics across glass surfaces. Best in Chromium / Desktop app.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={liquidGlass.useRealLiquidGlass}
+                  aria-label="Enable Real Liquid Glass Engine"
+                  onClick={() =>
+                    setLiquidGlass({ useRealLiquidGlass: !liquidGlass.useRealLiquidGlass })
+                  }
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 ${
+                    liquidGlass.useRealLiquidGlass
+                      ? 'bg-gradient-to-r from-[#22C55E] to-[#10B981] shadow-lem-glow-sm'
+                      : 'bg-black/20 dark:bg-white/15'
+                  }`}
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow ${
+                      liquidGlass.useRealLiquidGlass ? 'left-[22px]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {liquidGlass.reduceTransparency && (
+                <p className="rounded-xl bg-amber-500/15 px-2.5 py-1.5 text-[10.5px] font-medium text-amber-800 dark:text-amber-200">
+                  Accessibility &ldquo;Reduce transparency&rdquo; is active and overrides real glass refraction until turned off.
+                </p>
+              )}
+
+              <AnimatePresence initial={false}>
+                {liquidGlass.useRealLiquidGlass && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+                    className="space-y-3 overflow-hidden border-t border-black/5 pt-3 dark:border-white/10"
+                  >
+                    <div className="space-y-1.5">
+                      <SettingLabel
+                        label="Refraction mode"
+                        info="Selects the optical displacement map style used by liquid-glass-react: standard, polar, prominent, or custom shader."
+                      />
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(['standard', 'polar', 'prominent', 'shader'] as RealGlassMode[]).map(
+                          (mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setLiquidGlass({ realGlassMode: mode })}
+                              className={`glass-pill rounded-xl py-1.5 text-[11px] font-semibold capitalize transition ${
+                                liquidGlass.realGlassMode === mode
+                                  ? 'border-[#22C55E] bg-[#22C55E]/20 text-emerald-950 ring-1 ring-[#22C55E]/40 dark:text-white'
+                                  : 'text-emerald-900/70 hover:bg-black/5 dark:text-emerald-100/70 dark:hover:bg-white/5'
+                              }`}
+                            >
+                              {mode}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <LiquidGlassSlider
+                        label="Refraction"
+                        value={liquidGlass.refractionScale}
+                        min={0}
+                        max={140}
+                        step={2}
+                        info="Controls optical distortion and backdrop warping intensity along glass edges."
+                        onChange={(refractionScale) => setLiquidGlass({ refractionScale })}
+                      />
+                      <LiquidGlassSlider
+                        label="Aberration"
+                        value={liquidGlass.aberrationIntensity}
+                        min={0}
+                        max={6}
+                        step={0.5}
+                        info="Splits RGB light channels slightly along glass rims for prismatic edge dispersion."
+                        onChange={(aberrationIntensity) => setLiquidGlass({ aberrationIntensity })}
+                      />
+                      <LiquidGlassSlider
+                        label="Elasticity"
+                        value={liquidGlass.glassElasticity}
+                        min={0}
+                        max={35}
+                        step={1}
+                        unit="%"
+                        info="Adds subtle spring stretch and specular tilt toward your cursor on hover."
+                        onChange={(glassElasticity) => setLiquidGlass({ glassElasticity })}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* One-Click Presets */}
+            <div className="space-y-1.5">
+              <SettingLabel
+                label="Quick presets"
+                info="Instantly applies a curated Liquid Glass material profile."
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  [
+                    'Crystal Clear',
+                    {
+                      useRealLiquidGlass: false,
+                      blur: 12,
+                      opacity: 48,
+                      borderGlow: 26,
+                      roundness: 26,
+                      glassSaturation: 195,
+                      specularSheen: 75,
+                      glassTintStrength: 25,
+                      glassDepth: 'elevated' as GlassDepth,
+                    },
+                  ],
+                  [
+                    'Frosted Ice',
+                    {
+                      useRealLiquidGlass: false,
+                      blur: 36,
+                      opacity: 78,
+                      borderGlow: 18,
+                      roundness: 22,
+                      glassSaturation: 165,
+                      specularSheen: 60,
+                      glassTintStrength: 35,
+                      glassDepth: 'elevated' as GlassDepth,
+                    },
+                  ],
+                  [
+                    'Apple Liquid (Real)',
+                    {
+                      useRealLiquidGlass: true,
+                      realGlassMode: 'standard' as RealGlassMode,
+                      refractionScale: 74,
+                      aberrationIntensity: 2.5,
+                      glassElasticity: 20,
+                      blur: 8,
+                      opacity: 56,
+                      borderGlow: 24,
+                      roundness: 24,
+                      glassSaturation: 200,
+                      specularSheen: 80,
+                      glassTintStrength: 45,
+                      glassDepth: 'floating' as GlassDepth,
+                    },
+                  ],
+                  [
+                    'Obsidian Glass',
+                    {
+                      useRealLiquidGlass: false,
+                      blur: 28,
+                      opacity: 88,
+                      borderGlow: 12,
+                      roundness: 18,
+                      glassSaturation: 145,
+                      specularSheen: 35,
+                      glassTintStrength: 20,
+                      glassDepth: 'floating' as GlassDepth,
+                    },
+                  ],
+                  [
+                    'Soft Minimal',
+                    {
+                      useRealLiquidGlass: false,
+                      blur: 16,
+                      opacity: 74,
+                      borderGlow: 6,
+                      roundness: 16,
+                      glassSaturation: 130,
+                      specularSheen: 25,
+                      glassTintStrength: 15,
+                      glassDepth: 'flat' as GlassDepth,
+                    },
+                  ],
+                ] as const).map(([presetName, patch]) => (
+                  <motion.button
+                    key={presetName}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    type="button"
+                    onClick={() => setLiquidGlass(patch)}
+                    className="glass-pill rounded-full px-3 py-1.5 text-[11px] font-semibold text-emerald-950 transition hover:border-[#22C55E]/60 dark:text-emerald-100"
+                  >
+                    {presetName}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Liquid Glass & Bubble Preview */}
+            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-emerald-500/25 via-cyan-500/20 to-violet-500/25 p-4">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -left-8 -top-8 h-32 w-32 rounded-full bg-[#22C55E]/40 blur-2xl"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -bottom-8 right-2 h-32 w-32 rounded-full bg-sky-400/35 blur-2xl"
+              />
+              <div className="relative z-10 mb-3 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-950/75 dark:text-white/80">
+                  Live Preview
+                </span>
+                <span className="glass-pill relative rounded-full px-2.5 py-1 text-[10px] font-semibold text-emerald-950 dark:text-white">
+                  <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
+                  {liquidGlass.useRealLiquidGlass ? 'Real Refraction Active' : 'CSS Frosted Glass'}
+                </span>
+              </div>
+              <div className="relative z-10 space-y-2.5">
+                <div className="flex justify-start">
+                  <div
+                    data-message-bubble
+                    data-is-me="false"
+                    data-tail={
+                      liquidGlass.bubbleStyle === 'imessage' ||
+                      liquidGlass.bubbleStyle === 'imessage-classic'
+                        ? 'true'
+                        : 'false'
+                    }
+                    className="glass-panel glass-bubble-received relative max-w-[78%] rounded-[20px] px-3.5 py-2 text-xs text-emerald-950 dark:text-emerald-50"
+                  >
+                    <LiquidGlassLayer
+                      variant="bubble"
+                      interactive
+                      disabled={liquidGlass.bubbleStyle === 'imessage-classic'}
+                    />
+                    {(liquidGlass.bubbleStyle === 'imessage' ||
+                      liquidGlass.bubbleStyle === 'imessage-classic') && (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        className="bubble-tail-received pointer-events-none absolute -left-[5.8px] bottom-0 h-4 w-4 -scale-x-100"
+                      >
+                        <path
+                          d="M 9.8 2 C 9.8 9.2 12.1 13.5 15.8 15.7 C 11.2 16.1 6.9 14.9 3.8 13.3 A 14 14 0 0 0 9.8 2 Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    )}
+                    Hey! Hover this glass bubble to feel the refraction.
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <div
+                    data-message-bubble
+                    data-is-me="true"
+                    data-tail={
+                      liquidGlass.bubbleStyle === 'imessage' ||
+                      liquidGlass.bubbleStyle === 'imessage-classic'
+                        ? 'true'
+                        : 'false'
+                    }
+                    className="glass-panel glass-bubble-sent relative max-w-[78%] rounded-[20px] px-3.5 py-2 text-xs text-white"
+                  >
+                    <LiquidGlassLayer
+                      variant="bubble"
+                      interactive
+                      disabled={liquidGlass.bubbleStyle === 'imessage-classic'}
+                    />
+                    {(liquidGlass.bubbleStyle === 'imessage' ||
+                      liquidGlass.bubbleStyle === 'imessage-classic') && (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        className="bubble-tail-sent pointer-events-none absolute -right-[5.8px] bottom-0 h-4 w-4"
+                      >
+                        <path
+                          d="M 9.8 2 C 9.8 9.2 12.1 13.5 15.8 15.7 C 11.2 16.1 6.9 14.9 3.8 13.3 A 14 14 0 0 0 9.8 2 Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    )}
+                    Smooth curved tails &amp; liquid glass!
+                  </div>
+                </div>
+              </div>
             </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -918,6 +1265,9 @@ export const SettingsView: React.FC = () => {
               ['opacity', 'Glass opacity', 35, 95, '%', 'Adjusts how transparent or solid glass surfaces appear across windows.'],
               ['borderGlow', 'Border glow', 0, 50, '%', 'Sets the luminous highlight strength around card and panel edges.'],
               ['roundness', 'Corner roundness', 4, 36, 'px', 'Rounds the corners of panels, cards, and message containers.'],
+              ['glassSaturation', 'Color saturation', 100, 240, '%', 'Boosts backdrop color vibrancy passing through glass surfaces.'],
+              ['specularSheen', 'Specular sheen', 0, 100, '%', 'Controls the crisp top-edge specular highlight across Liquid Glass cards.'],
+              ['glassTintStrength', 'Accent glass tint', 0, 100, '%', 'Blends your accent color subtly into frosted Liquid Glass panels.'],
             ] as const).map(([key, label, min, max, unit, info]) => (
               <LiquidGlassSlider
                 key={key}
@@ -925,11 +1275,35 @@ export const SettingsView: React.FC = () => {
                 value={liquidGlass[key]}
                 min={min}
                 max={max}
+                step={key === 'glassSaturation' || key === 'specularSheen' || key === 'glassTintStrength' ? 5 : 1}
                 unit={unit}
                 info={info}
                 onChange={(nextValue) => setLiquidGlass({ [key]: nextValue })}
               />
             ))}
+
+            <div className="space-y-1.5">
+              <SettingLabel
+                label="Glass elevation depth"
+                info="Controls shadow depth and floating separation of Liquid Glass cards."
+              />
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['flat', 'elevated', 'floating'] as GlassDepth[]).map((depth) => (
+                  <button
+                    key={depth}
+                    type="button"
+                    onClick={() => setLiquidGlass({ glassDepth: depth })}
+                    className={`glass-pill rounded-xl py-2 text-[11px] font-semibold capitalize transition ${
+                      liquidGlass.glassDepth === depth
+                        ? 'border-[#22C55E] bg-[#22C55E]/15 text-emerald-950 dark:text-white'
+                        : 'text-emerald-900/70 dark:text-emerald-100/70'
+                    }`}
+                  >
+                    {depth}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1070,9 +1444,10 @@ export const SettingsView: React.FC = () => {
                   onChange={(e) => setLiquidGlass({ bubbleStyle: e.target.value as typeof liquidGlass.bubbleStyle })}
                   className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
                 >
-                  <option value="imessage">iMessage curved tails</option>
-                  <option value="cyber">Sharp cyber-cut</option>
+                  <option value="imessage">iMessage curved tails (Theme)</option>
+                  <option value="imessage-classic">Classic iMessage (Blue &amp; Gray tails)</option>
                   <option value="glass">Floating glass</option>
+                  <option value="cyber">Sharp cyber-cut</option>
                 </select>
               </div>
 
@@ -1405,9 +1780,10 @@ export const SettingsView: React.FC = () => {
 
         <SettingsSection
           title="Notifications & Sound"
-          description="Choose when SkellyTalk alerts you and whether it plays a chime."
+          description="Choose reveal effects, notification chimes, ringtones, and alert timing."
         >
-          <div className="glass-pill space-y-3.5 rounded-2xl p-4 text-xs">
+          <div className="glass-pill relative space-y-4 rounded-2xl p-4 text-xs">
+            <LiquidGlassLayer variant="surface" />
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-start gap-2.5">
                 <Bell className="mt-0.5 h-4 w-4 text-[#22C55E]" />
@@ -1495,6 +1871,152 @@ export const SettingsView: React.FC = () => {
               </button>
             </div>
 
+            {/* Liquid Glass Notification Reveal Mode */}
+            <div className="space-y-2 border-t border-black/5 pt-3 dark:border-white/10">
+              <SettingLabel
+                label="Toast notification reveal"
+                info="Controls how incoming in-app notification toasts materialize: Classic slide, Liquid Glass Lens Reveal, or Hover/Tap Privacy Veil."
+              />
+              <div className="grid gap-2 sm:grid-cols-3">
+                {([
+                  ['classic', 'Classic Slide', 'Clean spring drop-in'],
+                  ['liquid-reveal', 'Liquid Reveal', 'Refractive glass lens sweep'],
+                  ['liquid-privacy', 'Privacy Veil', 'Blurred until hover or tap'],
+                ] as const).map(([mode, label, hint]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() =>
+                      setLiquidGlass({ notificationReveal: mode as NotificationRevealMode })
+                    }
+                    className={`glass-pill rounded-xl p-2.5 text-left transition ${
+                      liquidGlass.notificationReveal === mode
+                        ? 'border-[#22C55E] bg-[#22C55E]/15 ring-1 ring-[#22C55E]/40'
+                        : 'hover:bg-black/5 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <p className="text-[11px] font-bold text-emerald-950 dark:text-white">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-emerald-800/65 dark:text-emerald-200/60">
+                      {hint}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sound Volume + Notification Sounds + Ringtones */}
+            <div className="space-y-3 border-t border-black/5 pt-3 dark:border-white/10">
+              <LiquidGlassSlider
+                label="Sound & ringtone volume"
+                value={liquidGlass.soundVolume}
+                min={10}
+                max={100}
+                step={5}
+                unit="%"
+                info="Scales playback loudness for message notification chimes and call ringtones."
+                onChange={(soundVolume) => setLiquidGlass({ soundVolume })}
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <SettingLabel
+                    label="Notification sound"
+                    info="Choose from 10 synthesized chimes for incoming messages."
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={liquidGlass.notificationSound}
+                      onChange={(e) => {
+                        const sound = e.target.value as NotificationSoundId;
+                        setLiquidGlass({ notificationSound: sound });
+                        playNotificationChime(sound, liquidGlass.soundVolume / 100);
+                      }}
+                      className="chat-font-select glass-pill min-w-0 flex-1 rounded-xl px-3 py-2 text-xs"
+                    >
+                      {NOTIFICATION_SOUNDS.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label} — {item.description}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        playNotificationChime(
+                          liquidGlass.notificationSound,
+                          liquidGlass.soundVolume / 100
+                        )
+                      }
+                      title="Preview notification sound"
+                      className="glass-pill flex h-8 shrink-0 items-center gap-1 rounded-xl px-2.5 text-[11px] font-semibold text-emerald-800 transition hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-200"
+                    >
+                      <Play className="h-3 w-3" />
+                      Play
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <SettingLabel
+                    label="Incoming call ringtone"
+                    info="Choose from 8 musical ringtones played on incoming audio and video calls."
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={liquidGlass.ringtone}
+                      onChange={(e) => {
+                        const nextRingtone = e.target.value as RingtoneId;
+                        setLiquidGlass({ ringtone: nextRingtone });
+                        setPreviewingRingtone(true);
+                        previewRingtone(nextRingtone, liquidGlass.soundVolume / 100, () =>
+                          setPreviewingRingtone(false)
+                        );
+                      }}
+                      className="chat-font-select glass-pill min-w-0 flex-1 rounded-xl px-3 py-2 text-xs"
+                    >
+                      {RINGTONES.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label} — {item.description}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (previewingRingtone) {
+                          stopRingtone();
+                          setPreviewingRingtone(false);
+                        } else {
+                          setPreviewingRingtone(true);
+                          previewRingtone(
+                            liquidGlass.ringtone,
+                            liquidGlass.soundVolume / 100,
+                            () => setPreviewingRingtone(false)
+                          );
+                        }
+                      }}
+                      title={previewingRingtone ? 'Stop ringtone preview' : 'Preview ringtone'}
+                      className="glass-pill flex h-8 shrink-0 items-center gap-1 rounded-xl px-2.5 text-[11px] font-semibold text-emerald-800 transition hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-200"
+                    >
+                      {previewingRingtone ? (
+                        <>
+                          <Square className="h-3 w-3 fill-current" />
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Play
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-end border-t border-black/5 pt-3 dark:border-white/10">
               <motion.button
                 whileTap={{ scale: 0.96 }}
@@ -1505,6 +2027,101 @@ export const SettingsView: React.FC = () => {
                 <Bell className="h-3.5 w-3.5" />
                 <span>Send Test Notification</span>
               </motion.button>
+            </div>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          title="Accessibility"
+          description="Adjust motion, transparency, contrast, typography, focus rings, and visual alerts."
+        >
+          <div className="glass-pill relative space-y-4 rounded-2xl p-4">
+            <LiquidGlassLayer variant="surface" />
+            <LiquidGlassSlider
+              label="Interface & text scale"
+              value={liquidGlass.textScale}
+              min={85}
+              max={140}
+              step={5}
+              unit="%"
+              info="Globally scales text and UI proportions from 85% up to 140%."
+              onChange={(textScale) => setLiquidGlass({ textScale })}
+            />
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {([
+                [
+                  'reduceMotion',
+                  'Reduce motion',
+                  'Disables decorative animations, ambient mesh drift, and spring bounce effects.',
+                ],
+                [
+                  'reduceTransparency',
+                  'Reduce transparency',
+                  'Replaces translucent Liquid Glass backgrounds with crisp, solid surfaces.',
+                ],
+                [
+                  'highContrast',
+                  'High contrast',
+                  'Strengthens borders, bubble edges, and text contrast across light and dark themes.',
+                ],
+                [
+                  'dyslexiaFont',
+                  'Dyslexia-friendly font',
+                  'Applies a readable humanist typeface with generous character and line spacing.',
+                ],
+                [
+                  'focusOutlines',
+                  'Strong focus outlines',
+                  'Draws clear high-visibility keyboard focus rings around interactive controls.',
+                ],
+                [
+                  'underlineLinks',
+                  'Underline links',
+                  'Adds persistent underlines to links and link-style controls for clarity.',
+                ],
+                [
+                  'largeClickTargets',
+                  'Larger click targets',
+                  'Enlarges toolbar, header, and switch targets for easier pointer or touch tapping.',
+                ],
+                [
+                  'screenFlashAlerts',
+                  'Visual screen-flash alerts',
+                  'Pulses a subtle luminous border flash on incoming messages and calls.',
+                ],
+              ] as const).map(([key, label, info]) => (
+                <GlassToggle
+                  key={key}
+                  label={label}
+                  info={info}
+                  checked={liquidGlass[key]}
+                  onChange={(next) => setLiquidGlass({ [key]: next })}
+                />
+              ))}
+            </div>
+
+            <div className="flex justify-end border-t border-black/5 pt-3 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() =>
+                  setLiquidGlass({
+                    reduceMotion: false,
+                    reduceTransparency: false,
+                    highContrast: false,
+                    dyslexiaFont: false,
+                    textScale: 100,
+                    focusOutlines: true,
+                    underlineLinks: false,
+                    largeClickTargets: false,
+                    screenFlashAlerts: false,
+                  })
+                }
+                className="glass-pill flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-semibold text-emerald-900 transition hover:border-[#22C55E]/50 dark:text-emerald-100"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset Accessibility Defaults
+              </button>
             </div>
           </div>
         </SettingsSection>

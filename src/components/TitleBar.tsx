@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Minus, Square, Copy, X, Wifi, Bell, BellOff } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 export const TitleBar: React.FC = () => {
   const platform = window.lemchat?.platform ?? 'win32';
@@ -76,12 +77,13 @@ export const TitleBar: React.FC = () => {
                   ? 'Notifications On (click to mute, right-click to test)'
                   : 'Notifications Muted (click to enable)'
               }
-              className={`glass-pill flex h-7 w-7 items-center justify-center rounded-full transition hover:scale-105 ${
+              className={`glass-pill relative flex h-7 w-7 items-center justify-center rounded-full transition hover:scale-105 ${
                 notificationsEnabled
                   ? 'text-[#22C55E]'
                   : 'text-emerald-900/45 dark:text-white/40'
               }`}
             >
+              <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
               {notificationsEnabled ? (
                 <Bell className="h-3.5 w-3.5" />
               ) : (
@@ -89,7 +91,8 @@ export const TitleBar: React.FC = () => {
               )}
             </button>
 
-            <div className="glass-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
+            <div className="glass-pill relative flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium text-emerald-800 dark:text-emerald-200">
+              <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
               <Wifi
                 className={`h-3 w-3 ${
                   realtimeConnected ? 'text-[#22C55E]' : 'animate-pulse text-amber-400'
