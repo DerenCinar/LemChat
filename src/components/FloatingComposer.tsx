@@ -171,6 +171,46 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
     }
   };
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
+  const [pendingRecording, setPendingRecording] = useState<{
+    file: File;
+    url: string;
+    mode: 'audio' | 'video';
+    size: string;
+    mimeLabel: string;
+  } | null>(null);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  React.useEffect(() => {
+    if (liveVideoRef.current) liveVideoRef.current.srcObject = liveStream;
+  }, [liveStream]);
+
+  const pendingUrlRef = useRef<string | null>(null);
+  pendingUrlRef.current = pendingRecording?.url ?? null;
+  React.useEffect(
+    () => () => {
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (pendingUrlRef.current) URL.revokeObjectURL(pendingUrlRef.current);
+    },
+    [],
+  );
+
+  const discardPendingRecording = () => {
+    setPendingRecording((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  };
+
+  const confirmPendingRecording = () => {
+    if (!pendingRecording) return;
+    const { file, size, mimeLabel } = pendingRecording;
+    setStagedUploads((prev) => [
+      ...prev,
+      { id: `recording-${Date.now()}`, file, name: file.name, type: 'file', size, mimeLabel },
+    ]);
+    discardPendingRecording();
+  };
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -368,6 +408,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
+        setLiveStream(null);
         let type = mode === 'video' ? 'video/webm' : 'audio/webm';
         let extension = 'webm';
         let blob: Blob = new Blob(chunks, { type });
@@ -383,21 +424,22 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
         }
         const file = new File([blob], `${mode}-recording.${extension}`, { type });
         const sizeKb = file.size / 1024;
-        setStagedUploads((prev) => [
-          ...prev,
-          {
-            id: `recording-${Date.now()}`,
+        setPendingRecording((prev) => {
+          if (prev) URL.revokeObjectURL(prev.url);
+          return {
             file,
-            name: file.name,
-            type: mode === 'video' ? 'file' : 'file',
+            url: URL.createObjectURL(file),
+            mode,
             size: sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(sizeKb))} KB`,
             mimeLabel: type,
-          },
-        ]);
+          };
+        });
       };
       mediaRecorderRef.current = recorder;
+      discardPendingRecording();
       recorder.start();
       setRecordingMode(mode);
+      if (mode === 'video') setLiveStream(stream);
     } catch (error) {
       console.error('[SkellyTalk] Recording failed:', error);
     }
@@ -838,6 +880,59 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Live video recording view */}
+      {recordingMode === 'video' && (
+        <div className="mb-2 overflow-hidden rounded-2xl border border-rose-500/30 bg-black shadow-lg">
+          <div className="relative">
+            <video
+              ref={(el) => {
+                liveVideoRef.current = el;
+                if (el && el.srcObject !== liveStream) el.srcObject = liveStream;
+              }}
+              autoPlay
+              muted
+              playsInline
+              className="mx-auto max-h-64 w-full -scale-x-100 object-contain"
+            />
+            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" /> REC
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Recording preview before attaching */}
+      {pendingRecording && !recordingMode && (
+        <div className="mb-2 rounded-2xl border border-emerald-500/25 bg-white/70 p-2.5 shadow-lg backdrop-blur dark:bg-zinc-900/70">
+          {pendingRecording.mode === 'video' ? (
+            <video src={pendingRecording.url} controls playsInline className="max-h-64 w-full rounded-xl bg-black object-contain" />
+          ) : (
+            <audio src={pendingRecording.url} controls className="w-full" />
+          )}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-emerald-800/70 dark:text-emerald-200/70">
+              {pendingRecording.mode === 'video' ? 'Video' : 'Audio'} recording · {pendingRecording.size}
+            </span>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={discardPendingRecording}
+                className="flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold text-rose-500 transition hover:bg-rose-500/10"
+              >
+                <Trash2 className="h-3 w-3" /> Discard
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingRecording}
+                className="rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-1 text-xs font-semibold text-white transition hover:brightness-110"
+              >
+                Attach
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pill-shaped Floating Glass Composer */}
       <motion.div
