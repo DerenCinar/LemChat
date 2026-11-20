@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { DownloadCloud } from 'lucide-react';
 import { MeshBackground } from './components/MeshBackground';
 import { TitleBar } from './components/TitleBar';
@@ -14,6 +14,8 @@ import { CallOverlay } from './components/CallOverlay';
 import { ProfileModal } from './components/ProfileModal';
 import { AttachmentViewer } from './components/AttachmentViewer';
 import { AppLockScreen } from './components/AppLockScreen';
+import { LiquidGlassLayer } from './components/LiquidGlassLayer';
+import { isAndroidNative } from './lib/updater';
 import { useChatStore } from './store/useChatStore';
 
 export const App: React.FC = () => {
@@ -26,6 +28,21 @@ export const App: React.FC = () => {
   const setWindowFocused = useChatStore((s) => s.setWindowFocused);
   const updateStatus = useChatStore((s) => s.updateStatus);
   const setUpdateStatus = useChatStore((s) => s.setUpdateStatus);
+  const reduceMotion = useChatStore((s) => s.liquidGlass.reduceMotion);
+  const alertFlashSeq = useChatStore((s) => s.alertFlashSeq);
+  const activePopupId = useChatStore((s) => s.activePopupId);
+  const closeAllPopups = useChatStore((s) => s.closeAllPopups);
+
+  useEffect(() => {
+    if (!activePopupId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeAllPopups();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activePopupId, closeAllPopups]);
 
   useEffect(() => {
     void initializeApp();
@@ -50,38 +67,67 @@ export const App: React.FC = () => {
       setUpdateStatus(payload);
     });
 
+    let initialUpdateTimer: number | undefined;
+    let periodicUpdateTimer: number | undefined;
+    if (!window.lemchat && isAndroidNative()) {
+      initialUpdateTimer = window.setTimeout(() => {
+        void useChatStore.getState().checkForUpdates();
+      }, 3000);
+      periodicUpdateTimer = window.setInterval(() => {
+        void useChatStore.getState().checkForUpdates();
+      }, 30 * 60 * 1000);
+    }
+
     return () => {
       unsubNotif?.();
       unsubTrayStatus?.();
       unsubFocus?.();
       unsubUpdate?.();
+      if (initialUpdateTimer !== undefined) window.clearTimeout(initialUpdateTimer);
+      if (periodicUpdateTimer !== undefined) window.clearInterval(periodicUpdateTimer);
     };
   }, [initializeApp, selectConversation, setSelfStatus, setWindowFocused, setUpdateStatus]);
 
   return (
-    <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden md:rounded-[14px] md:border md:border-white/15">
-      <MeshBackground />
-      <TitleBar />
-      <NotificationToast />
-      <NewConversationModal />
-      <CallOverlay />
-      <ProfileModal />
-      <AttachmentViewer />
-      <AppLockScreen />
+    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
+      <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden md:rounded-[14px] md:border md:border-white/15">
+        <MeshBackground />
+        <TitleBar />
+        <NotificationToast />
+        <NewConversationModal />
+        <CallOverlay />
+        <ProfileModal />
+        <AttachmentViewer />
+        <AppLockScreen />
 
-      <AnimatePresence>
-        {updateStatus.status === 'installing' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#090F0C]/88 backdrop-blur-2xl"
-          >
+        <AnimatePresence>
+          {alertFlashSeq > 0 && (
             <motion.div
-              initial={{ scale: 0.94, y: 12 }}
-              animate={{ scale: 1, y: 0 }}
-              className="glass-panel glass-surface mx-4 flex w-full max-w-sm flex-col items-center rounded-3xl px-8 py-10 text-center ring-1 ring-[#22C55E]/35"
+              key={`alert-flash-${alertFlashSeq}`}
+              aria-hidden
+              initial={{ opacity: 0.75 }}
+              animate={{ opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.65, ease: 'easeOut' }}
+              className="pointer-events-none fixed inset-0 z-[250] rounded-[14px] ring-4 ring-inset ring-[#22C55E]/80 shadow-[inset_0_0_48px_rgba(34,197,94,0.45)]"
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {updateStatus.status === 'installing' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-[#090F0C]/88 backdrop-blur-2xl"
             >
+              <motion.div
+                initial={{ scale: 0.94, y: 12 }}
+                animate={{ scale: 1, y: 0 }}
+                className="glass-panel glass-surface relative mx-4 flex w-full max-w-sm flex-col items-center rounded-3xl px-8 py-10 text-center ring-1 ring-[#22C55E]/35"
+              >
+                <LiquidGlassLayer variant="modal" />
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
@@ -131,7 +177,8 @@ export const App: React.FC = () => {
           </div>
         </main>
       )}
-    </div>
+      </div>
+    </MotionConfig>
   );
 };
 

@@ -17,7 +17,7 @@ interface LiquidGlassSliderProps {
  * Custom watery Liquid Glass slider with flowing caustic fill, droplet spring squash/stretch,
  * ripple ring feedback, and floating glass value bubble.
  */
-export const LiquidGlassSlider: React.FC<LiquidGlassSliderProps> = ({
+export const LiquidGlassSlider: React.FC<LiquidGlassSliderProps> = React.memo(({
   label,
   value,
   min,
@@ -141,33 +141,28 @@ export const LiquidGlassSlider: React.FC<LiquidGlassSliderProps> = ({
         onPointerEnter={() => setIsHovered(true)}
         onPointerLeave={() => setIsHovered(false)}
         onKeyDown={handleKeyDown}
+        data-slider-dragging={isDragging ? 'true' : 'false'}
         className="group relative flex h-8 cursor-pointer touch-none items-center px-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#22C55E]/60 focus-visible:rounded-full"
       >
         <div className="liquid-slider-track relative h-3 w-full overflow-hidden rounded-full">
-          <motion.div
-            className="liquid-slider-fill absolute inset-y-0 left-0 rounded-full"
-            animate={{ width: `${percent}%` }}
-            transition={
-              isDragging
-                ? { type: 'tween', duration: 0.04, ease: 'linear' }
-                : { type: 'spring', stiffness: 360, damping: 28 }
-            }
+          <div
+            className={`liquid-slider-fill absolute inset-y-0 left-0 rounded-full ${
+              isDragging ? '' : 'transition-[width] duration-150 ease-out'
+            }`}
+            style={{ width: `${percent}%` }}
           >
             <div className="liquid-slider-flow pointer-events-none absolute inset-0 rounded-full" />
             <div className="liquid-slider-caustics pointer-events-none absolute inset-0 rounded-full" />
             <span className="pointer-events-none absolute inset-x-1 top-[1px] h-[2px] rounded-full bg-white/45 blur-[0.5px]" />
-          </motion.div>
+          </div>
         </div>
 
         <div className="pointer-events-none absolute inset-x-2.5 inset-y-0">
-          <motion.div
-            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-            animate={{ left: `${percent}%` }}
-            transition={
-              isDragging
-                ? { type: 'tween', duration: 0.04, ease: 'linear' }
-                : { type: 'spring', stiffness: 360, damping: 28 }
-            }
+          <div
+            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 ${
+              isDragging ? '' : 'transition-[left] duration-150 ease-out'
+            }`}
+            style={{ left: `${percent}%` }}
           >
             <AnimatePresence>
               {(isDragging || isHovered) && (
@@ -205,9 +200,9 @@ export const LiquidGlassSlider: React.FC<LiquidGlassSliderProps> = ({
               <span className="pointer-events-none absolute left-1.5 top-1 h-1.5 w-2.5 rounded-full bg-white/85 blur-[0.4px]" />
               <span className="pointer-events-none absolute bottom-0.5 h-1 w-3 rounded-full bg-white/30 blur-[0.5px]" />
             </motion.div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>
   );
-};
+});

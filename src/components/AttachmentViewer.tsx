@@ -1,41 +1,50 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, ExternalLink, FileText, X } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 export const AttachmentViewer: React.FC = () => {
   const attachment = useChatStore((s) => s.selectedAttachment);
   const closeAttachment = useChatStore((s) => s.closeAttachment);
 
-  if (!attachment) {
-    return null;
-  }
+  useEffect(() => {
+    if (!attachment) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAttachment();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [attachment, closeAttachment]);
 
-  const mime = attachment.mimeLabel?.toLowerCase() ?? '';
-  const name = attachment.name.toLowerCase();
+  const mime = attachment?.mimeLabel?.toLowerCase() ?? '';
+  const name = attachment?.name.toLowerCase() ?? '';
   const isGif = mime.includes('gif') || name.endsWith('.gif');
-  const isImage = attachment.type === 'image' || mime.startsWith('image/');
+  const isImage = attachment?.type === 'image' || mime.startsWith('image/');
   const isPdf = mime.includes('pdf') || name.endsWith('.pdf');
   const isVideo = mime.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(name);
   const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm)$/i.test(name);
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-12 z-[70] flex items-center justify-center"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) closeAttachment();
-        }}
-      >
+      {attachment && (
         <motion.div
-          initial={{ scale: 0.96, y: 12 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: 12 }}
-          className="glass-panel glass-surface flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-12 z-[70] flex items-center justify-center"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeAttachment();
+          }}
         >
+          <motion.div
+            initial={{ scale: 0.94, y: 14, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.94, y: 12, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            className="glass-panel glass-surface relative flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl"
+          >
+            <LiquidGlassLayer variant="modal" />
           <header className="flex items-center justify-between border-b border-black/10 px-4 py-3 dark:border-white/10">
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold text-emerald-950 dark:text-white">
@@ -110,8 +119,9 @@ export const AttachmentViewer: React.FC = () => {
               </div>
             )}
           </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 };

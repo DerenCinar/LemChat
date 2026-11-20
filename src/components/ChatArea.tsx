@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -25,6 +25,7 @@ import { MessageBubble } from './MessageBubble';
 import { FloatingComposer } from './FloatingComposer';
 import { UserAvatar } from './UserAvatar';
 import { FriendshipStatsPanel } from './FriendshipStats';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { UserPresence } from '../types/chat';
 
 const STATUS_LABEL: Record<UserPresence, string> = {
@@ -55,20 +56,27 @@ export const ChatArea: React.FC = () => {
   const feedEndRef = useRef<HTMLDivElement | null>(null);
   const wasNearBottomRef = useRef(true);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
 
-  const conversations = useChatStore((s) => s.conversations);
+  const activeConv = useChatStore(
+    (s) => s.conversations.find((c) => c.id === s.activeConversationId) ?? s.conversations[0]
+  );
   const profiles = useChatStore((s) => s.profiles);
   const self = useChatStore((s) => s.self);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isInChatSearchOpen = useChatStore((s) => s.isInChatSearchOpen);
   const inChatSearchQuery = useChatStore((s) => s.inChatSearchQuery);
   const isInfoPanelOpen = useChatStore((s) => s.isInfoPanelOpen);
-  const typingConversations = useChatStore((s) => s.typingConversations);
+  const typingState = useChatStore((s) => {
+    const id = s.activeConversationId ?? s.conversations[0]?.id;
+    return id ? s.typingConversations[id] ?? null : null;
+  });
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
   const workspaceLoading = useChatStore((s) => s.workspaceLoading);
+  const inviteOpen = useChatStore((s) => s.activePopupId === 'chat:invite');
+  const setActivePopupId = useChatStore((s) => s.setActivePopupId);
+  const togglePopup = useChatStore((s) => s.togglePopup);
 
   const toggleInChatSearch = useChatStore((s) => s.toggleInChatSearch);
   const setInChatSearchQuery = useChatStore((s) => s.setInChatSearchQuery);
@@ -86,10 +94,6 @@ export const ChatArea: React.FC = () => {
   const setMobileChatOpen = useChatStore((s) => s.setMobileChatOpen);
   const pendingMentionMessageId = useChatStore((s) => s.pendingMentionMessageId);
   const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
-
-  const activeConv =
-    conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
-  const typingState = activeConv ? typingConversations[activeConv.id] : null;
 
   useEffect(() => {
     if (pendingMentionMessageId) return;
@@ -143,13 +147,46 @@ export const ChatArea: React.FC = () => {
   }, [pendingMentionMessageId, activeConversationId, setPendingMentionMessageId]);
 
   useEffect(() => {
-    setInviteOpen(false);
+    if (useChatStore.getState().activePopupId === 'chat:invite') {
+      setActivePopupId(null);
+    }
     setSelectedInvites([]);
-  }, [activeConversationId]);
+  }, [activeConversationId, setActivePopupId]);
+
+  useEffect(() => {
+    if (!inviteOpen && !isInChatSearchOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (inviteOpen) setActivePopupId(null);
+      if (isInChatSearchOpen) toggleInChatSearch();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [inviteOpen, isInChatSearchOpen, setActivePopupId, toggleInChatSearch]);
+
+  const visibleMessages = useMemo(() => {
+    const msgs = activeConv?.messages ?? [];
+    const q = inChatSearchQuery.trim().toLowerCase();
+    return q ? msgs.filter((m) => m.content.toLowerCase().includes(q)) : msgs;
+  }, [activeConv?.messages, inChatSearchQuery]);
+
+  const invitableUsers = useMemo(() => {
+    const members = activeConv?.members ?? [];
+    const existingMemberIds = new Set(members.map((m) => m.id));
+    return Object.values(profiles).filter(
+      (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
+    );
+  }, [activeConv?.members, profiles, self?.id]);
+
+  const sharedAttachments = useMemo(
+    () => (activeConv?.messages ?? []).flatMap((m) => m.attachments ?? []),
+    [activeConv?.messages]
+  );
 
   if (workspaceLoading) {
     return (
-      <div className="glass-panel glass-surface flex flex-1 flex-col rounded-2xl p-4 md:p-5" aria-label="Loading conversation">
+      <div className="glass-panel glass-surface relative flex flex-1 flex-col overflow-hidden rounded-2xl p-4 md:p-5" aria-label="Loading conversation">
+        <LiquidGlassLayer variant="panel" />
         <div className="flex items-center gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.09]">
           <div className="h-10 w-10 animate-pulse rounded-2xl bg-emerald-500/15" />
           <div className="flex-1 space-y-2">
@@ -173,10 +210,20 @@ export const ChatArea: React.FC = () => {
 
   if (!activeConv) {
     return (
-      <div className="glass-panel glass-surface flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl p-6 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E]/25 to-[#10B981]/15 ring-1 ring-[#22C55E]/25">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+        className="glass-panel glass-surface relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl p-6 text-center"
+      >
+        <LiquidGlassLayer variant="panel" />
+        <motion.div
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#22C55E]/25 to-[#10B981]/15 ring-1 ring-[#22C55E]/25"
+        >
           <Sparkles className="h-6 w-6 text-[#22C55E]" />
-        </div>
+        </motion.div>
         <div>
           <p className="text-sm font-semibold text-emerald-950 dark:text-white">
             Welcome to SkellyTalk
@@ -185,14 +232,16 @@ export const ChatArea: React.FC = () => {
             Create a group and invite people, or start a direct message to begin chatting in real time.
           </p>
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
           onClick={() => setNewConvModalOpen(true)}
           className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#22C55E] to-[#10B981] px-4 py-2 text-xs font-semibold text-white shadow-lem-glow-sm transition hover:brightness-110"
         >
           <Plus className="h-3.5 w-3.5" />
           <span>New Conversation</span>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
     );
   }
 
@@ -244,29 +293,19 @@ export const ChatArea: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const visibleMessages = inChatSearchQuery.trim()
-    ? convMessages.filter((m) =>
-        m.content.toLowerCase().includes(inChatSearchQuery.toLowerCase())
-      )
-    : convMessages;
-
-  const existingMemberIds = new Set(convMembers.map((m) => m.id));
-  const invitableUsers = Object.values(profiles).filter(
-    (p) => p.id !== self?.id && !existingMemberIds.has(p.id)
-  );
-
   const handleConfirmInvites = async () => {
     if (selectedInvites.length === 0 || inviting) return;
     setInviting(true);
     await inviteToGroup(activeConv.id, selectedInvites);
     setSelectedInvites([]);
     setInviting(false);
-    setInviteOpen(false);
+    setActivePopupId(null);
   };
 
   return (
     <div className="relative flex h-full max-h-full min-h-0 min-w-0 flex-1 items-stretch gap-3 overflow-hidden">
-      <section className="glass-panel glass-surface flex h-full min-h-0 min-w-0 basis-0 flex-1 flex-col overflow-hidden rounded-2xl">
+      <section className="glass-panel glass-surface relative flex h-full min-h-0 min-w-0 basis-0 flex-1 flex-col overflow-hidden rounded-2xl">
+        <LiquidGlassLayer variant="panel" />
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-3 py-2.5 md:px-5 md:py-3.5 dark:border-white/[0.09]">
           <div className="flex min-w-0 items-center gap-2 md:gap-3">
@@ -350,9 +389,13 @@ export const ChatArea: React.FC = () => {
           <div className="flex items-center gap-1.5">
             {activeConv.type === 'channel' && (
               <motion.button
+                data-header-btn
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
-                onClick={() => setInviteOpen((v) => !v)}
+                onClick={() => {
+                  if (isInChatSearchOpen) toggleInChatSearch();
+                  togglePopup('chat:invite');
+                }}
                 title="Invite people to group"
                 className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
                   inviteOpen
@@ -364,7 +407,10 @@ export const ChatArea: React.FC = () => {
               </motion.button>
             )}
 
-            <button
+            <motion.button
+              data-header-btn
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               onClick={toggleInChatSearch}
               title="Search in conversation"
               className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
@@ -374,9 +420,10 @@ export const ChatArea: React.FC = () => {
               }`}
             >
               <Search className="h-3.5 w-3.5" />
-            </button>
+            </motion.button>
 
             <motion.button
+              data-header-btn
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
               onClick={() => void startCall(activeConv.id, 'audio')}
@@ -392,6 +439,7 @@ export const ChatArea: React.FC = () => {
             </motion.button>
 
             <motion.button
+              data-header-btn
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
               onClick={() => void startCall(activeConv.id, 'video')}
@@ -406,7 +454,10 @@ export const ChatArea: React.FC = () => {
               <Video className="h-3.5 w-3.5" />
             </motion.button>
 
-            <button
+            <motion.button
+              data-header-btn
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               onClick={toggleInfoPanel}
               title="Conversation Info"
               className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
@@ -416,7 +467,7 @@ export const ChatArea: React.FC = () => {
               }`}
             >
               <Info className="h-3.5 w-3.5" />
-            </button>
+            </motion.button>
           </div>
         </header>
 
@@ -435,7 +486,7 @@ export const ChatArea: React.FC = () => {
                     Invite people to #{activeConv.name}
                   </span>
                   <button
-                    onClick={() => setInviteOpen(false)}
+                    onClick={() => setActivePopupId(null)}
                     className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -507,28 +558,33 @@ export const ChatArea: React.FC = () => {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden border-b border-black/[0.06] px-5 dark:border-white/[0.08]"
             >
-              <div className="flex items-center gap-2 py-2">
-                <Search className="h-3.5 w-3.5 text-[#22C55E]" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={inChatSearchQuery}
-                  onChange={(e) => setInChatSearchQuery(e.target.value)}
-                  placeholder="Filter messages in this thread..."
-                  className="flex-1 bg-transparent text-xs text-emerald-950 placeholder-emerald-800/50 outline-none dark:text-white dark:placeholder-emerald-100/40"
-                />
-                {inChatSearchQuery && (
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                    {visibleMessages.length} match
-                    {visibleMessages.length === 1 ? '' : 'es'}
-                  </span>
-                )}
-                <button
-                  onClick={toggleInChatSearch}
-                  className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+              <div className="py-2">
+                <div
+                  data-input-shell
+                  className="glass-pill flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20"
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  <Search className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={inChatSearchQuery}
+                    onChange={(e) => setInChatSearchQuery(e.target.value)}
+                    placeholder="Filter messages in this thread..."
+                    className="flex-1 bg-transparent text-xs text-emerald-950 placeholder-emerald-800/50 outline-none dark:text-white dark:placeholder-emerald-100/40"
+                  />
+                  {inChatSearchQuery && (
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                      {visibleMessages.length} match
+                      {visibleMessages.length === 1 ? '' : 'es'}
+                    </span>
+                  )}
+                  <button
+                    onClick={toggleInChatSearch}
+                    className="rounded-full p-1 text-emerald-800/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -542,12 +598,21 @@ export const ChatArea: React.FC = () => {
             const distanceFromBottom =
               feed.scrollHeight - feed.scrollTop - feed.clientHeight;
             const nearBottom = distanceFromBottom < 120;
-            wasNearBottomRef.current = nearBottom;
-            setShowScrollToBottom(!nearBottom);
+            if (wasNearBottomRef.current !== nearBottom) {
+              wasNearBottomRef.current = nearBottom;
+              setShowScrollToBottom(!nearBottom);
+            }
           }}
+          style={{ transform: 'translateZ(0)' }}
           className="lem-scrollbar flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4"
         >
-          <div className="space-y-3">
+          <motion.div
+            key={activeConv.id}
+            initial={{ opacity: 0.72, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="space-y-3"
+          >
             {visibleMessages.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                 <span className="glass-pill rounded-full px-3.5 py-1.5 text-xs text-emerald-800/70 dark:text-emerald-200/65">
@@ -563,7 +628,9 @@ export const ChatArea: React.FC = () => {
             ) : (
               visibleMessages.map((msg, index) => {
                 const prev = visibleMessages[index - 1];
+                const next = visibleMessages[index + 1];
                 const showHeader = !prev || prev.senderId !== msg.senderId;
+                const isLastInGroup = !next || next.senderId !== msg.senderId;
                 const lastReadTime = activeConv.lastReadAt
                   ? new Date(activeConv.lastReadAt).getTime()
                   : 0;
@@ -589,6 +656,7 @@ export const ChatArea: React.FC = () => {
                     <MessageBubble
                       message={msg}
                       showHeader={showHeader}
+                      isLastInGroup={isLastInGroup}
                       highlightQuery={inChatSearchQuery}
                       highlightMention={pendingMentionMessageId === msg.id}
                     />
@@ -596,7 +664,7 @@ export const ChatArea: React.FC = () => {
                 );
               })
             )}
-          </div>
+          </motion.div>
 
           <AnimatePresence>
             {typingState && (
@@ -649,6 +717,7 @@ export const ChatArea: React.FC = () => {
               title="Scroll to bottom"
               aria-label="Scroll to bottom"
             >
+              <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
               <ArrowDown className="h-4 w-4" />
             </motion.button>
           )}
@@ -671,10 +740,11 @@ export const ChatArea: React.FC = () => {
             animate={{ width: activeConv.type === 'channel' ? 320 : 270, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-            className={`glass-panel glass-surface fixed bottom-2 left-2 right-2 top-12 z-40 flex min-h-0 !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:static md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-auto md:max-h-full md:self-stretch ${
+            className={`glass-panel glass-surface fixed bottom-2 left-2 right-2 top-12 z-40 flex min-h-0 !w-auto shrink-0 flex-col overflow-hidden rounded-2xl md:relative md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-auto md:max-h-full md:self-stretch ${
               activeConv.type === 'channel' ? 'md:!w-[260px] lg:!w-[280px]' : 'md:!w-[250px] lg:!w-[270px]'
             }`}
           >
+            <LiquidGlassLayer variant="panel" />
             <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5 dark:border-white/[0.09]">
               <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900/75 dark:text-emerald-200/75">
                 Details
@@ -758,7 +828,7 @@ export const ChatArea: React.FC = () => {
                       Members ({convMembers.length})
                     </p>
                     <button
-                      onClick={() => setInviteOpen(true)}
+                      onClick={() => setActivePopupId('chat:invite')}
                       className="flex items-center gap-1 text-[10px] font-semibold text-[#22C55E] hover:underline"
                     >
                       <UserPlus className="h-3 w-3" />
@@ -834,10 +904,8 @@ export const ChatArea: React.FC = () => {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/50">
                   Shared Media &amp; Files
                 </p>
-                {convMessages.some((m) => m.attachments?.length) ? (
-                  convMessages
-                    .flatMap((m) => m.attachments ?? [])
-                    .map((att) => (
+                {sharedAttachments.length > 0 ? (
+                  sharedAttachments.map((att) => (
                       <button
                         type="button"
                         key={att.id}

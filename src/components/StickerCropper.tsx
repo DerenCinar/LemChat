@@ -1,17 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { X, ImagePlus, Square, Circle } from 'lucide-react';
 import { useStickerPacks, MAX_STICKERS_PER_PACK } from '../store/useStickerPacks';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 const VIEW = 288; // on-screen crop square (px)
 const OUT = 320; // exported sticker size (px)
 
 interface StickerCropperProps {
+  isOpen?: boolean;
   onClose: () => void;
   /** Pack to preselect when opening from a pack tab. */
   initialPackId?: string | null;
 }
 
-export const StickerCropper: React.FC<StickerCropperProps> = ({ onClose, initialPackId }) => {
+export const StickerCropper: React.FC<StickerCropperProps> = ({
+  isOpen = true,
+  onClose,
+  initialPackId,
+}) => {
   const packs = useStickerPacks((s) => s.packs);
   const createPack = useStickerPacks((s) => s.createPack);
   const addSticker = useStickerPacks((s) => s.addSticker);
@@ -37,6 +44,15 @@ export const StickerCropper: React.FC<StickerCropperProps> = ({ onClose, initial
     },
     []
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   // "Cover" scale: at zoom 1 the image fully covers the crop square.
   const baseScale = img ? VIEW / Math.min(img.naturalWidth, img.naturalHeight) : 1;
@@ -135,11 +151,25 @@ export const StickerCropper: React.FC<StickerCropperProps> = ({ onClose, initial
   const packFull = !!targetPack && targetPack.stickers.length >= MAX_STICKERS_PER_PACK;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3 backdrop-blur-sm"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="glass-panel glass-surface max-h-[92vh] w-full max-w-[360px] overflow-y-auto rounded-3xl p-4 text-emerald-950 dark:text-white">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3 backdrop-blur-sm"
+          onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 12 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="glass-panel glass-surface relative w-full max-w-[360px] overflow-hidden rounded-3xl text-emerald-950 dark:text-white"
+          >
+            <LiquidGlassLayer variant="modal" />
+            <div className="lem-scrollbar relative z-10 max-h-[92vh] overflow-y-auto p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-bold">Create sticker</span>
           <button
@@ -297,7 +327,10 @@ export const StickerCropper: React.FC<StickerCropperProps> = ({ onClose, initial
             Save sticker
           </button>
         </div>
-      </div>
-    </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

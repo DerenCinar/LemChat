@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
+import packageInfo from '../../package.json';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
+import {
+  checkGitHubLatestRelease,
+  downloadAndInstallAndroidApk,
+  hasNativeAndroidUpdater,
+  installDownloadedAndroidApk,
+  isAndroidNative,
+} from '../lib/updater';
 import { parseAvatarSpec, serializeAvatarSpec } from '../components/UserAvatar';
 import {
   playNotificationChime,
@@ -157,6 +165,8 @@ interface ChatStore {
   selectedProfileId: string | null;
   pendingMentionMessageId: string | null;
   selectedAttachment: Attachment | null;
+  activePopupId: string | null;
+  alertFlashSeq: number;
 
   typingConversations: Record<string, TypingState | null>;
   latestToast: ToastNotification | null;
@@ -185,6 +195,10 @@ interface ChatStore {
   setNewConvModalOpen: (open: boolean) => void;
   setMobileChatOpen: (open: boolean) => void;
   setWindowFocused: (focused: boolean) => void;
+  setActivePopupId: (popupId: string | null) => void;
+  togglePopup: (popupId: string) => void;
+  closeAllPopups: () => void;
+  triggerAlertFlash: () => void;
   touchLastSeen: () => Promise<void>;
   dismissToast: () => void;
   setReplyingTo: (msg: Message | null) => void;
@@ -592,10 +606,33 @@ const DEFAULT_LIQUID_GLASS: LiquidGlassTheme = {
   autoLoadMedia: true,
   snippets: {},
   savedReplies: [],
+  useRealLiquidGlass: false,
+  realGlassMode: 'standard',
+  realGlassQuality: 'balanced',
+  refractionScale: 68,
+  aberrationIntensity: 2,
+  glassElasticity: 15,
+  glassSaturation: 180,
+  specularSheen: 55,
+  glassTintStrength: 40,
+  glassDepth: 'elevated',
+  notificationReveal: 'liquid-reveal',
+  notificationSound: 'emerald-chime',
+  ringtone: 'skelly-arpeggio',
+  soundVolume: 80,
+  reduceMotion: false,
+  reduceTransparency: false,
+  highContrast: false,
+  dyslexiaFont: false,
+  textScale: 100,
+  focusOutlines: false,
+  underlineLinks: false,
+  largeClickTargets: false,
+  screenFlashAlerts: false,
 };
 
 const normalizeBubbleStyle = (value: unknown): BubbleStyle =>
-  value === 'cyber' || value === 'glass' ? value : 'imessage';
+  value === 'cyber' || value === 'glass' || value === 'imessage-classic' ? value : 'imessage';
 
 const readLiquidGlass = (): LiquidGlassTheme => {
   try {
@@ -614,13 +651,28 @@ const applyLiquidGlass = (theme: LiquidGlassTheme) => {
   root.style.setProperty('--glass-radius', `${theme.roundness}px`);
   root.style.setProperty('--glass-accent', theme.accent);
   root.style.setProperty('--glass-bubble', theme.bubbleColor);
+  root.style.setProperty('--glass-saturation', `${theme.glassSaturation}%`);
+  root.style.setProperty('--glass-specular', String(theme.specularSheen / 100));
+  root.style.setProperty('--glass-tint', String(theme.glassTintStrength / 100));
+  root.style.setProperty('--glass-aberration', String(theme.aberrationIntensity));
+  root.style.setProperty('--a11y-text-scale', String(theme.textScale / 100));
   root.dataset.bubbleDensity = theme.density;
-  root.dataset.ambientMotion = theme.ambientMotion ? 'true' : 'false';
+  root.dataset.ambientMotion = theme.ambientMotion && !theme.reduceMotion ? 'true' : 'false';
   root.dataset.bubbleStyle = theme.bubbleStyle;
-  root.dataset.entranceEffect = theme.entranceEffect;
+  root.dataset.entranceEffect = theme.reduceMotion ? 'instant' : theme.entranceEffect;
   root.dataset.sidebarLayout = theme.sidebarLayout;
   root.dataset.cursorGlow = theme.cursorGlow ? 'true' : 'false';
   root.dataset.unreadDividerStyle = theme.unreadDividerStyle;
+  root.dataset.realLiquidGlass =
+    theme.useRealLiquidGlass && !theme.reduceTransparency ? 'true' : 'false';
+  root.dataset.glassDepth = theme.glassDepth;
+  root.dataset.reduceMotion = theme.reduceMotion ? 'true' : 'false';
+  root.dataset.reduceTransparency = theme.reduceTransparency ? 'true' : 'false';
+  root.dataset.highContrast = theme.highContrast ? 'true' : 'false';
+  root.dataset.dyslexiaFont = theme.dyslexiaFont ? 'true' : 'false';
+  root.dataset.strongFocus = theme.focusOutlines ? 'true' : 'false';
+  root.dataset.underlineLinks = theme.underlineLinks ? 'true' : 'false';
+  root.dataset.largeTargets = theme.largeClickTargets ? 'true' : 'false';
   root.style.setProperty('--chat-font-weight', String(theme.fontWeight));
   root.style.setProperty('--chat-letter-spacing', `${theme.letterSpacing / 100}em`);
   root.style.setProperty('--chat-line-height', String(theme.lineHeight / 100));
@@ -659,6 +711,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   selectedProfileId: null,
   pendingMentionMessageId: null,
   selectedAttachment: null,
+  activePopupId: null,
+  alertFlashSeq: 0,
 
   typingConversations: {},
   latestToast: null,
@@ -747,21 +801,51 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     get().setTheme(next);
   },
 
-  setActiveTab: (activeTab) => set({ activeTab, mobileChatOpen: false }),
+  setActiveTab: (activeTab) => set({ activeTab, mobileChatOpen: false, activePopupId: null }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setInChatSearchQuery: (inChatSearchQuery) => set({ inChatSearchQuery }),
   toggleInChatSearch: () =>
     set((state) => ({
       isInChatSearchOpen: !state.isInChatSearchOpen,
       inChatSearchQuery: state.isInChatSearchOpen ? '' : state.inChatSearchQuery,
+      activePopupId: state.isInChatSearchOpen ? state.activePopupId : null,
     })),
   toggleInfoPanel: () =>
-    set((state) => ({ isInfoPanelOpen: !state.isInfoPanelOpen })),
-  setNewConvModalOpen: (isNewConvModalOpen) => set({ isNewConvModalOpen }),
+    set((state) => ({ isInfoPanelOpen: !state.isInfoPanelOpen, activePopupId: null })),
+  setNewConvModalOpen: (isNewConvModalOpen) =>
+    set((state) =>
+      isNewConvModalOpen
+        ? {
+            isNewConvModalOpen: true,
+            activePopupId: null,
+            selectedProfileId: null,
+            selectedAttachment: null,
+          }
+        : { isNewConvModalOpen: false, activePopupId: state.activePopupId }
+    ),
   setMobileChatOpen: (mobileChatOpen) => set({ mobileChatOpen }),
+  setActivePopupId: (activePopupId) => set({ activePopupId }),
+  togglePopup: (popupId) =>
+    set((state) => ({ activePopupId: state.activePopupId === popupId ? null : popupId })),
+  closeAllPopups: () => set({ activePopupId: null }),
+  triggerAlertFlash: () => {
+    if (get().liquidGlass.screenFlashAlerts) {
+      set((state) => ({ alertFlashSeq: state.alertFlashSeq + 1 }));
+    }
+  },
   dismissToast: () => set({ latestToast: null }),
   setReplyingTo: (replyingTo) => set({ replyingTo }),
-  setSelectedProfileId: (selectedProfileId) => set({ selectedProfileId }),
+  setSelectedProfileId: (selectedProfileId) =>
+    set((state) =>
+      selectedProfileId
+        ? {
+            selectedProfileId,
+            activePopupId: null,
+            isNewConvModalOpen: false,
+            selectedAttachment: null,
+          }
+        : { selectedProfileId: null, activePopupId: state.activePopupId }
+    ),
   setPendingMentionMessageId: (pendingMentionMessageId) => set({ pendingMentionMessageId }),
   getContactName: (userId, fallbackName) => {
     const selfId = get().session?.user?.id;
@@ -788,7 +872,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ),
     }));
   },
-  openAttachment: (selectedAttachment) => set({ selectedAttachment }),
+  openAttachment: (selectedAttachment) =>
+    set({
+      selectedAttachment,
+      activePopupId: null,
+      isNewConvModalOpen: false,
+      selectedProfileId: null,
+    }),
   closeAttachment: () => set({ selectedAttachment: null }),
 
   setNotificationsEnabled: (notificationsEnabled) => {
@@ -844,15 +934,145 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   checkForUpdates: async () => {
-    await window.lemchat?.checkForUpdates?.();
+    if (window.lemchat?.checkForUpdates) {
+      await window.lemchat.checkForUpdates();
+      return;
+    }
+
+    const { setUpdateStatus } = get();
+    setUpdateStatus({ status: 'checking', message: 'Checking for updates...' });
+
+    try {
+      const result = await checkGitHubLatestRelease(packageInfo.version);
+      if (result.updateAvailable) {
+        setUpdateStatus({
+          status: 'available',
+          version: result.latestVersion,
+          downloadUrl: result.apkDownloadUrl,
+          releaseUrl: result.releaseUrl,
+          message:
+            isAndroidNative() && !result.apkDownloadUrl
+              ? `Version ${result.latestVersion} is available on GitHub (APK still uploading).`
+              : `Update v${result.latestVersion} is available.`,
+        });
+      } else {
+        setUpdateStatus({
+          status: 'not-available',
+          version: result.currentVersion,
+          releaseUrl: result.releaseUrl,
+          message: `SkellyTalk v${result.currentVersion} is up to date.`,
+        });
+      }
+    } catch (error) {
+      setUpdateStatus({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unable to check for updates.',
+      });
+    }
   },
 
   downloadUpdate: () => {
-    window.lemchat?.downloadUpdate?.();
+    if (window.lemchat?.downloadUpdate) {
+      window.lemchat.downloadUpdate();
+      return;
+    }
+
+    const { updateStatus, setUpdateStatus } = get();
+    if (isAndroidNative()) {
+      if (hasNativeAndroidUpdater() && updateStatus.downloadUrl) {
+        setUpdateStatus({
+          status: 'downloading',
+          version: updateStatus.version,
+          progress: 0,
+          downloadUrl: updateStatus.downloadUrl,
+          releaseUrl: updateStatus.releaseUrl,
+          message: `Downloading update v${updateStatus.version ?? ''}...`,
+        });
+
+        void downloadAndInstallAndroidApk(
+          updateStatus.downloadUrl,
+          updateStatus.version,
+          (progress) => {
+            const current = get().updateStatus;
+            if (current.status === 'downloading') {
+              setUpdateStatus({
+                ...current,
+                status: 'downloading',
+                progress,
+              });
+            }
+          }
+        )
+          .then((res) => {
+            setUpdateStatus({
+              status: 'downloaded',
+              version: updateStatus.version,
+              downloadUrl: updateStatus.downloadUrl,
+              releaseUrl: updateStatus.releaseUrl,
+              message: res?.needsPermission
+                ? 'Allow "Install unknown apps" for SkellyTalk in Android settings, then tap Install Update.'
+                : `Version ${updateStatus.version ?? ''} downloaded. Tap Install Update if the installer did not open.`,
+            });
+          })
+          .catch((error) => {
+            setUpdateStatus({
+              status: 'error',
+              version: updateStatus.version,
+              downloadUrl: updateStatus.downloadUrl,
+              releaseUrl: updateStatus.releaseUrl,
+              message: error instanceof Error ? error.message : 'APK download failed.',
+            });
+          });
+        return;
+      }
+
+      const targetUrl =
+        updateStatus.downloadUrl ||
+        updateStatus.releaseUrl ||
+        'https://github.com/DerenCinar/LemChat/releases/latest';
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const targetUrl =
+      updateStatus.releaseUrl || 'https://github.com/DerenCinar/LemChat/releases/latest';
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   },
 
   installUpdate: () => {
-    window.lemchat?.installUpdate?.();
+    if (window.lemchat?.installUpdate) {
+      window.lemchat.installUpdate();
+      return;
+    }
+
+    const { updateStatus, setUpdateStatus } = get();
+    if (isAndroidNative() && hasNativeAndroidUpdater()) {
+      void installDownloadedAndroidApk()
+        .then((res) => {
+          if (res?.needsPermission) {
+            setUpdateStatus({
+              ...updateStatus,
+              status: 'downloaded',
+              message:
+                'Allow "Install unknown apps" for SkellyTalk in Android settings, then tap Install Update again.',
+            });
+          }
+        })
+        .catch((error) => {
+          setUpdateStatus({
+            status: 'error',
+            version: updateStatus.version,
+            downloadUrl: updateStatus.downloadUrl,
+            releaseUrl: updateStatus.releaseUrl,
+            message: error instanceof Error ? error.message : 'Unable to launch APK installer.',
+          });
+        });
+      return;
+    }
+
+    const targetUrl =
+      updateStatus.releaseUrl || 'https://github.com/DerenCinar/LemChat/releases/latest';
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   },
 
   sendTestNotification: async () => {
@@ -865,8 +1085,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const body = 'Native desktop notifications, sound chime, and Liquid Glass toasts are active!';
 
     if (state.soundEnabled) {
-      playNotificationChime();
+      playNotificationChime(state.liquidGlass.notificationSound, state.liquidGlass.soundVolume / 100);
     }
+    get().triggerAlertFlash();
 
     if (window.lemchat) {
       await window.lemchat.sendNotification({
@@ -1560,8 +1781,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
           if (state.notificationsEnabled && state.self?.status !== 'busy') {
             if (state.soundEnabled) {
-              playNotificationChime();
+              playNotificationChime(
+                state.liquidGlass.notificationSound,
+                state.liquidGlass.soundVolume / 100
+              );
             }
+            get().triggerAlertFlash();
 
             if (window.lemchat) {
               void window.lemchat.sendNotification({
@@ -1958,8 +2183,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (!conv) return;
 
         if (get().soundEnabled && get().self?.status !== 'busy') {
-          startIncomingRingtone();
+          startIncomingRingtone(
+            get().liquidGlass.ringtone,
+            get().liquidGlass.soundVolume / 100
+          );
         }
+        get().triggerAlertFlash();
 
         set({
           incomingCall: {
@@ -2206,6 +2435,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         mobileChatOpen: true,
         inChatSearchQuery: '',
         isInChatSearchOpen: false,
+        activePopupId: null,
       };
     });
 
@@ -3320,7 +3550,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
 
     if (get().soundEnabled) {
-      startOutgoingRingtone();
+      startOutgoingRingtone(get().liquidGlass.soundVolume / 100);
     }
 
     const offer = await pc.createOffer();

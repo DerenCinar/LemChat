@@ -117,7 +117,7 @@ export const FriendshipStatsPanel: React.FC<{ messages: Message[] }> = ({ messag
         Friendship Stats
         <Lock className="h-2.5 w-2.5 opacity-70" aria-label="Private to you" />
       </p>
-      <div className="glass-pill space-y-2 rounded-xl px-3 py-2.5">
+      <div className="glass-pill relative space-y-2 rounded-xl px-3 py-2.5">
         <Row
           icon={<Flame className="h-3 w-3 text-orange-500" />}
           label="Longest streak"

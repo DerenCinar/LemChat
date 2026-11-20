@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Info } from 'lucide-react';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
 
 interface InfoTooltipProps {
   title?: string;
@@ -122,8 +123,9 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ title, description }) 
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.94, y: coords.below ? -3 : 3 }}
                   transition={{ type: 'spring', stiffness: 460, damping: 28, mass: 0.6 }}
-                  className="liquid-tooltip-box rounded-2xl px-3 py-2 text-left"
+                  className="liquid-tooltip-box relative overflow-hidden rounded-2xl px-3 py-2 text-left"
                 >
+                  <LiquidGlassLayer variant="popover" />
                   {title && (
                     <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-[#22C55E]">
                       {title}

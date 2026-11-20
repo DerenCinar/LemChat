@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Pin, Hash, X, Plus } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
-import type { Conversation, UserPresence } from '../types/chat';
+import { LiquidGlassLayer } from './LiquidGlassLayer';
+import type { Conversation, NavTab, UserPresence } from '../types/chat';
 
 const PRESENCE_DOT: Record<UserPresence, string> = {
   online: 'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.85)]',
@@ -12,95 +13,27 @@ const PRESENCE_DOT: Record<UserPresence, string> = {
   offline: 'bg-slate-400',
 };
 
-export const ConversationSidebar: React.FC = () => {
-  const [width, setWidth] = useState(296);
-  const isResizingRef = useRef(false);
+interface ConversationRowProps {
+  conv: Conversation;
+  isActive: boolean;
+  activeTab: NavTab;
+  typingSenderName?: string;
+  peerPresence: UserPresence;
+  onSelect: (conv: Conversation) => void;
+  onTogglePin: (conversationId: string) => void;
+}
 
-  const conversations = useChatStore((s) => s.conversations);
-  const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const activeTab = useChatStore((s) => s.activeTab);
-  const searchQuery = useChatStore((s) => s.searchQuery);
-  const typingConversations = useChatStore((s) => s.typingConversations);
-  const onlineUserIds = useChatStore((s) => s.onlineUserIds);
-
-  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
-  const selectConversation = useChatStore((s) => s.selectConversation);
-  const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
-  const togglePinConversation = useChatStore((s) => s.togglePinConversation);
-  const setNewConvModalOpen = useChatStore((s) => s.setNewConvModalOpen);
-
-  const startResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    const startX = e.clientX;
-    const startWidth = width;
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const next = Math.max(240, Math.min(390, startWidth + (moveEvent.clientX - startX)));
-      setWidth(next);
-    };
-
-    const onMouseUp = () => {
-      isResizingRef.current = false;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
-  const filtered = conversations.filter((conv) => {
-    if (activeTab === 'channels' && conv.type !== 'channel') return false;
-    if (activeTab === 'mentions' && !conv.messages.some((m) => m.isMention)) {
-      return false;
-    }
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      conv.name.toLowerCase().includes(q) ||
-      conv.roleOrTopic.toLowerCase().includes(q) ||
-      conv.messages.some((m) => m.content.toLowerCase().includes(q))
-    );
-  });
-
-  const pinnedList = filtered.filter((c) => c.pinned);
-  const regularList = filtered.filter((c) => !c.pinned);
-
-  const headerLabel =
-    activeTab === 'channels'
-      ? 'Groups'
-      : activeTab === 'mentions'
-        ? 'Mentions'
-        : 'Messages';
-
-  const renderItem = (conv: Conversation) => {
-    const isActive = conv.id === activeConversationId && activeTab !== 'settings';
+const ConversationRow: React.FC<ConversationRowProps> = React.memo(
+  ({ conv, isActive, typingSenderName, peerPresence, onSelect, onTogglePin }) => {
     const msgs = conv.messages ?? [];
     const lastMessage = msgs[msgs.length - 1];
-    const typing = typingConversations[conv.id];
-    const peerPresence: UserPresence =
-      conv.type === 'dm' && conv.peerUserId
-        ? onlineUserIds.has(conv.peerUserId)
-          ? conv.status ?? 'online'
-          : 'offline'
-        : 'offline';
 
     return (
       <motion.div
-        key={conv.id}
-        layout
         whileHover={{ x: 2 }}
         whileTap={{ scale: 0.985 }}
         transition={{ type: 'spring', stiffness: 440, damping: 30 }}
-        onClick={() => {
-          if (activeTab === 'mentions') {
-            const mention = [...msgs].reverse().find((message) => message.isMention);
-            if (mention) setPendingMentionMessageId(mention.id);
-          }
-          void selectConversation(conv.id);
-        }}
+        onClick={() => onSelect(conv)}
         className={`group relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl px-3 py-2.5 transition-colors ${
           isActive
             ? ''
@@ -150,9 +83,9 @@ export const ConversationSidebar: React.FC = () => {
           </div>
 
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            {typing ? (
+            {typingSenderName ? (
               <span className="truncate text-xs font-medium text-[#22C55E]">
-                {typing.senderName} is typing...
+                {typingSenderName} is typing...
               </span>
             ) : (
               <p className="truncate text-xs text-emerald-900/65 dark:text-emerald-100/55">
@@ -171,7 +104,7 @@ export const ConversationSidebar: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  void togglePinConversation(conv.id);
+                  onTogglePin(conv.id);
                 }}
                 title={conv.pinned ? 'Unpin' : 'Pin conversation'}
                 className={`rounded-md p-0.5 transition ${
@@ -197,6 +130,115 @@ export const ConversationSidebar: React.FC = () => {
         </div>
       </motion.div>
     );
+  }
+);
+
+export const ConversationSidebar: React.FC = () => {
+  const [width, setWidth] = useState(296);
+  const isResizingRef = useRef(false);
+
+  const conversations = useChatStore((s) => s.conversations);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const activeTab = useChatStore((s) => s.activeTab);
+  const searchQuery = useChatStore((s) => s.searchQuery);
+  const typingConversations = useChatStore((s) => s.typingConversations);
+  const onlineUserIds = useChatStore((s) => s.onlineUserIds);
+
+  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
+  const selectConversation = useChatStore((s) => s.selectConversation);
+  const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
+  const togglePinConversation = useChatStore((s) => s.togglePinConversation);
+  const setNewConvModalOpen = useChatStore((s) => s.setNewConvModalOpen);
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = width;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const next = Math.max(240, Math.min(390, startWidth + (moveEvent.clientX - startX)));
+      setWidth(next);
+    };
+
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const { filtered, pinnedList, regularList } = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const list = conversations.filter((conv) => {
+      if (activeTab === 'channels' && conv.type !== 'channel') return false;
+      if (activeTab === 'mentions' && !conv.messages.some((m) => m.isMention)) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        conv.name.toLowerCase().includes(q) ||
+        conv.roleOrTopic.toLowerCase().includes(q) ||
+        conv.messages.some((m) => m.content.toLowerCase().includes(q))
+      );
+    });
+    return {
+      filtered: list,
+      pinnedList: list.filter((c) => c.pinned),
+      regularList: list.filter((c) => !c.pinned),
+    };
+  }, [conversations, activeTab, searchQuery]);
+
+  const handleSelectRow = useCallback(
+    (conv: Conversation) => {
+      if (activeTab === 'mentions') {
+        const msgs = conv.messages ?? [];
+        const mention = [...msgs].reverse().find((message) => message.isMention);
+        if (mention) setPendingMentionMessageId(mention.id);
+      }
+      void selectConversation(conv.id);
+    },
+    [activeTab, setPendingMentionMessageId, selectConversation]
+  );
+
+  const handleTogglePin = useCallback(
+    (conversationId: string) => {
+      void togglePinConversation(conversationId);
+    },
+    [togglePinConversation]
+  );
+
+  const headerLabel =
+    activeTab === 'channels'
+      ? 'Groups'
+      : activeTab === 'mentions'
+        ? 'Mentions'
+        : 'Messages';
+
+  const renderItem = (conv: Conversation) => {
+    const peerPresence: UserPresence =
+      conv.type === 'dm' && conv.peerUserId
+        ? onlineUserIds.has(conv.peerUserId)
+          ? conv.status ?? 'online'
+          : 'offline'
+        : 'offline';
+
+    return (
+      <ConversationRow
+        key={conv.id}
+        conv={conv}
+        isActive={conv.id === activeConversationId && activeTab !== 'settings'}
+        activeTab={activeTab}
+        typingSenderName={typingConversations[conv.id]?.senderName}
+        peerPresence={peerPresence}
+        onSelect={handleSelectRow}
+        onTogglePin={handleTogglePin}
+      />
+    );
   };
 
   return (
@@ -205,27 +247,48 @@ export const ConversationSidebar: React.FC = () => {
       style={{ '--sidebar-w': `${width}px` } as React.CSSProperties}
       className="glass-panel glass-surface relative z-10 flex w-full flex-1 shrink-0 flex-col rounded-2xl transition-[box-shadow] duration-200 md:w-[var(--sidebar-w)] md:flex-initial"
     >
+      <LiquidGlassLayer variant="panel" />
       <div className="px-3.5 pb-2 pt-3.5">
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold tracking-tight text-emerald-950 dark:text-white">
-              {headerLabel}
-            </h2>
-            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.h2
+                key={headerLabel}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.16 }}
+                className="text-base font-bold tracking-tight text-emerald-950 dark:text-white"
+              >
+                {headerLabel}
+              </motion.h2>
+            </AnimatePresence>
+            <motion.span
+              key={filtered.length}
+              initial={{ scale: 0.85 }}
+              animate={{ scale: 1 }}
+              className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+            >
               {filtered.length}
-            </span>
+            </motion.span>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 22 }}
             onClick={() => setNewConvModalOpen(true)}
             title="New channel or direct message"
-            className="glass-pill flex h-7 w-7 items-center justify-center rounded-full text-emerald-700 transition hover:scale-105 hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-300"
+            className="glass-pill relative flex h-7 w-7 items-center justify-center rounded-full text-emerald-700 transition hover:border-[#22C55E]/60 hover:text-[#22C55E] dark:text-emerald-300"
           >
             <Plus className="h-3.5 w-3.5" />
-          </button>
+          </motion.button>
         </div>
 
-        <div className="glass-pill flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20">
+        <div
+          data-input-shell
+          className="glass-pill relative flex items-center gap-2 rounded-full px-3 py-1.5 transition focus-within:border-[#22C55E]/60 focus-within:ring-2 focus-within:ring-[#22C55E]/20"
+        >
           <Search className="h-3.5 w-3.5 shrink-0 text-emerald-700/60 dark:text-emerald-200/50" />
           <input
             type="text"
@@ -234,18 +297,26 @@ export const ConversationSidebar: React.FC = () => {
             placeholder="Search SkellyTalk..."
             className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-emerald-700/60 hover:text-emerald-950 dark:text-white/50 dark:hover:text-white"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+          <AnimatePresence>
+            {searchQuery && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                onClick={() => setSearchQuery('')}
+                className="text-emerald-700/60 hover:text-emerald-950 dark:text-white/50 dark:hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      <div className="lem-scrollbar flex-1 space-y-4 overflow-y-auto px-2.5 pb-3 pt-1">
+      <div
+        className="lem-scrollbar flex-1 space-y-4 overflow-y-auto px-2.5 pb-3 pt-1"
+        style={{ transform: 'translateZ(0)' }}
+      >
         {pinnedList.length > 0 && (
           <div>
             <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/45">
@@ -263,7 +334,12 @@ export const ConversationSidebar: React.FC = () => {
           <div className="space-y-1">
             {regularList.map(renderItem)}
             {filtered.length === 0 && (
-              <div className="mx-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-500/20 px-4 text-center">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                className="mx-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-500/20 px-4 text-center"
+              >
                 <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10">
                   {searchQuery ? <Search className="h-4 w-4 text-emerald-600" /> : <Plus className="h-4 w-4 text-emerald-600" />}
                 </div>
@@ -273,7 +349,7 @@ export const ConversationSidebar: React.FC = () => {
                 <p className="mt-1 max-w-44 text-[11px] leading-relaxed text-emerald-800/55 dark:text-emerald-200/50">
                   {searchQuery ? 'Try a different name or keyword.' : 'Create a group or start a direct message.'}
                 </p>
-              </div>
+              </motion.div>
             )}
           </div>
         </div>
