@@ -927,7 +927,6 @@ html[data-glass-depth="floating"] .glass-rail {
   overflow: hidden !important;
   border-radius: inherit !important;
   transform: translateZ(0);
-  contain: layout style paint;
 }
 .rdev-lg-layer,
 .rdev-lg-layer * {
@@ -963,6 +962,10 @@ html[data-glass-depth="floating"] .glass-rail {
   opacity: calc(0.45 + var(--glass-specular, 0.55) * 0.48) !important;
 }
 .rdev-lg-layer svg {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   pointer-events: none;
 }
 

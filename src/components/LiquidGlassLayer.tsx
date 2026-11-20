@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import LiquidGlass from 'liquid-glass-react';
 import { useChatStore } from '../store/useChatStore';
 
@@ -38,6 +38,45 @@ const LIQUID_GLASS_STYLE: React.CSSProperties = {
   top: '50%',
   left: '50%',
   pointerEvents: 'none',
+};
+const SPACER_STYLE: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  pointerEvents: 'none',
+};
+
+const syncSvgFilter = (anchor: HTMLDivElement | null, host: HTMLElement | null) => {
+  if (!anchor || !host) return;
+  let rawW = host.offsetWidth;
+  let rawH = host.offsetHeight;
+  if (rawW === 0 || rawH === 0) {
+    const rect = host.getBoundingClientRect();
+    rawW = rect.width;
+    rawH = rect.height;
+  }
+  if (rawW < 12 || rawH < 12) return;
+  const w = Math.max(1, Math.round(rawW + 2));
+  const h = Math.max(1, Math.round(rawH + 2));
+
+  const svg = anchor.querySelector('svg');
+  if (svg) {
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+  }
+  const filterEl = anchor.querySelector('filter');
+  if (filterEl) {
+    filterEl.setAttribute('x', '-4%');
+    filterEl.setAttribute('y', '-4%');
+    filterEl.setAttribute('width', '108%');
+    filterEl.setAttribute('height', '108%');
+  }
+  const feImg = anchor.querySelector('feImage, #feimage');
+  if (feImg) {
+    feImg.setAttribute('x', '-2');
+    feImg.setAttribute('y', '-2');
+    feImg.setAttribute('width', String(w + 4));
+    feImg.setAttribute('height', String(h + 4));
+  }
 };
 
 interface MeasuredSize {
@@ -107,7 +146,9 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
 
     const initial = measure();
     let lastCommitted = initial;
-    const hasInitialValidSize = initial.width >= 12 && initial.height >= 12;
+    let lastSyncedW = initial.width;
+    let lastSyncedH = initial.height;
+    let syncRafId: number | null = null;
     if (initial.width > 0 && initial.height > 0) {
       setSize(initial);
     }
@@ -125,29 +166,35 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
     }
 
     let ro: ResizeObserver | null = null;
-    const needsResizeObserver = isShaderEligible || !hasInitialValidSize;
-    if (needsResizeObserver && typeof ResizeObserver !== 'undefined') {
+    if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => {
         const next = measure();
         const hadValidSize = lastCommitted.width >= 12 && lastCommitted.height >= 12;
 
+        if (
+          next.width >= 12 &&
+          next.height >= 12 &&
+          (Math.abs(next.width - lastSyncedW) >= 1 || Math.abs(next.height - lastSyncedH) >= 1)
+        ) {
+          lastSyncedW = next.width;
+          lastSyncedH = next.height;
+          if (syncRafId === null) {
+            syncRafId = window.requestAnimationFrame(() => {
+              syncRafId = null;
+              syncSvgFilter(anchor, host);
+            });
+          }
+        }
+
         if (!hadValidSize) {
-          if (next.width > 0 && next.height > 0) {
+          if (next.width >= 12 && next.height >= 12) {
             lastCommitted = next;
             setSize(next);
-            const nextEffectiveShader = isShaderEligible && Math.max(next.width, next.height) <= 360;
-            if (!nextEffectiveShader) {
-              ro?.disconnect();
-              ro = null;
-            }
           }
           return;
         }
 
-        // For non-shader modes, CSS 100% sizing handles growth without re-measuring or remounting
         if (!isShaderEligible) {
-          ro?.disconnect();
-          ro = null;
           return;
         }
 
@@ -184,6 +231,10 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
       host.removeAttribute('data-real-glass-host');
       io?.disconnect();
       ro?.disconnect();
+      if (syncRafId !== null) {
+        window.cancelAnimationFrame(syncRafId);
+        syncRafId = null;
+      }
       if (resizeTimerRef.current !== null) {
         window.clearTimeout(resizeTimerRef.current);
         resizeTimerRef.current = null;
@@ -195,18 +246,6 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
     realGlassMode === 'shader' && (variant === 'panel' || Math.max(size.width, size.height) > 360)
       ? 'standard'
       : realGlassMode;
-
-  useLayoutEffect(() => {
-    if (!isVisible || size.width < 12 || size.height < 12) return;
-    // Shrink liquid-glass-react's default 170%x170% filter bounds to minimize GPU backdrop reads per frame
-    const filterEl = anchorRef.current?.querySelector('filter');
-    if (filterEl) {
-      filterEl.setAttribute('x', '-4%');
-      filterEl.setAttribute('y', '-4%');
-      filterEl.setAttribute('width', '108%');
-      filterEl.setAttribute('height', '108%');
-    }
-  }, [isVisible, size.width, size.height, effectiveMode]);
 
   const isLightTheme = theme === 'light' || theme === 'mono';
   const rawBlur = Math.min(1, Math.max(0, blur / 96));
@@ -241,10 +280,15 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
     effectiveMode === 'shader'
       ? `shader-${Math.round(size.width / 256)}x${Math.round(size.height / 256)}`
       : effectiveMode;
-  const spacerStyle = useMemo<React.CSSProperties>(
-    () => ({ width: size.width, height: size.height, pointerEvents: 'none' }),
-    [size.width, size.height]
-  );
+
+  useLayoutEffect(() => {
+    if (!isVisible || size.width < 12 || size.height < 12) return;
+    const anchor = anchorRef.current;
+    const host = anchor?.parentElement ?? null;
+    syncSvgFilter(anchor, host);
+    const rafId = window.requestAnimationFrame(() => syncSvgFilter(anchor, host));
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isVisible, size.width, size.height, effectiveMode, effectiveDisplacement, aberrationIntensity]);
 
   return (
     <div
@@ -270,7 +314,7 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
           mouseOffset={ZERO_POS}
           style={LIQUID_GLASS_STYLE}
         >
-          <div style={spacerStyle} />
+          <div style={SPACER_STYLE} />
         </LiquidGlass>
       )}
     </div>
