@@ -9,8 +9,8 @@ export type AppLogoId = 'default' | 'gradient' | 'red' | 'teal';
 export const APP_LOGOS: { id: AppLogoId; label: string; description: string; src: string; file?: string }[] = [
   { id: 'default', label: 'Classic', description: 'Adapts to light / dark system theme', src: classicLogo },
   { id: 'gradient', label: 'Skull Bubbles', description: 'Gradient chat bubbles with skull', src: gradientLogo, file: 'assets/logo-gradient.png' },
-  { id: 'red', label: 'Stamp · Light', description: 'Light speckled badge, red bubbles', src: redLogo, file: 'assets/logo-red.png' },
-  { id: 'teal', label: 'Stamp · Dark', description: 'Dark speckled badge, teal bubbles', src: tealLogo, file: 'assets/logo-teal.png' },
+  { id: 'red', label: 'Stamp · Light', description: 'Light version of the original stamp', src: redLogo, file: 'assets/logo-red.png' },
+  { id: 'teal', label: 'Stamp · Dark', description: 'The original stamp logo', src: tealLogo, file: 'assets/logo-teal.png' },
 ];
 
 let current: AppLogoId | null = null;
