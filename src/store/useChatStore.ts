@@ -3,6 +3,7 @@ import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import packageInfo from '../../package.json';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
 import { GRID_GAMES, applyMove, emptyBoard, type GridGameId } from '../lib/gridGames';
+import { DUEL_GAMES, initialDuel, type DuelGameId, type GamePatch } from '../lib/duelGames';
 import {
   checkGitHubLatestRelease,
   downloadAndInstallAndroidApk,
@@ -27,6 +28,7 @@ import type {
   InteractiveMetadata,
   CapsuleMetadata,
   IncomingCallState,
+  GameMetadata,
   Message,
   NavTab,
   Profile,
@@ -242,9 +244,10 @@ interface ChatStore {
   sendCapsule: (text: string, unlockAt: Date) => Promise<void>;
   openCapsule: (messageId: string, capsule: CapsuleMetadata) => Promise<string>;
   sendPoll: (question: string, options: string[]) => Promise<void>;
-  sendGame: (gameId?: GridGameId) => Promise<void>;
+  sendGame: (gameId?: GridGameId | DuelGameId) => Promise<void>;
   votePoll: (messageId: string, optionId: string) => void;
   makeGameMove: (messageId: string, position: number) => void;
+  playGame: (messageId: string, build: (game: GameMetadata, mark: 'X' | 'O') => GamePatch | null) => void;
   editMessage: (messageId: string, content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
@@ -2813,15 +2816,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sendGame: async (gameId = 'tic-tac-toe') => {
     const self = get().self;
     if (!self) return;
-    const cfg = GRID_GAMES[gameId];
+    const isDuel = gameId in DUEL_GAMES;
+    const init = isDuel ? initialDuel(gameId as DuelGameId) : { board: emptyBoard(GRID_GAMES[gameId as GridGameId]), state: undefined };
+    const name = isDuel ? DUEL_GAMES[gameId as DuelGameId].name : GRID_GAMES[gameId as GridGameId].name;
     const interactive: InteractiveMetadata = {
       kind: 'game',
       game: gameId,
-      board: emptyBoard(cfg),
+      board: init.board,
+      ...(init.state ? { state: init.state } : {}),
       xPlayerId: self.id,
       currentTurn: 'X',
     };
-    await get().sendMessage(`🎮 ${cfg.name} — join and play!`, undefined, undefined, undefined, interactive);
+    await get().sendMessage(`🎮 ${name} — join and play!`, undefined, undefined, undefined, interactive);
   },
 
   votePoll: (messageId, optionId) => {
@@ -2847,13 +2853,49 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   makeGameMove: (messageId, position) => {
+    const msg = get().conversations.flatMap((c) => c.messages).find((m) => m.id === messageId);
+    if (!msg || msg.interactive?.kind !== 'game') return;
+    const game = msg.interactive;
+    if (game.game === 'tic-tac-toe') {
+      // Original server-validated path.
+      const supabase = getSupabaseClient();
+      const user = get().session?.user;
+      if (!supabase || !user || game.winner) return;
+      const mark = game.currentTurn;
+      const expected = mark === 'X' ? game.xPlayerId : game.oPlayerId;
+      let oPlayerId = game.oPlayerId;
+      if (expected) {
+        if (expected !== user.id) return;
+      } else {
+        if (user.id === game.xPlayerId) return;
+        oPlayerId = user.id;
+      }
+      const result = applyMove(GRID_GAMES['tic-tac-toe'], game.board, position, mark);
+      if (!result) return;
+      applyInteractive(messageId, { ...game, board: result.board, oPlayerId, currentTurn: result.next, winner: result.winner });
+      void supabase.rpc('game_move', { p_message_id: messageId, p_position: position }).then(({ error }) => {
+        if (error) {
+          console.error('Game move failed:', error);
+          applyInteractive(messageId, game);
+        }
+      });
+      return;
+    }
+    const cfg = GRID_GAMES[game.game as GridGameId];
+    if (!cfg) return;
+    get().playGame(messageId, (g, mark) => {
+      const r = applyMove(cfg, g.board, position, mark);
+      return r ? { board: r.board, currentTurn: r.next, winner: r.winner } : null;
+    });
+  },
+
+  playGame: (messageId, build) => {
     const supabase = getSupabaseClient();
     const user = get().session?.user;
     if (!supabase || !user) return;
     const msg = get().conversations.flatMap((c) => c.messages).find((m) => m.id === messageId);
     if (!msg || msg.interactive?.kind !== 'game') return;
     const game = msg.interactive;
-    const cfg = GRID_GAMES[game.game] ?? GRID_GAMES['tic-tac-toe'];
     if (game.winner) return;
     const mark = game.currentTurn;
     const expected = mark === 'X' ? game.xPlayerId : game.oPlayerId;
@@ -2864,24 +2906,41 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (user.id === game.xPlayerId) return;
       oPlayerId = user.id;
     }
-    const result = applyMove(cfg, game.board, position, mark);
-    if (!result) return;
+    const patch = build(game, mark);
+    if (!patch) return;
     applyInteractive(messageId, {
       ...game,
-      board: result.board,
+      ...(patch.board ? { board: patch.board } : {}),
+      ...(patch.state ? { state: patch.state } : {}),
       oPlayerId,
-      currentTurn: result.next,
-      winner: result.winner,
+      currentTurn: patch.currentTurn,
+      winner: patch.winner,
     });
     void supabase
-      .rpc(game.game === 'tic-tac-toe' ? 'game_move' : game.game === 'reversi' ? 'reversi_move' : 'grid_game_move', {
+      .rpc('game_apply', {
         p_message_id: messageId,
-        p_position: position,
+        p_state: {
+          ...(patch.board ? { board: patch.board } : {}),
+          ...(patch.state ? { state: patch.state } : {}),
+          currentTurn: patch.currentTurn,
+          ...(patch.winner ? { winner: patch.winner } : {}),
+        },
       })
       .then(({ error }) => {
         if (error) {
           console.error('Game move failed:', error);
           applyInteractive(messageId, game);
+          const missing = /game_apply|schema cache|could not find/i.test(error.message);
+          window.dispatchEvent(
+            new CustomEvent('skellytalk-game-error', {
+              detail: {
+                messageId,
+                text: missing
+                  ? 'Game server update missing — run supabase/grid_games_migration.sql'
+                  : error.message,
+              },
+            })
+          );
         }
       });
   },

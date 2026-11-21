@@ -2,7 +2,9 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart3, Gamepad2, Lock, Maximize2, Unlock, X } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
-import { GRID_GAMES, reversiMoves } from '../lib/gridGames';
+import { GRID_GAMES, reversiMoves, type GridGameId } from '../lib/gridGames';
+import { DUEL_GAMES, type DuelGameId } from '../lib/duelGames';
+import { DuelBoard } from './DuelBoards';
 import type { CapsuleMetadata, GameMetadata, Message, PollMetadata } from '../types/chat';
 
 const PollCard: React.FC<{ message: Message; poll: PollMetadata }> = ({ message, poll }) => {
@@ -95,8 +97,22 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
     status = 'Waiting for an opponent to move...';
   else status = `${game.currentTurn === 'X' ? name(game.xPlayerId) : name(game.oPlayerId)}'s turn`;
 
-  const cfg = GRID_GAMES[game.game] ?? GRID_GAMES['tic-tac-toe'];
-  const [symX, symO] = cfg.symbols;
+  const duel = game.game in DUEL_GAMES ? DUEL_GAMES[game.game as DuelGameId] : null;
+  const cfg = GRID_GAMES[game.game as GridGameId] ?? GRID_GAMES['tic-tac-toe'];
+  const title = duel?.name ?? cfg.name;
+  const [symX, symO] = duel?.symbols ?? cfg.symbols;
+  const playGame = useChatStore((s) => s.playGame);
+  const [gameError, setGameError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const onErr = (e: Event) => {
+      const d = (e as CustomEvent<{ messageId: string; text: string }>).detail;
+      if (d.messageId !== message.id) return;
+      setGameError(d.text);
+      window.setTimeout(() => setGameError(null), 6000);
+    };
+    window.addEventListener('skellytalk-game-error', onErr);
+    return () => window.removeEventListener('skellytalk-game-error', onErr);
+  }, [message.id]);
   const [expanded, setExpanded] = React.useState(false);
   const turnMark = game.currentTurn;
   const legal = React.useMemo(
@@ -106,7 +122,10 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
   const small =
     cfg.cols <= 3 ? 'h-12 w-12 text-xl' : cfg.cols <= 5 ? 'h-9 w-9 text-lg' : cfg.cols <= 7 ? 'h-8 w-8 text-lg' : 'h-7 w-7 text-sm';
 
-  const renderBoard = (big: boolean) => (
+  const renderBoard = (big: boolean) =>
+    duel ? (
+      <DuelBoard game={game} myTurn={myTurn} big={big} onPlay={(b) => playGame(message.id, b)} />
+    ) : (
     <div
       className="grid gap-1"
       style={
@@ -148,7 +167,7 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
         );
       })}
     </div>
-  );
+    );
 
   const counts =
     cfg.kind === 'reversi'
@@ -160,6 +179,7 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
         {status}
         {counts}
       </p>
+      {gameError && <p className="mt-1 text-[11px] text-rose-300">{gameError}</p>}
       <p className="text-[10px] opacity-60">
         {symX}: {name(game.xPlayerId)} · {symO}: {name(game.oPlayerId)}
       </p>
@@ -177,7 +197,7 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
     <div className="glass-card mt-1 w-fit rounded-xl p-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide opacity-70">
         <Gamepad2 className="h-3.5 w-3.5" />
-        <span>{cfg.name}</span>
+        <span>{title}</span>
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -197,14 +217,14 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
             onClick={() => setExpanded(false)}
             role="dialog"
             aria-modal="true"
-            aria-label={cfg.name}
+            aria-label={title}
           >
             <div
               className="glass-panel glass-surface glass-readable max-h-full overflow-y-auto rounded-3xl p-5 text-emerald-950 dark:text-white"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between gap-6">
-                <span className="text-sm font-bold">{cfg.name}</span>
+                <span className="text-sm font-bold">{title}</span>
                 <button
                   type="button"
                   onClick={() => setExpanded(false)}

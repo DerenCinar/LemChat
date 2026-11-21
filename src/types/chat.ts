@@ -1,3 +1,5 @@
+import type { GridGameId } from '../lib/gridGames';
+import type { DuelGameId } from '../lib/duelGames';
 export type UserPresence = 'online' | 'away' | 'busy' | 'offline';
 export type SelfPresence = 'online' | 'away' | 'busy';
 export type NavTab = 'chats' | 'channels' | 'mentions' | 'settings';
@@ -161,8 +163,10 @@ export interface PollMetadata {
 
 export interface GameMetadata {
   kind: 'game';
-  game: 'tic-tac-toe' | 'mega-tic-tac-toe' | 'connect-four' | 'connect-five' | 'gomoku' | 'reversi';
+  game: GridGameId | DuelGameId;
   board: Array<'X' | 'O' | null>;
+  /** Extra per-game state (checkers kings, dots edges, pig scores, ...). */
+  state?: Record<string, unknown>;
   xPlayerId: string;
   oPlayerId?: string;
   currentTurn: 'X' | 'O';

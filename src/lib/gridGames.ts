@@ -5,7 +5,6 @@ export type GridGameId =
   | 'mega-tic-tac-toe'
   | 'connect-four'
   | 'connect-five'
-  | 'gomoku'
   | 'reversi';
 
 export interface GridGameConfig {
@@ -29,7 +28,6 @@ export const GRID_GAMES: Record<GridGameId, GridGameConfig> = {
   'mega-tic-tac-toe': { id: 'mega-tic-tac-toe', name: 'Mega Tic-Tac-Toe', emoji: '✖️🔵', hint: '4 in a row on a 5×5 board', cols: 5, rows: 5, winLen: 4, gravity: false, kind: 'line', symbols: ['X', 'O'] },
   'connect-four': { id: 'connect-four', name: 'Connect Four', emoji: '🔴🟡', hint: 'Drop discs, line up four', cols: 7, rows: 6, winLen: 4, gravity: true, kind: 'line', symbols: ['🔴', '🟡'] },
   'connect-five': { id: 'connect-five', name: 'Connect Five', emoji: '🟣🟠', hint: 'Bigger board, line up five', cols: 9, rows: 7, winLen: 5, gravity: true, kind: 'line', symbols: ['🟣', '🟠'] },
-  gomoku: { id: 'gomoku', name: 'Gomoku', emoji: '⚫⚪', hint: 'Five in a row on a 9×9 board', cols: 9, rows: 9, winLen: 5, gravity: false, kind: 'line', symbols: ['⚫', '⚪'] },
   reversi: { id: 'reversi', name: 'Reversi', emoji: '🟢⚪', hint: 'Flank discs to flip them', cols: 8, rows: 8, winLen: 0, gravity: false, kind: 'reversi', symbols: ['⚫', '⚪'] },
 };
 

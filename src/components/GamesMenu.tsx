@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Flame, CheckCircle2, ChevronDown } from 'lucide-react';
 import { GRID_GAMES, type GridGameId } from '../lib/gridGames';
+import { DUEL_GAMES, type DuelGameId } from '../lib/duelGames';
+
+const TWO_PLAYER = [...Object.values(GRID_GAMES), ...Object.values(DUEL_GAMES)];
 import {
   DailyWordGame,
   getCryptleDateKey,
@@ -1223,7 +1226,7 @@ const Section: React.FC<{
 
 export const GamesMenu: React.FC<{
   onClose: () => void;
-  onStartGame: (id: GridGameId) => void;
+  onStartGame: (id: GridGameId | DuelGameId) => void;
   onShare: (text: string) => void;
 }> = ({ onClose, onStartGame, onShare }) => {
   const [game, setGame] = useState<GameId | null>(null);
@@ -1356,12 +1359,12 @@ export const GamesMenu: React.FC<{
 
               <Section
                 title="⚔️ Two-player (in this chat)"
-                count={Object.keys(GRID_GAMES).length}
+                count={TWO_PLAYER.length}
                 open={section === 'duel'}
                 onToggle={() => toggle('duel')}
               >
                 <div className="space-y-2">
-                  {Object.values(GRID_GAMES).map((g) => (
+                  {TWO_PLAYER.map((g) => (
                     <button
                       key={g.id}
                       type="button"
