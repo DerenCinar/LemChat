@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, VolumeX, Share2, RotateCcw, Flame, CheckCircle2 } from 'lucide-react';
+import { Volume2, VolumeX, Share2, RotateCcw, Flame, CheckCircle2, Tv } from 'lucide-react';
 import {
   BATTLE_ITEMS,
   BOSSES,
@@ -8,6 +8,7 @@ import {
   getDailyBoss,
   loadSoulBattleSave,
   playBattleSfx,
+  playVoiceBlip,
   recordDailyBossWin,
   type BattleItem,
   type BossDef,
@@ -40,10 +41,15 @@ interface Hazard {
     | 'donut'
     | 'croissant'
     | 'spider'
+    | 'spiderwarn'
+    | 'dog'
+    | 'boot'
+    | 'bootwarn'
+    | 'slamwarn'
+    | 'slamspikes'
     | 'blaster'
-    | 'slashwarn'
-    | 'slashbeam'
-    | 'floorspike'
+    | 'tridentwarn'
+    | 'tridentslash'
     | 'discolaser'
     | 'explosion';
   x: number;
@@ -57,20 +63,18 @@ interface Hazard {
   age: number;
   maxAge: number;
   hp?: number;
-  // Special fields for Undertale attacks
+  maxHp?: number;
   dirX?: number;
   dirY?: number;
   angle?: number;
   omega?: number;
   yellowFlip?: boolean;
   flipped?: boolean;
+  flipProgress?: number;
+  startX?: number;
+  startY?: number;
   fired?: boolean;
-  laneY?: number;
-  baseY?: number;
-  amp?: number;
-  freq?: number;
-  targetX?: number;
-  targetY?: number;
+  entryDist?: number;
 }
 
 interface Particle {
@@ -88,12 +92,13 @@ interface LaserBolt {
   x: number;
   y: number;
   vy: number;
+  power?: boolean;
 }
 
-const ARENA_W = 320;
-const ARENA_H = 170;
-const PLAYER_MAX_HP = 20;
-const WEB_LANES = [40, 85, 130];
+const WIDE_W = 350;
+const SHIELD_W = 216;
+const ARENA_H = 175;
+const WEB_LANES = [42, 87.5, 133];
 
 const drawPixelHeart = (
   ctx: CanvasRenderingContext2D,
@@ -106,7 +111,6 @@ const drawPixelHeart = (
   ctx.translate(Math.round(x), Math.round(y));
   if (inverted) ctx.scale(1, -1);
   ctx.fillStyle = color;
-  // Classic crisp 12x11 pixel heart
   const pts: [number, number, number, number][] = [
     [-4, -4, 3, 2],
     [1, -4, 3, 2],
@@ -119,6 +123,51 @@ const drawPixelHeart = (
   for (const [rx, ry, rw, rh] of pts) {
     ctx.fillRect(rx, ry, rw, rh);
   }
+  ctx.restore();
+};
+
+const drawGasterBlaster = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  jawOpen: number,
+  charging: boolean,
+) => {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  // Sculpted Skull Crown & Horns
+  ctx.fillStyle = '#F8FAFC';
+  ctx.beginPath();
+  ctx.moveTo(-14, -10);
+  ctx.lineTo(-22, -16);
+  ctx.lineTo(-10, -13);
+  ctx.lineTo(10, -11);
+  ctx.lineTo(15, -4);
+  ctx.lineTo(15, 4);
+  ctx.lineTo(10, 11);
+  ctx.lineTo(-10, 13);
+  ctx.lineTo(-22, 16);
+  ctx.lineTo(-14, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#090D16';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Snapping Jaw
+  const sep = jawOpen * 5;
+  ctx.fillStyle = '#090D16';
+  ctx.fillRect(4, -3 - sep * 0.5, 11, 6 + sep);
+
+  // Eye Sockets + Glowing Pupil
+  ctx.fillStyle = '#090D16';
+  ctx.fillRect(-3, -8, 7, 5);
+  ctx.fillRect(-3, 3, 7, 5);
+  ctx.fillStyle = charging ? '#38BDF8' : '#FFFFFF';
+  ctx.fillRect(0, -7, 3, 3);
+  ctx.fillRect(0, 4, 3, 3);
   ctx.restore();
 };
 
@@ -173,8 +222,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
   const [subMenuAction, setSubMenuAction] = useState<'ACT' | 'ITEM' | 'MERCY'>('ACT');
   const [subIndex, setSubIndex] = useState(0);
 
-  const [playerHp, setPlayerHp] = useState(PLAYER_MAX_HP);
+  const [playerHp, setPlayerHp] = useState(boss.playerMaxHp);
+  const [karma, setKarma] = useState(0);
+  const [ratings, setRatings] = useState(5400);
   const [bossHp, setBossHp] = useState(boss.maxHp);
+  const [showEnemyHpBar, setShowEnemyHpBar] = useState(false);
   const [spareProgress, setSpareProgress] = useState(0);
   const [turn, setTurn] = useState(0);
   const [fightAttempts, setFightAttempts] = useState(0);
@@ -188,13 +240,14 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
   const [bossHurt, setBossHurt] = useState(false);
   const [bossDodging, setBossDodging] = useState(false);
   const [slashAnim, setSlashAnim] = useState(false);
+  const [screenShake, setScreenShake] = useState(0);
+  const [glintColor, setGlintColor] = useState<'cyan' | 'orange' | null>(null);
+  const [glintQueue, setGlintQueue] = useState<('cyan' | 'orange')[]>([]);
   const [victoryMethod, setVictoryMethod] = useState<'FIGHT' | 'SPARE'>('FIGHT');
 
-  // FIGHT aim reticle state (0..1)
   const [aimPos, setAimPos] = useState(0);
   const aimRef = useRef({ pos: 0, dir: 1, active: false });
 
-  // Dodge phase state
   const [activeSoulMode, setActiveSoulMode] = useState<SoulMode>(boss.soulModes[0]);
   const [hudHint, setHudHint] = useState<string | null>(null);
   const [dodgeProgress, setDodgeProgress] = useState(1);
@@ -205,13 +258,16 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
   const edgeDownRef = useRef(false);
   const pointerTargetRef = useRef<{ active: boolean; x: number; y: number }>({
     active: false,
-    x: ARENA_W / 2,
+    x: WIDE_W / 2,
     y: ARENA_H / 2,
   });
 
-  // Live synced battle refs for 60fps canvas loop
   const playerHpRef = useRef(playerHp);
   playerHpRef.current = playerHp;
+  const karmaRef = useRef(karma);
+  karmaRef.current = karma;
+  const ratingsRef = useRef(ratings);
+  ratingsRef.current = ratings;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
   const speedBoostRef = useRef(speedBoost);
@@ -219,8 +275,18 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
   const turnRef = useRef(turn);
   turnRef.current = turn;
 
-  const isSpareReady = spareProgress >= boss.spareTarget || bossHp <= Math.max(1, Math.floor(boss.maxHp * 0.25));
+  const isShieldArena = phase === 'dodge' && activeSoulMode === 'green';
+  const arenaW = isShieldArena ? SHIELD_W : WIDE_W;
+
+  const isSpareReady =
+    spareProgress >= boss.spareTarget ||
+    bossHp <= Math.max(1, Math.floor(boss.maxHp * 0.25)) ||
+    (boss.hasRatings && ratings >= 12000);
   const asgoreMercyUnlocked = boss.id !== 'asgore' || isSpareReady;
+
+  const triggerShake = useCallback(() => {
+    setScreenShake((n) => n + 1);
+  }, []);
 
   const resetBattle = useCallback(
     (nextBossId: BossId = bossId) => {
@@ -229,9 +295,14 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       setPhase('menu');
       setMenuIndex(0);
       setSubIndex(0);
-      setPlayerHp(PLAYER_MAX_HP);
-      playerHpRef.current = PLAYER_MAX_HP;
+      setPlayerHp(nextBoss.playerMaxHp);
+      playerHpRef.current = nextBoss.playerMaxHp;
+      setKarma(0);
+      karmaRef.current = 0;
+      setRatings(5400);
+      ratingsRef.current = 5400;
       setBossHp(nextBoss.maxHp);
+      setShowEnemyHpBar(false);
       setSpareProgress(0);
       setTurn(0);
       setFightAttempts(0);
@@ -243,23 +314,46 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       setBossHurt(false);
       setBossDodging(false);
       setSlashAnim(false);
+      setGlintColor(null);
+      setGlintQueue([]);
       setHudHint(null);
       setActiveSoulMode(nextBoss.soulModes[0]);
     },
     [bossId, dailyBoss],
   );
 
-  // Typewriter narration effect
+  // Typewriter narration effect with throttled per-boss voice blips
   useEffect(() => {
     setDisplayedText('');
     let i = 0;
     const id = setInterval(() => {
       i++;
+      const ch = narration[i - 1];
       setDisplayedText(narration.slice(0, i));
+      if (ch && ch !== ' ' && ch !== '*' && i % 2 === 1 && (phase === 'menu' || phase === 'message')) {
+        playVoiceBlip(boss.voiceFreq, boss.voiceWave, mutedRef.current);
+      }
       if (i >= narration.length) clearInterval(id);
-    }, 16);
+    }, 17);
     return () => clearInterval(id);
-  }, [narration]);
+  }, [narration, boss.voiceFreq, boss.voiceWave, phase]);
+
+  // Karma poison drain tick (down to min 1 HP)
+  useEffect(() => {
+    if (!boss.hasKarma || phase === 'gameover' || phase === 'victory') return;
+    const id = setInterval(() => {
+      if (karmaRef.current > 0 && playerHpRef.current > 1) {
+        karmaRef.current -= 1;
+        setKarma(karmaRef.current);
+        playerHpRef.current -= 1;
+        setPlayerHp(playerHpRef.current);
+      } else if (karmaRef.current > 0 && playerHpRef.current <= 1) {
+        karmaRef.current = 0;
+        setKarma(0);
+      }
+    }, 620);
+    return () => clearInterval(id);
+  }, [boss.hasKarma, phase]);
 
   const finishVictory = useCallback(
     (method: 'FIGHT' | 'SPARE') => {
@@ -267,6 +361,8 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       setVictoryMethod(method);
       setPhase('victory');
       setBossQuip(null);
+      setGlintColor(null);
+      setGlintQueue([]);
       setNarration(method === 'SPARE' ? boss.winSpareText : boss.winFightText);
       if (boss.id === dailyBoss.id) {
         setSave(recordDailyBossWin(boss.id, method));
@@ -283,14 +379,16 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
     setBossQuip(q);
 
     if (chosenMode === 'green') {
-      setHudHint('GREEN SOUL · ARROWS / WASD AIM SHIELD');
+      setHudHint('GREEN SOUL · BLOCK WITH SHIELD (RED SPEAR = NEXT)');
     } else if (chosenMode === 'blue') {
       setHudHint('BLUE SOUL · JUMP! CYAN=STOP ORANGE=MOVE');
     } else if (chosenMode === 'purple') {
-      setHudHint('PURPLE SOUL · UP/DOWN SWITCHES WEB LINES');
+      setHudHint('PURPLE SOUL · UP/DOWN WEB THREADS');
     } else if (chosenMode === 'yellow') {
-      setHudHint('YELLOW SOUL · AUTO-FIRE LASERS UPWARD!');
-    } else if (boss.id === 'asgore' || boss.id === 'sans' || boss.id === 'mettaton') {
+      setHudHint('YELLOW SOUL · SHOOT CRATES & HEARTS');
+    } else if (boss.id === 'asgore') {
+      setHudHint('WATCH ASGORE’S GLINT · CYAN=STOP ORANGE=MOVE');
+    } else if (boss.id === 'sans' || boss.id === 'mettaton') {
       setHudHint('CYAN = STOP · ORANGE = KEEP MOVING');
     } else {
       setHudHint(null);
@@ -307,7 +405,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
     setAimPos(0.04);
     let last = performance.now();
     let raf = 0;
-    const speed = boss.id === 'sans' ? 1.32 : 1.08;
+    const speed = boss.id === 'sans' ? 1.38 : 1.12;
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -318,9 +416,8 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         aimRef.current.pos = 0.98;
         aimRef.current.dir = -1;
       } else if (aimRef.current.pos <= 0.02) {
-        // Complete one bounce then auto-resolve as weak hit/miss
         aimRef.current.active = false;
-        resolveFightStrike(0.15);
+        resolveFightStrike(0.14);
         return;
       }
       setAimPos(aimRef.current.pos);
@@ -335,7 +432,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       if (phase !== 'fight_aim') return;
       aimRef.current.active = false;
       const dist = Math.abs((overrideAcc !== undefined ? 0.5 - overrideAcc * 0.5 : aimRef.current.pos) - 0.5);
-      const accuracy = clamp(1 - dist * 2, 0.12, 1);
+      const accuracy = clamp(1 - dist * 2, 0.14, 1);
 
       playBattleSfx('slash', mutedRef.current);
       setSlashAnim(true);
@@ -356,43 +453,46 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             setBossDodging(false);
             setFloatingDmg(null);
             if (nextAttempts >= 4) {
-              setBossQuip('huff... alright, that got close.');
+              setBossQuip('huff... alright, that almost clipped me.');
             }
             startDodgePhase();
-          }, 820);
+          }, 840);
           return;
         }
 
         playBattleSfx('hit', mutedRef.current);
+        triggerShake();
         setBossHurt(true);
-        const isCrit = accuracy >= 0.86;
+        setShowEnemyHpBar(true);
+        const isCrit = accuracy >= 0.85;
         const dmg =
           boss.id === 'sans'
             ? 9999999
-            : Math.max(8, Math.round((24 + Math.random() * 8) * (0.45 + accuracy * 1.1)));
+            : Math.max(10, Math.round((25 + Math.random() * 9) * (0.45 + accuracy * 1.15)));
         const nextHp = Math.max(0, bossHp - dmg);
         setBossHp(nextHp);
         setFloatingDmg({
-          text: isCrit ? `CRIT -${dmg}!` : `-${dmg}`,
-          color: isCrit ? '#FACC15' : '#EF4444',
+          text: isCrit ? `${dmg}!!` : `${dmg}`,
+          color: isCrit ? '#FFE600' : '#EF4444',
           key: Date.now(),
         });
 
         setTimeout(() => {
           setBossHurt(false);
+          setShowEnemyHpBar(false);
           setFloatingDmg(null);
           if (nextHp <= 0) {
             finishVictory('FIGHT');
           } else {
             startDodgePhase();
           }
-        }, 850);
+        }, 900);
       }, 360);
     },
-    [boss.id, bossHp, fightAttempts, finishVictory, phase, startDodgePhase],
+    [boss.id, bossHp, fightAttempts, finishVictory, phase, startDodgePhase, triggerShake],
   );
 
-  // Main 60fps Bullet-Hell Dodge Canvas Engine
+  // Main 60fps Choreographed Bullet-Hell Dodge Engine
   useEffect(() => {
     if (phase !== 'dodge') return;
     const canvas = canvasRef.current;
@@ -400,24 +500,35 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = ARENA_W * dpr;
-    canvas.height = ARENA_H * dpr;
-
     const mode = activeSoulMode;
+    const W = mode === 'green' ? SHIELD_W : WIDE_W;
+    const H = ARENA_H;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+
     const currentTurn = turnRef.current;
     const patternIdx = currentTurn % 3;
-    const waveDuration = 5.4;
+    const waveDuration = 5.8;
 
     const soul = {
-      x: mode === 'green' ? ARENA_W / 2 : ARENA_W / 2,
-      y: mode === 'blue' ? ARENA_H - 14 : mode === 'purple' ? WEB_LANES[1] : mode === 'yellow' ? ARENA_H - 26 : ARENA_H / 2 + 12,
+      x: W / 2,
+      y:
+        mode === 'blue'
+          ? H - 14
+          : mode === 'purple'
+            ? WEB_LANES[1]
+            : mode === 'yellow'
+              ? H - 24
+              : mode === 'green'
+                ? H / 2
+                : H / 2 + 12,
       vx: 0,
       vy: 0,
-      prevX: ARENA_W / 2,
-      prevY: ARENA_H / 2,
+      prevX: W / 2,
+      prevY: H / 2,
       lane: 1,
-      shieldDir: 0, // 0=up, 1=right, 2=down, 3=left
+      shieldDir: 0,
       invuln: 0,
       grounded: mode === 'blue',
     };
@@ -427,35 +538,69 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
     const particles: Particle[] = [];
 
     let elapsed = 0;
-    let spawnTimer = 0.2;
-    let shotTimer = 0.15;
-    let secondaryTimer = 0.6;
+    let spawnTimer = 0.22;
+    let secondaryTimer = 0.65;
+    let shotTimer = 0.12;
+    let shotCount = 0;
     let stepCount = 0;
+    let pawX1 = 70;
+    let pawX2 = W - 70;
+    let asgoreSeqStep = 0;
+    let asgoreSequence: ('cyan' | 'orange')[] = [];
+    let asgoreTimer = 0.25;
+    let asgorePhase: 'glint' | 'slash' = 'glint';
     let raf = 0;
     let lastTs = performance.now();
+
+    if (boss.id === 'asgore' && patternIdx === 0) {
+      asgoreSequence = currentTurn % 2 === 0 ? ['cyan', 'orange', 'cyan'] : ['orange', 'cyan', 'orange'];
+      setGlintQueue([]);
+    } else {
+      setGlintQueue([]);
+      setGlintColor(null);
+    }
 
     const addBurst = (x: number, y: number, color: string, count = 8) => {
       for (let i = 0; i < count; i++) {
         const a = (Math.PI * 2 * i) / count + Math.random() * 0.4;
-        const spd = 40 + Math.random() * 85;
+        const spd = 45 + Math.random() * 85;
         particles.push({
           x,
           y,
           vx: Math.cos(a) * spd,
           vy: Math.sin(a) * spd,
           life: 0,
-          maxLife: 0.32 + Math.random() * 0.2,
+          maxLife: 0.34 + Math.random() * 0.2,
           color,
-          size: 2.5,
+          size: 2.6,
         });
       }
     };
 
     const hurtSoul = (amount: number) => {
       if (soul.invuln > 0) return;
-      soul.invuln = 0.85;
+      soul.invuln = boss.hasKarma ? 0.52 : 0.85;
       playBattleSfx('hurt', mutedRef.current);
+      triggerShake();
       addBurst(soul.x, soul.y, '#EF4444', 10);
+
+      if (boss.hasKarma) {
+        const direct = 1;
+        const nextHp = Math.max(0, playerHpRef.current - direct);
+        playerHpRef.current = nextHp;
+        setPlayerHp(nextHp);
+        const nextKr = Math.min(Math.max(0, nextHp - 1), karmaRef.current + 4);
+        karmaRef.current = nextKr;
+        setKarma(nextKr);
+        if (nextHp <= 0) {
+          cancelAnimationFrame(raf);
+          playBattleSfx('gameover', mutedRef.current);
+          setBossQuip(null);
+          setPhase('gameover');
+        }
+        return;
+      }
+
       const next = Math.max(0, playerHpRef.current - amount);
       playerHpRef.current = next;
       setPlayerHp(next);
@@ -473,92 +618,122 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       // SANS
       if (boss.id === 'sans') {
         if (mode === 'blue') {
-          const fromRight = stepCount % 2 === 0;
-          const vx = fromRight ? -135 : 135;
-          const x = fromRight ? ARENA_W + 10 : -18;
-          if (patternIdx === 2 && stepCount % 3 === 0) {
-            const cColor: Hazard['color'] = stepCount % 6 === 0 ? 'cyan' : 'orange';
+          if (patternIdx === 0 && stepCount % 4 === 1) {
+            // Directional Gravity Slam warning on floor -> shakes & erupts spikes!
             hazards.push({
-              kind: 'bone',
-              x,
-              y: 10,
-              w: 12,
-              h: ARENA_H - 18,
-              vx,
+              kind: 'slamwarn',
+              x: 4,
+              y: H - 42,
+              w: W - 8,
+              h: 38,
+              vx: 0,
               vy: 0,
-              color: cColor,
+              color: 'red',
               age: 0,
-              maxAge: 3.5,
+              maxAge: 0.56,
+              fired: false,
             });
           } else {
-            const h = 24 + (stepCount % 3) * 10;
-            hazards.push({
-              kind: 'bone',
-              x,
-              y: ARENA_H - h - 4,
-              w: 10,
-              h,
-              vx,
-              vy: 0,
-              color: 'white',
-              age: 0,
-              maxAge: 3.5,
-            });
-            // Top ceiling decorative/hazard bone leaving jump room
-            hazards.push({
-              kind: 'bone',
-              x,
-              y: 4,
-              w: 10,
-              h: 54,
-              vx,
-              vy: 0,
-              color: 'white',
-              age: 0,
-              maxAge: 3.5,
-            });
+            const fromRight = stepCount % 2 === 0;
+            const vx = fromRight ? -145 : 145;
+            const x = fromRight ? W + 12 : -20;
+            if (patternIdx === 2 && stepCount % 3 === 0) {
+              hazards.push({
+                kind: 'bone',
+                x,
+                y: 8,
+                w: 12,
+                h: H - 14,
+                vx,
+                vy: 0,
+                color: 'cyan',
+                age: 0,
+                maxAge: 3.4,
+              });
+            } else {
+              // Sinusoidal bone corridor!
+              const floorH = 24 + Math.round((Math.sin(stepCount * 0.9) + 1) * 14);
+              hazards.push(
+                {
+                  kind: 'bone',
+                  x,
+                  y: H - floorH - 4,
+                  w: 10,
+                  h: floorH,
+                  vx,
+                  vy: 0,
+                  color: 'white',
+                  age: 0,
+                  maxAge: 3.4,
+                },
+                {
+                  kind: 'bone',
+                  x,
+                  y: 4,
+                  w: 10,
+                  h: 52,
+                  vx,
+                  vy: 0,
+                  color: 'white',
+                  age: 0,
+                  maxAge: 3.4,
+                },
+              );
+            }
           }
         } else {
-          // Red mode: Gaster Blasters aiming across SOUL + drifting bones
-          const side = stepCount % 4;
-          let bx = ARENA_W / 2;
-          let by = 22;
-          if (side === 0) {
-            bx = clamp(soul.x + (Math.random() - 0.5) * 40, 28, ARENA_W - 28);
-            by = 20;
-          } else if (side === 1) {
-            bx = ARENA_W - 20;
-            by = clamp(soul.y + (Math.random() - 0.5) * 30, 26, ARENA_H - 26);
-          } else if (side === 2) {
-            bx = clamp(soul.x + (Math.random() - 0.5) * 40, 28, ARENA_W - 28);
-            by = ARENA_H - 20;
+          // Choreographed Gaster Blaster Pairs (X-Cross / Flank / Aimed)
+          const pairType = stepCount % 3;
+          const makeBlaster = (bx: number, by: number, tx: number, ty: number) => {
+            const ang = Math.atan2(ty - by, tx - bx);
+            hazards.push({
+              kind: 'blaster',
+              x: bx,
+              y: by,
+              w: 24,
+              h: 24,
+              vx: 0,
+              vy: 0,
+              angle: ang,
+              color: 'white',
+              age: 0,
+              maxAge: 1.08,
+              fired: false,
+            });
+          };
+          if (pairType === 1) {
+            makeBlaster(24, 24, soul.x, soul.y);
+            makeBlaster(W - 24, 24, soul.x, soul.y);
+          } else if (pairType === 2) {
+            makeBlaster(22, clamp(soul.y, 26, H - 26), W, soul.y);
+            makeBlaster(clamp(soul.x, 30, W - 30), H - 22, soul.x, 0);
           } else {
-            bx = 20;
-            by = clamp(soul.y + (Math.random() - 0.5) * 30, 26, ARENA_H - 26);
+            const bx = clamp(soul.x + (Math.random() - 0.5) * 44, 30, W - 30);
+            makeBlaster(bx, 22, soul.x, soul.y);
           }
-          const ang = Math.atan2(soul.y - by, soul.x - bx);
-          hazards.push({
-            kind: 'blaster',
-            x: bx,
-            y: by,
-            w: 22,
-            h: 22,
-            vx: 0,
-            vy: 0,
-            angle: ang,
-            color: 'white',
-            age: 0,
-            maxAge: 1.05,
-            fired: false,
-          });
+          playBattleSfx('charge', mutedRef.current);
         }
         return;
       }
 
-      // PAPYRUS (Blue SOUL)
+      // PAPYRUS (Blue SOUL + Annoying Dog Cameo on Wave 2!)
       if (boss.id === 'papyrus') {
-        const x = ARENA_W + 12;
-        const speed = -125;
+        const x = W + 14;
+        const speed = -132;
+        if (patternIdx === 2 && stepCount === 3) {
+          hazards.push({
+            kind: 'dog',
+            x: W + 10,
+            y: H - 28,
+            w: 24,
+            h: 20,
+            vx: -105,
+            vy: 0,
+            color: 'white',
+            age: 0,
+            maxAge: 4.2,
+          });
+        }
         if (stepCount % 4 === 0) {
           const isCyan = (stepCount / 4) % 2 === 1;
           hazards.push({
@@ -566,7 +741,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             x,
             y: 12,
             w: 13,
-            h: ARENA_H - 18,
+            h: H - 18,
             vx: speed,
             vy: 0,
             color: isCyan ? 'cyan' : 'orange',
@@ -574,20 +749,34 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             maxAge: 3.6,
           });
         } else {
-          const tall = stepCount % 2 === 0;
-          const h = tall ? 38 : 24;
+          // Stair-step hurdles (18 -> 30 -> 42)
+          const stair = [18, 28, 38][stepCount % 3];
           hazards.push({
             kind: 'bone',
             x,
-            y: ARENA_H - h - 4,
+            y: H - stair - 4,
             w: 11,
-            h,
+            h: stair,
             vx: speed,
             vy: 0,
             color: 'white',
             age: 0,
             maxAge: 3.6,
           });
+          if (patternIdx === 2) {
+            hazards.push({
+              kind: 'bone',
+              x,
+              y: 4,
+              w: 11,
+              h: 46,
+              vx: speed,
+              vy: 0,
+              color: 'white',
+              age: 0,
+              maxAge: 3.6,
+            });
+          }
         }
         return;
       }
@@ -595,17 +784,21 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       // UNDYNE
       if (boss.id === 'undyne') {
         if (mode === 'green') {
-          // Cardinal spears aimed at (160, 85), with yellow reverse spears!
-          const dir = Math.floor(Math.random() * 4);
+          const patternSeq = [0, 1, 2, 3, 1, 3, 0, 2];
+          const dir = patternSeq[stepCount % patternSeq.length];
           const isYellow = stepCount >= 3 && stepCount % 3 === 0;
-          const dist = 165;
+          const dist = 124;
           const dx = [0, 1, 0, -1][dir];
           const dy = [-1, 0, 1, 0][dir];
-          const speed = isYellow ? 145 : 155;
+          const speed = isYellow ? 128 : 138;
+          const sx = W / 2 + dx * dist;
+          const sy = H / 2 + dy * dist;
           hazards.push({
             kind: 'spear',
-            x: ARENA_W / 2 + dx * dist,
-            y: ARENA_H / 2 + dy * dist,
+            x: sx,
+            y: sy,
+            startX: sx,
+            startY: sy,
             w: 14,
             h: 14,
             vx: -dx * speed,
@@ -615,11 +808,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             color: isYellow ? 'yellow' : 'cyan',
             yellowFlip: isYellow,
             flipped: false,
+            flipProgress: 0,
             age: 0,
             maxAge: 2.5,
           });
         } else {
-          // Red SOUL: closing spear ring around player
           const cx = soul.x;
           const cy = soul.y;
           const count = 6;
@@ -627,20 +820,19 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           for (let i = 0; i < count; i++) {
             if (i === gapIdx) continue;
             const a = (Math.PI * 2 * i) / count + stepCount * 0.25;
-            const rad = 115;
+            const rad = 112;
             const sx = cx + Math.cos(a) * rad;
             const sy = cy + Math.sin(a) * rad;
-            const spd = 82;
             hazards.push({
               kind: 'spear',
               x: sx,
               y: sy,
               w: 10,
               h: 10,
-              vx: -Math.cos(a) * spd,
-              vy: -Math.sin(a) * spd,
+              vx: -Math.cos(a) * 80,
+              vy: -Math.sin(a) * 80,
               angle: a + Math.PI,
-              color: 'white',
+              color: 'cyan',
               age: 0,
               maxAge: 2.1,
             });
@@ -652,40 +844,51 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       // TORIEL
       if (boss.id === 'toriel') {
         if (patternIdx === 0) {
-          // Parabolic arcing fireballs from left & right
+          pawX1 = W * 0.25 + Math.sin(elapsed * 2.4) * 55;
+          pawX2 = W * 0.75 - Math.sin(elapsed * 2.4) * 55;
+          hazards.push(
+            {
+              kind: 'fire',
+              x: pawX1,
+              y: 16,
+              w: 12,
+              h: 12,
+              r: 6,
+              vx: Math.cos(elapsed * 3) * 28,
+              vy: 96,
+              color: 'white',
+              age: 0,
+              maxAge: 2.6,
+            },
+            {
+              kind: 'fire',
+              x: pawX2,
+              y: 16,
+              w: 12,
+              h: 12,
+              r: 6,
+              vx: -Math.cos(elapsed * 3) * 28,
+              vy: 96,
+              color: 'white',
+              age: 0,
+              maxAge: 2.6,
+            },
+          );
+        } else {
           const fromLeft = stepCount % 2 === 0;
           for (let k = 0; k < 2; k++) {
             hazards.push({
               kind: 'fire',
-              x: fromLeft ? -6 : ARENA_W + 6,
+              x: fromLeft ? -6 : W + 6,
               y: 26 + k * 28,
               w: 12,
               h: 12,
               r: 6,
-              vx: (fromLeft ? 1 : -1) * (88 + k * 18),
-              vy: 35 + Math.random() * 25,
+              vx: (fromLeft ? 1 : -1) * (92 + k * 18),
+              vy: 34 + Math.random() * 24,
               color: 'white',
               age: 0,
               maxAge: 4,
-            });
-          }
-        } else {
-          // Sweeping curtain from top with gap wave
-          const gapX = ARENA_W / 2 + Math.sin(stepCount * 0.9) * 88;
-          for (let x = 18; x < ARENA_W - 10; x += 34) {
-            if (Math.abs(x - gapX) < 30) continue;
-            hazards.push({
-              kind: 'fire',
-              x,
-              y: -8,
-              w: 12,
-              h: 12,
-              r: 6,
-              vx: Math.cos(stepCount + x) * 18,
-              vy: 86,
-              color: 'white',
-              age: 0,
-              maxAge: 3,
             });
           }
         }
@@ -695,7 +898,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       // METTATON EX
       if (boss.id === 'mettaton') {
         if (mode === 'yellow') {
-          const colX = 28 + Math.floor(Math.random() * 8) * 34;
+          const colX = 28 + Math.floor(Math.random() * 9) * 32;
           const roll = stepCount % 4;
           if (roll === 0) {
             hazards.push({
@@ -705,11 +908,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
               w: 18,
               h: 18,
               vx: 0,
-              vy: 64,
+              vy: 66,
               color: 'red',
               hp: 1,
               age: 0,
-              maxAge: 1.55,
+              maxAge: 1.5,
             });
           } else if (roll === 3) {
             hazards.push({
@@ -718,7 +921,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
               y: -14,
               w: 16,
               h: 16,
-              vx: (Math.random() - 0.5) * 24,
+              vx: (Math.random() - 0.5) * 22,
               vy: 74,
               color: 'pink',
               hp: 1,
@@ -736,56 +939,53 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
               vy: 68,
               color: 'white',
               hp: 2,
+              maxHp: 2,
               age: 0,
               maxAge: 3.4,
             });
           }
         } else {
-          // Red mode: Rotating disco beams + Metta boots
           const isCyan = stepCount % 2 === 0;
           hazards.push({
             kind: 'discolaser',
-            x: ARENA_W / 2,
-            y: ARENA_H / 2,
+            x: W / 2,
+            y: H / 2,
             w: 12,
             h: 12,
             vx: 0,
             vy: 0,
-            angle: stepCount * 0.5,
+            angle: stepCount * 0.55,
             omega: (stepCount % 2 === 0 ? 1 : -1) * 1.15,
             color: isCyan ? 'cyan' : 'orange',
             age: 0,
             maxAge: 2.2,
           });
+          if (stepCount % 3 === 1) {
+            hazards.push({
+              kind: 'bootwarn',
+              x: 4,
+              y: H - 30,
+              w: W - 8,
+              h: 26,
+              vx: 0,
+              vy: 0,
+              color: 'pink',
+              age: 0,
+              maxAge: 0.52,
+              fired: false,
+            });
+          }
         }
         return;
       }
 
-      // ASGORE
+      // ASGORE (Fire Curtains / Spirals when patternIdx !== 0)
       if (boss.id === 'asgore') {
-        if (stepCount % 3 === 1) {
-          // Glinting cyan/orange trident sweep!
-          const horizontal = stepCount % 2 === 1;
-          const col: Hazard['color'] = (stepCount / 3) % 2 >= 1 ? 'orange' : 'cyan';
-          hazards.push({
-            kind: 'slashwarn',
-            x: horizontal ? 0 : soul.x - 45,
-            y: horizontal ? soul.y - 36 : 0,
-            w: horizontal ? ARENA_W : 90,
-            h: horizontal ? 72 : ARENA_H,
-            vx: 0,
-            vy: 0,
-            color: col,
-            age: 0,
-            maxAge: 0.72,
-            fired: false,
-          });
-        } else {
-          // Fire rain / rings
-          const cx = ARENA_W / 2 + Math.cos(stepCount) * 75;
-          const cy = 24;
+        if (patternIdx !== 0) {
+          const cx = W / 2 + Math.cos(stepCount * 0.9) * 80;
+          const cy = 22;
           for (let i = 0; i < 6; i++) {
-            const a = (Math.PI * 2 * i) / 6 + stepCount * 0.4;
+            const a = (Math.PI * 2 * i) / 6 + stepCount * 0.45;
             hazards.push({
               kind: 'fire',
               x: cx,
@@ -793,8 +993,8 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
               w: 11,
               h: 11,
               r: 5.5,
-              vx: Math.cos(a) * 86,
-              vy: Math.sin(a) * 86 + 22,
+              vx: Math.cos(a) * 88,
+              vy: Math.sin(a) * 88 + 20,
               color: 'white',
               age: 0,
               maxAge: 3.1,
@@ -804,55 +1004,53 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         return;
       }
 
-      // MUFFET (Purple SOUL, 3 web lanes)
+      // MUFFET (Purple SOUL, 3 web lanes with clear telegraph warnings)
       if (boss.id === 'muffet') {
         const laneIdx = Math.floor(Math.random() * 3);
         const fromLeft = stepCount % 2 === 0;
         if (stepCount % 3 === 0) {
-          // Bouncing Donut between top and bottom
           hazards.push({
             kind: 'donut',
-            x: fromLeft ? -12 : ARENA_W + 12,
+            x: fromLeft ? -12 : W + 12,
             y: WEB_LANES[laneIdx],
             w: 16,
             h: 16,
             r: 8,
-            vx: (fromLeft ? 1 : -1) * 112,
-            vy: (Math.random() > 0.5 ? 1 : -1) * 95,
+            vx: (fromLeft ? 1 : -1) * 114,
+            vy: (Math.random() > 0.5 ? 1 : -1) * 96,
             color: 'purple',
             age: 0,
             maxAge: 3.8,
           });
         } else if (stepCount % 4 === 1) {
-          // Boomerang Croissant
           hazards.push({
             kind: 'croissant',
-            x: fromLeft ? -10 : ARENA_W + 10,
+            x: fromLeft ? -10 : W + 10,
             y: WEB_LANES[laneIdx],
             w: 14,
             h: 14,
             r: 7,
-            vx: (fromLeft ? 1 : -1) * 210,
-            vy: (laneIdx === 1 ? 18 : laneIdx === 0 ? 22 : -22),
+            vx: (fromLeft ? 1 : -1) * 215,
+            vy: laneIdx === 1 ? 18 : laneIdx === 0 ? 22 : -22,
             dirX: fromLeft ? -1 : 1,
             color: 'white',
             age: 0,
             maxAge: 3.4,
           });
         } else {
-          // Spider scuttling along a web line
+          // Edge warning indicator before spider sprints across!
           hazards.push({
-            kind: 'spider',
-            x: fromLeft ? -12 : ARENA_W + 12,
+            kind: 'spiderwarn',
+            x: fromLeft ? 10 : W - 10,
             y: WEB_LANES[laneIdx],
             w: 14,
             h: 14,
-            r: 7,
-            vx: (fromLeft ? 1 : -1) * 145,
+            vx: fromLeft ? 1 : -1,
             vy: 0,
-            color: 'white',
+            color: 'purple',
             age: 0,
-            maxAge: 3.2,
+            maxAge: 0.4,
+            fired: false,
           });
         }
       }
@@ -869,11 +1067,59 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         const nextTurn = turnRef.current + 1;
         setTurn(nextTurn);
         setBossQuip(null);
+        setGlintColor(null);
+        setGlintQueue([]);
         setHudHint(null);
         const lines = boss.statusLines;
         setNarration(lines[nextTurn % lines.length]);
         setPhase('menu');
         return;
+      }
+
+      // Asgore Eye-Glint Sequence choreography
+      if (boss.id === 'asgore' && patternIdx === 0) {
+        asgoreTimer -= dt;
+        if (asgorePhase === 'glint' && asgoreTimer <= 0) {
+          if (asgoreSeqStep < asgoreSequence.length) {
+            const c = asgoreSequence[asgoreSeqStep];
+            setGlintColor(c);
+            setGlintQueue((prev) => [...prev, c]);
+            playBattleSfx(c === 'cyan' ? 'glint_cyan' : 'glint_orange', mutedRef.current);
+            asgoreSeqStep++;
+            asgoreTimer = 0.42;
+            if (asgoreSeqStep >= asgoreSequence.length) {
+              asgorePhase = 'slash';
+              asgoreSeqStep = 0;
+              asgoreTimer = 0.55;
+            }
+          }
+        } else if (asgorePhase === 'slash' && asgoreTimer <= 0) {
+          setGlintColor(null);
+          if (asgoreSeqStep < asgoreSequence.length) {
+            const c = asgoreSequence[asgoreSeqStep];
+            hazards.push({
+              kind: 'tridentslash',
+              x: asgoreSeqStep % 2 === 0 ? -40 : W + 40,
+              y: 0,
+              w: W,
+              h: H,
+              vx: asgoreSeqStep % 2 === 0 ? 1 : -1,
+              vy: 0,
+              color: c,
+              age: 0,
+              maxAge: 0.45,
+            });
+            playBattleSfx('slash', mutedRef.current);
+            asgoreSeqStep++;
+            asgoreTimer = 0.72;
+          } else {
+            asgoreSeqStep = 0;
+            asgoreSequence = currentTurn % 2 === 0 ? ['orange', 'cyan', 'orange'] : ['cyan', 'orange', 'cyan'];
+            setGlintQueue([]);
+            asgorePhase = 'glint';
+            asgoreTimer = 0.35;
+          }
+        }
       }
 
       // Input state
@@ -884,12 +1130,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       const down = !!(k.ArrowDown || k.s || k.S);
       const actionHeld = !!(k[' '] || k.z || k.Z || k.Enter);
 
-      const moveSpeed = speedBoostRef.current ? 175 : 145;
+      const moveSpeed = speedBoostRef.current ? 178 : 148;
       soul.prevX = soul.x;
       soul.prevY = soul.y;
       if (soul.invuln > 0) soul.invuln = Math.max(0, soul.invuln - dt);
 
-      // Move SOUL according to SoulMode
       if (mode === 'red' || mode === 'yellow') {
         if (pointerTargetRef.current.active) {
           const dx = pointerTargetRef.current.x - soul.x;
@@ -910,14 +1155,15 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           soul.x += mx * moveSpeed * dt;
           soul.y += my * moveSpeed * dt;
         }
-        soul.x = clamp(soul.x, 10, ARENA_W - 10);
-        soul.y = clamp(soul.y, 12, ARENA_H - 12);
+        soul.x = clamp(soul.x, 10, W - 10);
+        soul.y = clamp(soul.y, 12, H - 12);
 
         if (mode === 'yellow') {
           shotTimer -= dt;
-          if ((actionHeld || pointerTargetRef.current.active || elapsed > 0.25) && shotTimer <= 0) {
-            shotTimer = 0.24;
-            lasers.push({ x: soul.x, y: soul.y - 8, vy: -330 });
+          if ((actionHeld || pointerTargetRef.current.active || elapsed > 0.2) && shotTimer <= 0) {
+            shotTimer = 0.22;
+            shotCount++;
+            lasers.push({ x: soul.x, y: soul.y - 8, vy: -340, power: shotCount % 5 === 0 });
             playBattleSfx('laser', mutedRef.current);
           }
         }
@@ -931,7 +1177,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             soul.grounded = false;
           }
         }
-        soul.x = clamp(soul.x + mx * moveSpeed * dt, 10, ARENA_W - 10);
+        soul.x = clamp(soul.x + mx * moveSpeed * dt, 10, W - 10);
 
         if ((up || k[' ']) && soul.grounded) {
           soul.vy = -275;
@@ -942,8 +1188,8 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         }
         soul.vy += 680 * dt;
         soul.y += soul.vy * dt;
-        if (soul.y >= ARENA_H - 14) {
-          soul.y = ARENA_H - 14;
+        if (soul.y >= H - 14) {
+          soul.y = H - 14;
           soul.vy = 0;
           soul.grounded = true;
         }
@@ -963,7 +1209,6 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           if (Math.abs(dx) > 3) {
             soul.x += Math.sign(dx) * Math.min(Math.abs(dx), moveSpeed * dt);
           }
-          // Closest web lane
           let best = 0;
           let bestD = Infinity;
           WEB_LANES.forEach((ly, idx) => {
@@ -978,12 +1223,12 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           const mx = (right ? 1 : 0) - (left ? 1 : 0);
           soul.x += mx * moveSpeed * dt;
         }
-        soul.x = clamp(soul.x, 12, ARENA_W - 12);
+        soul.x = clamp(soul.x, 12, W - 12);
         const targetY = WEB_LANES[soul.lane];
         soul.y += (targetY - soul.y) * Math.min(1, 22 * dt);
       } else if (mode === 'green') {
-        soul.x = ARENA_W / 2;
-        soul.y = ARENA_H / 2;
+        soul.x = W / 2;
+        soul.y = H / 2;
         if (up) soul.shieldDir = 0;
         else if (right) soul.shieldDir = 1;
         else if (down) soul.shieldDir = 2;
@@ -1001,10 +1246,10 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
       const interval =
         boss.id === 'sans'
           ? mode === 'red'
-            ? 0.85
+            ? 0.92
             : 0.56
           : boss.id === 'undyne' && mode === 'green'
-            ? 0.52
+            ? 0.54
             : boss.id === 'undyne'
               ? 1.05
               : boss.id === 'papyrus'
@@ -1012,28 +1257,31 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
                 : boss.id === 'asgore'
                   ? 0.72
                   : boss.id === 'muffet'
-                    ? 0.5
+                    ? 0.48
                     : boss.id === 'mettaton'
                       ? 0.65
-                      : 0.68;
+                      : boss.id === 'toriel'
+                        ? patternIdx === 0
+                          ? 0.28
+                          : 0.6
+                        : 0.58;
 
       if (spawnTimer <= 0 && elapsed < waveDuration - 0.65) {
         spawnTimer = interval;
         spawnPatternStep();
       }
 
-      // Extra Sans bone stream in red mode
       if (boss.id === 'sans' && mode === 'red') {
         secondaryTimer -= dt;
         if (secondaryTimer <= 0 && elapsed < waveDuration - 0.7) {
-          secondaryTimer = 0.95;
+          secondaryTimer = 0.9;
           hazards.push({
             kind: 'bone',
             x: -10,
-            y: 12 + Math.random() * (ARENA_H - 46),
+            y: 12 + Math.random() * (H - 46),
             w: 10,
             h: 28,
-            vx: 130,
+            vx: 135,
             vy: 0,
             color: 'white',
             age: 0,
@@ -1042,7 +1290,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         }
       }
 
-      // Update yellow lasers & check hits against crates/hearts/bombs
+      // Yellow Laser updates
       for (let i = lasers.length - 1; i >= 0; i--) {
         const l = lasers[i];
         l.y += l.vy * dt;
@@ -1053,27 +1301,35 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         for (let j = hazards.length - 1; j >= 0; j--) {
           const h = hazards[j];
           if (h.kind !== 'crate' && h.kind !== 'pinkheart' && h.kind !== 'bomb') continue;
-          if (l.x >= h.x && l.x <= h.x + h.w && l.y >= h.y && l.y <= h.y + h.h) {
+          const bw = l.power ? 8 : 3;
+          if (l.x + bw >= h.x && l.x - bw <= h.x + h.w && l.y >= h.y && l.y <= h.y + h.h) {
             lasers.splice(i, 1);
             if (h.kind === 'pinkheart') {
               addBurst(h.x + h.w / 2, h.y + h.h / 2, '#F472B6', 8);
               playBattleSfx('heal', mutedRef.current);
-              const healed = Math.min(PLAYER_MAX_HP, playerHpRef.current + 1);
+              const healed = Math.min(boss.playerMaxHp, playerHpRef.current + 1);
               playerHpRef.current = healed;
               setPlayerHp(healed);
+              const nr = ratingsRef.current + 400;
+              ratingsRef.current = nr;
+              setRatings(nr);
               hazards.splice(j, 1);
             } else if (h.kind === 'bomb') {
               hazards.splice(j, 1);
               playBattleSfx('blaster', mutedRef.current);
+              triggerShake();
               hazards.push(
-                { kind: 'explosion', x: 0, y: h.y + 4, w: ARENA_W, h: 10, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
-                { kind: 'explosion', x: h.x + 4, y: 0, w: 10, h: ARENA_H, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
+                { kind: 'explosion', x: 0, y: h.y + 4, w: W, h: 10, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
+                { kind: 'explosion', x: h.x + 4, y: 0, w: 10, h: H, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
               );
             } else {
-              h.hp = (h.hp ?? 1) - 1;
-              addBurst(l.x, l.y, '#FACC15', 4);
+              h.hp = (h.hp ?? 1) - (l.power ? 2 : 1);
+              addBurst(l.x, l.y, '#FACC15', 5);
               if (h.hp <= 0) {
                 addBurst(h.x + h.w / 2, h.y + h.h / 2, '#F8FAFC', 8);
+                const nr = ratingsRef.current + 150;
+                ratingsRef.current = nr;
+                setRatings(nr);
                 hazards.splice(j, 1);
               }
             }
@@ -1082,34 +1338,105 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         }
       }
 
-      // Track if SOUL moved for Cyan / Orange rules
       const playerMoved = Math.hypot(soul.x - soul.prevX, soul.y - soul.prevY) > 0.38;
 
-      // Update hazards & detect collisions
+      // Find nearest incoming spear in Green mode to highlight it red (Undertale cue!)
+      let nearestSpearIdx = -1;
+      let nearestSpearDist = Infinity;
+      if (mode === 'green') {
+        hazards.forEach((h, idx) => {
+          if (h.kind !== 'spear') return;
+          const d = Math.hypot(h.x - soul.x, h.y - soul.y);
+          if (d < nearestSpearDist) {
+            nearestSpearDist = d;
+            nearestSpearIdx = idx;
+          }
+        });
+      }
+
       for (let i = hazards.length - 1; i >= 0; i--) {
         const h = hazards[i];
         h.age += dt;
+
+        if (h.kind === 'slamwarn' && h.age >= h.maxAge && !h.fired) {
+          h.fired = true;
+          playBattleSfx('slam', mutedRef.current);
+          triggerShake();
+          hazards.push({
+            kind: 'slamspikes',
+            x: 4,
+            y: H - 38,
+            w: W - 8,
+            h: 34,
+            vx: 0,
+            vy: 0,
+            color: 'white',
+            age: 0,
+            maxAge: 0.42,
+          });
+          hazards.splice(i, 1);
+          continue;
+        }
+
+        if (h.kind === 'bootwarn' && h.age >= h.maxAge && !h.fired) {
+          h.fired = true;
+          hazards.push({
+            kind: 'boot',
+            x: -24,
+            y: H - 28,
+            w: 24,
+            h: 24,
+            vx: 290,
+            vy: 0,
+            color: 'pink',
+            age: 0,
+            maxAge: 1.4,
+          });
+          hazards.splice(i, 1);
+          continue;
+        }
+
+        if (h.kind === 'spiderwarn' && h.age >= h.maxAge && !h.fired) {
+          h.fired = true;
+          const goRight = h.vx > 0;
+          hazards.push({
+            kind: 'spider',
+            x: goRight ? -10 : W + 10,
+            y: h.y,
+            w: 14,
+            h: 14,
+            r: 7,
+            vx: (goRight ? 1 : -1) * 168,
+            vy: 0,
+            color: 'white',
+            age: 0,
+            maxAge: 2.8,
+          });
+          hazards.splice(i, 1);
+          continue;
+        }
+
         if (h.age >= h.maxAge) {
-          // Bomb explodes into cross blast on timeout
           if (h.kind === 'bomb') {
             playBattleSfx('blaster', mutedRef.current);
+            triggerShake();
             hazards.push(
-              { kind: 'explosion', x: 0, y: h.y + 4, w: ARENA_W, h: 10, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
-              { kind: 'explosion', x: h.x + 4, y: 0, w: 10, h: ARENA_H, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
+              { kind: 'explosion', x: 0, y: h.y + 4, w: W, h: 10, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
+              { kind: 'explosion', x: h.x + 4, y: 0, w: 10, h: H, vx: 0, vy: 0, color: 'white', age: 0, maxAge: 0.25 },
             );
           }
           hazards.splice(i, 1);
           continue;
         }
 
-        // Toriel mercy safeguard when player HP <= 2
-        if (boss.id === 'toriel' && h.kind === 'fire' && playerHpRef.current <= 2) {
+        // Toriel mercy safeguard at low HP
+        if (boss.id === 'toriel' && h.kind === 'fire' && playerHpRef.current <= 3) {
           const dx = h.x - soul.x;
           const dy = h.y - soul.y;
           const d = Math.hypot(dx, dy);
-          if (d < 36 && d > 0.1) {
-            h.vx += (dx / d) * 190 * dt;
-            h.vy += (dy / d) * 190 * dt;
+          if (d < 42 && d > 0.1) {
+            h.vx += (dx / d) * 210 * dt;
+            h.vy += (dy / d) * 210 * dt;
           }
         }
 
@@ -1118,31 +1445,41 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         }
 
         if (h.kind === 'donut') {
-          if (h.y < 14 || h.y > ARENA_H - 14) h.vy *= -1;
+          if (h.y < 14 || h.y > H - 14) h.vy *= -1;
         }
 
+        // Smooth curved flip for Yellow Undyne Spears!
         if (h.kind === 'spear' && h.yellowFlip && !h.flipped) {
-          const d = Math.hypot(h.x - ARENA_W / 2, h.y - ARENA_H / 2);
-          if (d < 66) {
+          const d = Math.hypot(h.x - W / 2, h.y - H / 2);
+          if (d < 56) {
             h.flipped = true;
-            // Jump to opposite side at same radius and travel inward
-            h.x = ARENA_W - h.x;
-            h.y = ARENA_H - h.y;
-            h.vx = -h.vx;
-            h.vy = -h.vy;
-            h.dirX = -(h.dirX ?? 0);
-            h.dirY = -(h.dirY ?? 0);
+            h.flipProgress = 0;
           }
+        }
+        if (h.kind === 'spear' && h.yellowFlip && h.flipped && (h.flipProgress ?? 1) < 1) {
+          h.flipProgress = Math.min(1, (h.flipProgress ?? 0) + dt * 4.5);
+          const curAng = Math.atan2(h.y - H / 2, h.x - W / 2);
+          const rad = Math.hypot(h.x - W / 2, h.y - H / 2);
+          const nextAng = curAng + Math.PI * dt * 4.5;
+          h.x = W / 2 + Math.cos(nextAng) * rad;
+          h.y = H / 2 + Math.sin(nextAng) * rad;
+          if (h.flipProgress >= 1) {
+            const toCenterA = Math.atan2(H / 2 - h.y, W / 2 - h.x);
+            h.vx = Math.cos(toCenterA) * 136;
+            h.vy = Math.sin(toCenterA) * 136;
+          }
+          continue;
         }
 
         if (h.kind === 'blaster') {
           if (h.age >= 0.62 && !h.fired) {
             h.fired = true;
             playBattleSfx('blaster', mutedRef.current);
+            triggerShake();
           }
           if (h.fired && h.angle !== undefined) {
-            const bx2 = h.x + Math.cos(h.angle) * 440;
-            const by2 = h.y + Math.sin(h.angle) * 440;
+            const bx2 = h.x + Math.cos(h.angle) * 460;
+            const by2 = h.y + Math.sin(h.angle) * 460;
             if (distToSegment(soul.x, soul.y, h.x, h.y, bx2, by2) < 13) {
               hurtSoul(boss.atkDamage);
             }
@@ -1150,21 +1487,10 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           continue;
         }
 
-        if (h.kind === 'slashwarn') {
-          if (h.age >= h.maxAge - 0.04 && !h.fired) {
-            h.fired = true;
-            hazards.push({
-              kind: 'slashbeam',
-              x: h.x,
-              y: h.y,
-              w: h.w,
-              h: h.h,
-              vx: 0,
-              vy: 0,
-              color: h.color,
-              age: 0,
-              maxAge: 0.24,
-            });
+        if (h.kind === 'tridentslash') {
+          const checkRule = h.color === 'cyan' ? playerMoved : h.color === 'orange' ? !playerMoved : true;
+          if (h.age > 0.08 && h.age < 0.34 && checkRule) {
+            hurtSoul(boss.atkDamage);
           }
           continue;
         }
@@ -1187,18 +1513,20 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         h.x += h.vx * dt;
         h.y += h.vy * dt;
 
-        // Green shield blocking logic
+        if (h.kind === 'slamwarn' || h.kind === 'bootwarn' || h.kind === 'spiderwarn') {
+          continue;
+        }
+
+        // Green shield blocking
         if (mode === 'green' && h.kind === 'spear') {
           const d = Math.hypot(h.x - soul.x, h.y - soul.y);
-          if (d <= 24 && d >= 11) {
-            // Which side is spear approaching FROM?
+          if (d <= 25 && d >= 11) {
             const fx = h.x - soul.x;
             const fy = h.y - soul.y;
-            const approachDir =
-              Math.abs(fx) > Math.abs(fy) ? (fx > 0 ? 1 : 3) : fy > 0 ? 2 : 0;
+            const approachDir = Math.abs(fx) > Math.abs(fy) ? (fx > 0 ? 1 : 3) : fy > 0 ? 2 : 0;
             if (approachDir === soul.shieldDir) {
               playBattleSfx('clang', mutedRef.current);
-              addBurst(h.x, h.y, '#22C55E', 6);
+              addBurst(h.x, h.y, '#22C55E', 7);
               hazards.splice(i, 1);
               continue;
             }
@@ -1211,7 +1539,6 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           continue;
         }
 
-        // Standard hit test
         let hit = false;
         if (h.r !== undefined) {
           hit = Math.hypot(soul.x - h.x, soul.y - h.y) <= h.r + 4;
@@ -1228,7 +1555,6 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         }
       }
 
-      // Particles update
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life += dt;
@@ -1240,142 +1566,200 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         p.y += p.vy * dt;
       }
 
-      // ---------- DRAW ----------
+      // ---------- DRAW ARENA ----------
       ctx.save();
       ctx.scale(dpr, dpr);
       ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+      ctx.fillRect(0, 0, W, H);
 
-      // Mode-specific arena decorations
       if (mode === 'purple') {
-        ctx.strokeStyle = 'rgba(192, 132, 252, 0.75)';
+        ctx.strokeStyle = 'rgba(192, 132, 252, 0.78)';
         ctx.lineWidth = 2;
         for (const ly of WEB_LANES) {
           ctx.beginPath();
           ctx.moveTo(0, ly);
-          ctx.lineTo(ARENA_W, ly);
+          ctx.lineTo(W, ly);
           ctx.stroke();
         }
       }
 
       if (mode === 'green') {
-        ctx.strokeStyle = 'rgba(34, 197, 94, 0.35)';
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.42)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(soul.x, soul.y, 17, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Active shield arc
         const baseA = [-Math.PI / 2, 0, Math.PI / 2, Math.PI][soul.shieldDir];
         ctx.strokeStyle = '#38BDF8';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(soul.x, soul.y, 21, baseA - 0.68, baseA + 0.68);
+        ctx.arc(soul.x, soul.y, 21, baseA - 0.72, baseA + 0.72);
         ctx.stroke();
       }
 
-      // Draw hazards
-      for (const h of hazards) {
+      if (boss.id === 'toriel' && patternIdx === 0) {
+        // Draw hovering white paws at top of arena
+        for (const px of [pawX1, pawX2]) {
+          ctx.fillStyle = '#F8FAFC';
+          ctx.beginPath();
+          ctx.arc(px, 12, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      hazards.forEach((h, hIdx) => {
         const col = getHazardCssColor(h.color);
+
         if (h.kind === 'blaster') {
           const ang = h.angle ?? 0;
+          const slide = Math.min(1, h.age / 0.25);
+          const drawX = h.x - Math.cos(ang) * (1 - slide) * 24;
+          const drawY = h.y - Math.sin(ang) * (1 - slide) * 24;
+
           if (!h.fired) {
-            // Telegraph sight line
             ctx.save();
-            ctx.strokeStyle = h.age > 0.4 ? 'rgba(56, 189, 248, 0.7)' : 'rgba(248, 250, 252, 0.35)';
-            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = h.age > 0.4 ? 'rgba(56, 189, 248, 0.75)' : 'rgba(248, 250, 252, 0.35)';
+            ctx.setLineDash([6, 4]);
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(h.x, h.y);
-            ctx.lineTo(h.x + Math.cos(ang) * 440, h.y + Math.sin(ang) * 440);
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX + Math.cos(ang) * 460, drawY + Math.sin(ang) * 460);
             ctx.stroke();
             ctx.restore();
           } else {
-            // Firing beam!
-            const beamW = Math.max(4, 24 * (1 - (h.age - 0.62) / (h.maxAge - 0.62)));
+            const beamW = Math.max(5, 26 * (1 - (h.age - 0.62) / (h.maxAge - 0.62)));
             ctx.save();
             ctx.strokeStyle = '#38BDF8';
-            ctx.lineWidth = beamW + 6;
+            ctx.lineWidth = beamW + 7;
             ctx.beginPath();
-            ctx.moveTo(h.x, h.y);
-            ctx.lineTo(h.x + Math.cos(ang) * 440, h.y + Math.sin(ang) * 440);
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX + Math.cos(ang) * 460, drawY + Math.sin(ang) * 460);
             ctx.stroke();
             ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = beamW;
             ctx.beginPath();
-            ctx.moveTo(h.x, h.y);
-            ctx.lineTo(h.x + Math.cos(ang) * 440, h.y + Math.sin(ang) * 440);
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX + Math.cos(ang) * 460, drawY + Math.sin(ang) * 460);
             ctx.stroke();
             ctx.restore();
           }
-          // Blaster skull
-          ctx.save();
-          ctx.translate(h.x, h.y);
-          ctx.rotate(ang);
-          ctx.fillStyle = '#F8FAFC';
-          ctx.fillRect(-10, -9, 20, 18);
-          ctx.fillStyle = '#090D16';
-          ctx.fillRect(0, -6, 6, 4);
-          ctx.fillRect(0, 2, 6, 4);
-          ctx.fillStyle = '#38BDF8';
-          ctx.fillRect(2, -5, 3, 2);
-          ctx.fillRect(2, 3, 3, 2);
-          ctx.restore();
-          continue;
+          drawGasterBlaster(ctx, drawX, drawY, ang, h.fired ? 1 : h.age > 0.45 ? 0.5 : 0, !h.fired);
+          return;
         }
 
-        if (h.kind === 'slashwarn') {
+        if (h.kind === 'tridentslash') {
+          const p = h.age / h.maxAge;
+          const sx = h.vx > 0 ? W * p : W * (1 - p);
+          ctx.save();
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = 0.25;
+          ctx.fillStyle = col;
+          ctx.fillRect(0, 0, W, H);
+          ctx.globalAlpha = 1;
+          ctx.lineWidth = 9;
+          ctx.beginPath();
+          ctx.arc(sx, H / 2, H * 0.6, -Math.PI * 0.45, Math.PI * 0.45, h.vx < 0);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
+        if (h.kind === 'slamwarn' || h.kind === 'bootwarn') {
           const flash = Math.floor(h.age * 16) % 2 === 0;
           ctx.save();
           ctx.strokeStyle = col;
-          ctx.globalAlpha = flash ? 0.85 : 0.35;
           ctx.lineWidth = 2;
-          ctx.setLineDash([6, 4]);
-          ctx.strokeRect(h.x + 2, h.y + 2, h.w - 4, h.h - 4);
+          ctx.globalAlpha = flash ? 0.9 : 0.35;
+          ctx.strokeRect(h.x, h.y, h.w, h.h);
           ctx.fillStyle = col;
-          ctx.globalAlpha = 0.14;
-          ctx.fillRect(h.x, h.y, h.w, h.h);
+          ctx.font = 'bold 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('!', h.x + h.w / 2, h.y + h.h / 2 + 5);
           ctx.restore();
-          continue;
+          return;
         }
 
-        if (h.kind === 'slashbeam' || h.kind === 'explosion') {
+        if (h.kind === 'slamspikes') {
+          ctx.fillStyle = '#F8FAFC';
+          for (let sx = h.x; sx < h.x + h.w; sx += 12) {
+            ctx.fillRect(sx + 2, h.y, 6, h.h);
+            ctx.fillRect(sx, h.y, 10, 4);
+          }
+          return;
+        }
+
+        if (h.kind === 'spiderwarn') {
+          const flash = Math.floor(h.age * 18) % 2 === 0;
+          ctx.save();
+          ctx.fillStyle = flash ? '#C084FC' : '#F8FAFC';
+          ctx.font = 'bold 13px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('!', h.x, h.y + 4);
+          ctx.restore();
+          return;
+        }
+
+        if (h.kind === 'explosion') {
           ctx.save();
           ctx.fillStyle = col;
           ctx.globalAlpha = 0.85;
           ctx.fillRect(h.x, h.y, h.w, h.h);
           ctx.restore();
-          continue;
+          return;
         }
 
         if (h.kind === 'discolaser' && h.angle !== undefined) {
           ctx.save();
           ctx.strokeStyle = col;
           ctx.lineWidth = h.age < 0.35 ? 2 : 6;
-          ctx.globalAlpha = h.age < 0.35 ? 0.35 : 0.9;
+          ctx.globalAlpha = h.age < 0.35 ? 0.35 : 0.92;
           ctx.beginPath();
           ctx.moveTo(h.x - Math.cos(h.angle) * 260, h.y - Math.sin(h.angle) * 260);
           ctx.lineTo(h.x + Math.cos(h.angle) * 260, h.y + Math.sin(h.angle) * 260);
           ctx.stroke();
+          // Center disco ball
+          ctx.fillStyle = '#E2E8F0';
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 9, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
-          continue;
+          return;
         }
 
         if (h.kind === 'bone') {
           ctx.fillStyle = col;
           ctx.fillRect(h.x, h.y, h.w, h.h);
-          // Bone knobs
           ctx.fillRect(h.x - 2, h.y, h.w + 4, 4);
           ctx.fillRect(h.x - 2, h.y + h.h - 4, h.w + 4, 4);
+        } else if (h.kind === 'dog') {
+          // Annoying Dog sprite cameo!
+          ctx.fillStyle = '#F8FAFC';
+          ctx.fillRect(h.x + 2, h.y + 6, 18, 10);
+          ctx.fillRect(h.x + 2, h.y + 1, 8, 8);
+          ctx.fillRect(h.x + 3, h.y + 16, 4, 4);
+          ctx.fillRect(h.x + 15, h.y + 16, 4, 4);
+          ctx.fillStyle = '#090D16';
+          ctx.fillRect(h.x + 4, h.y + 4, 2, 2);
+        } else if (h.kind === 'boot') {
+          ctx.fillStyle = '#EC4899';
+          ctx.fillRect(h.x + 6, h.y, 12, 16);
+          ctx.fillRect(h.x + 6, h.y + 16, 18, 8);
+          ctx.fillStyle = '#F8FAFC';
+          ctx.fillRect(h.x + 8, h.y + 2, 8, 4);
         } else if (h.kind === 'spear') {
           ctx.save();
-          const a = h.angle ?? Math.atan2(h.vy, h.vx);
+          const a =
+            h.kind === 'spear' && mode === 'green'
+              ? Math.atan2(soul.y - h.y, soul.x - h.x)
+              : h.angle ?? Math.atan2(h.vy, h.vx);
           ctx.translate(h.x, h.y);
           ctx.rotate(a);
-          ctx.fillStyle = h.flipped ? '#FACC15' : col;
+          const isNearestRed = mode === 'green' && hIdx === nearestSpearIdx;
+          ctx.fillStyle = isNearestRed ? '#EF4444' : h.yellowFlip ? '#FACC15' : col;
           ctx.fillRect(-10, -2, 16, 4);
           ctx.beginPath();
-          ctx.moveTo(10, 0);
+          ctx.moveTo(11, 0);
           ctx.lineTo(2, -5);
           ctx.lineTo(2, 5);
           ctx.closePath();
@@ -1391,7 +1775,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           ctx.arc(h.x, h.y - 1, (h.r ?? 6) * 0.48, 0, Math.PI * 2);
           ctx.fill();
         } else if (h.kind === 'crate') {
-          ctx.fillStyle = '#E2E8F0';
+          ctx.fillStyle = (h.hp ?? 2) < (h.maxHp ?? 2) ? '#CBD5E1' : '#F8FAFC';
           ctx.fillRect(h.x, h.y, h.w, h.h);
           ctx.strokeStyle = '#0F172A';
           ctx.lineWidth = 2;
@@ -1401,6 +1785,19 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         } else if (h.kind === 'pinkheart') {
           drawPixelHeart(ctx, h.x + h.w / 2, h.y + h.h / 2, '#F472B6');
         } else if (h.kind === 'bomb') {
+          // Cross-blast telegraph reticle before bomb explodes
+          if (h.age > 1.0) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, h.y + h.h / 2);
+            ctx.lineTo(W, h.y + h.h / 2);
+            ctx.moveTo(h.x + h.w / 2, 0);
+            ctx.lineTo(h.x + h.w / 2, H);
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.fillStyle = Math.floor(h.age * 10) % 2 === 0 ? '#EF4444' : '#FFFFFF';
           ctx.beginPath();
           ctx.arc(h.x + h.w / 2, h.y + h.h / 2, h.w / 2, 0, Math.PI * 2);
@@ -1435,15 +1832,15 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           ctx.arc(h.x, h.y, 6, 0, Math.PI * 1.4);
           ctx.fill();
         }
-      }
+      });
 
-      // Draw Yellow Lasers
-      ctx.fillStyle = '#FACC15';
+      // Lasers
       for (const l of lasers) {
-        ctx.fillRect(l.x - 1.5, l.y - 6, 3, 12);
+        ctx.fillStyle = l.power ? '#FDE047' : '#FACC15';
+        ctx.fillRect(l.x - (l.power ? 3 : 1.5), l.y - 6, l.power ? 6 : 3, 13);
       }
 
-      // Draw particles
+      // Particles
       for (const p of particles) {
         ctx.save();
         ctx.globalAlpha = 1 - p.life / p.maxLife;
@@ -1452,7 +1849,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         ctx.restore();
       }
 
-      // Draw SOUL Heart (blinks during invuln frames)
+      // SOUL Heart
       const showSoul = soul.invuln <= 0 || Math.floor(soul.invuln * 20) % 2 === 0;
       if (showSoul) {
         const soulHex =
@@ -1474,9 +1871,9 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [activeSoulMode, boss.atkDamage, boss.id, boss.soulModes, boss.statusLines, phase]);
+  }, [activeSoulMode, boss.atkDamage, boss.hasKarma, boss.id, boss.playerMaxHp, boss.statusLines, phase, triggerShake]);
 
-  // Menu & global key listeners
+  // Menu Actions
   const triggerMenuAction = useCallback(
     (action: MainAction) => {
       playBattleSfx('select', mutedRef.current);
@@ -1485,7 +1882,8 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         return;
       }
       if (action === 'MERCY' && !asgoreMercyUnlocked) {
-        setNarration("* Asgore refuses to look at MERCY... Use ACT (Talk/Tea) or weaken him!");
+        playBattleSfx('shatter', mutedRef.current);
+        setNarration("* Asgore's trident glow blocks MERCY... Talk 3 times or weaken him first!");
         return;
       }
       setSubMenuAction(action);
@@ -1509,6 +1907,12 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         const nextSpare = spareProgress + act.spareGain;
         setSpareProgress(nextSpare);
         setBossQuip(act.quip);
+        if (boss.hasRatings) {
+          const boost = idx === 1 ? 1800 : 2800;
+          ratingsRef.current += boost;
+          setRatings(ratingsRef.current);
+          playBattleSfx('ratings', mutedRef.current);
+        }
         if (nextSpare >= boss.spareTarget) {
           setNarration(`${act.narration} ${boss.spareReadyLine}`);
         } else {
@@ -1520,10 +1924,12 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         if (!chosen) return;
         playBattleSfx('heal', mutedRef.current);
         setPlayerHp((hp) => {
-          const next = Math.min(PLAYER_MAX_HP, hp + chosen.heal);
+          const next = Math.min(boss.playerMaxHp, hp + chosen.heal);
           playerHpRef.current = next;
           return next;
         });
+        karmaRef.current = 0;
+        setKarma(0);
         if (chosen.speedBoost) setSpeedBoost(true);
         setItemsLeft((prev) => prev.filter((_, i) => i !== idx));
         setNarration(chosen.flavor);
@@ -1533,11 +1939,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           if (isSpareReady) {
             finishVictory('SPARE');
           } else {
-            setNarration('* Their name is not yellow yet! Try ACTing or battling more.');
+            setNarration('* Their name is not yellow yet! Keep acting or weakening them.');
             setPhase('menu');
           }
         } else {
-          setNarration('* You tried to flee... Wait, today’s Daily Boss won’t let you slip away so easily!');
+          setNarration('* Escape is cut off by the barrier! Finish the Daily Encounter!');
           setPhase('menu');
         }
       }
@@ -1591,7 +1997,10 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           e.preventDefault();
           playBattleSfx('move', mutedRef.current);
           setSubIndex((i) => (i - 1 + count) % count);
-        } else if (count > 0 && (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W')) {
+        } else if (
+          count > 0 &&
+          (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W')
+        ) {
           e.preventDefault();
           playBattleSfx('move', mutedRef.current);
           setSubIndex((i) => (i + 2) % count);
@@ -1643,7 +2052,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
 
   const updatePointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * ARENA_W;
+    const x = ((e.clientX - rect.left) / rect.width) * arenaW;
     const y = ((e.clientY - rect.top) / rect.height) * ARENA_H;
     pointerTargetRef.current = { active: true, x, y };
   };
@@ -1658,17 +2067,28 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
     const methodLabel = victoryMethod === 'SPARE' ? '🕊️ SPARED' : '⚔️ DEFEATED';
     const tag = isDailyChallenge ? 'Daily Boss' : 'Practice Boss';
     share(
-      `❤️ SOUL Duel (${tag}: ${boss.name}) — ${methodLabel} in ${turn + 1} turns with ${playerHp}/${PLAYER_MAX_HP} HP!${
+      `❤️ SOUL Duel (${tag}: ${boss.name}) — ${methodLabel} in ${turn + 1} turns with ${playerHp}/${boss.playerMaxHp} HP!${
         isDailyChallenge && save.streak > 1 ? ` 🔥${save.streak}` : ''
       }`,
     );
   };
 
   const hpPct = Math.max(0, Math.min(100, (bossHp / boss.maxHp) * 100));
-  const playerHpPct = Math.max(0, Math.min(100, (playerHp / PLAYER_MAX_HP) * 100));
+  const effectiveYellowHp = Math.max(0, playerHp - karma);
+  const yellowPct = Math.max(0, Math.min(100, (effectiveYellowHp / boss.playerMaxHp) * 100));
+  const krPct = Math.max(0, Math.min(100 - yellowPct, (karma / boss.playerMaxHp) * 100));
 
   return (
-    <div className="select-none rounded-2xl border-2 border-white/25 bg-[#050507] p-3 font-mono text-white shadow-2xl">
+    <motion.div
+      key={screenShake}
+      animate={
+        screenShake > 0
+          ? { x: [0, -6, 6, -4, 4, 0], y: [0, 3, -3, 2, -2, 0] }
+          : { x: 0, y: 0 }
+      }
+      transition={{ duration: 0.28 }}
+      className="select-none rounded-2xl border-2 border-white/25 bg-[#040406] p-3 font-mono text-white shadow-2xl"
+    >
       {/* Top challenge strip */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
         <div className="flex items-center gap-1.5">
@@ -1686,6 +2106,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           {isDailyChallenge && save.clearedDate === todayKey && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">
               <CheckCircle2 className="h-3 w-3" /> Cleared
+            </span>
+          )}
+          {boss.hasRatings && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-pink-400/40 bg-pink-500/15 px-1.5 py-0.5 text-pink-300">
+              <Tv className="h-3 w-3" /> {ratings.toLocaleString()}
             </span>
           )}
         </div>
@@ -1718,65 +2143,78 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         </div>
       </div>
 
-      {/* Enemy Stage */}
-      <div className="relative mb-2 flex min-h-[108px] flex-col items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/90 px-2 py-2">
+      {/* Classic Dark-Emerald Undertale Encounter Stage */}
+      <div
+        className="relative mb-2 flex min-h-[146px] flex-col items-center justify-center overflow-hidden rounded-lg border border-white/15 px-3 py-2"
+        style={{
+          backgroundColor: '#020504',
+          backgroundImage: `
+            radial-gradient(circle at 50% 45%, ${boss.stageTint}, transparent 70%),
+            linear-gradient(rgba(34, 197, 94, 0.14) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(34, 197, 94, 0.14) 1px, transparent 1px)
+          `,
+          backgroundSize: '100% 100%, 26px 26px, 26px 26px',
+        }}
+      >
         <div className="mb-1 flex items-center gap-2 text-[11px]">
-          <span className={`font-bold tracking-wide ${isSpareReady ? 'text-yellow-300' : 'text-white'}`}>
+          <span className={`font-black tracking-wider ${isSpareReady ? 'text-yellow-300' : 'text-white'}`}>
             {boss.name.toUpperCase()}
           </span>
           <span className="text-[10px] text-zinc-400">— {boss.title}</span>
         </div>
 
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center gap-2">
           <BossPixelSprite
             bossId={boss.id}
             hurt={bossHurt}
             dodging={bossDodging}
             activeAttack={phase === 'dodge'}
             spareable={isSpareReady}
+            tired={boss.id === 'sans' && fightAttempts >= 3}
+            glintColor={glintColor}
           />
 
-          {/* Animated Diagonal Slash */}
+          {/* Curved Undertale Crescent Slash SVG */}
           <AnimatePresence>
             {slashAnim && (
               <motion.svg
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1.08 }}
                 exit={{ opacity: 0 }}
-                viewBox="0 0 100 100"
-                className="pointer-events-none absolute inset-0 h-24 w-24"
+                viewBox="0 0 120 110"
+                className="pointer-events-none absolute inset-0 h-32 w-32"
               >
                 <motion.line
-                  x1="15"
-                  y1="15"
-                  x2="85"
-                  y2="85"
-                  stroke="#EF4444"
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray="110"
-                  initial={{ strokeDashoffset: 110 }}
-                  animate={{ strokeDashoffset: 0 }}
-                  transition={{ duration: 0.2 }}
-                />
-                <motion.line
                   x1="18"
-                  y1="15"
-                  x2="85"
-                  y2="82"
-                  stroke="#FFFFFF"
-                  strokeWidth="3"
+                  y1="14"
+                  x2="102"
+                  y2="96"
+                  stroke="#EF4444"
+                  strokeWidth="9"
                   strokeLinecap="round"
-                  strokeDasharray="110"
-                  initial={{ strokeDashoffset: 110 }}
+                  strokeDasharray="130"
+                  initial={{ strokeDashoffset: 130 }}
                   animate={{ strokeDashoffset: 0 }}
                   transition={{ duration: 0.18 }}
+                />
+                <motion.line
+                  x1="21"
+                  y1="14"
+                  x2="100"
+                  y2="93"
+                  stroke="#FFFFFF"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeDasharray="130"
+                  initial={{ strokeDashoffset: 130 }}
+                  animate={{ strokeDashoffset: 0 }}
+                  transition={{ duration: 0.16 }}
                 />
               </motion.svg>
             )}
           </AnimatePresence>
 
-          {/* Boss Speech Bubble */}
+          {/* White Undertale Speech Bubble with Triangle Pointer */}
           <AnimatePresence>
             {bossQuip && (
               <motion.div
@@ -1784,8 +2222,9 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
                 initial={{ opacity: 0, scale: 0.85, x: -6 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0 }}
-                className="ml-2 max-w-[175px] rounded-xl border-2 border-white bg-white px-2.5 py-1.5 text-[10px] font-bold leading-tight text-black shadow-lg"
+                className="relative ml-2 max-w-[175px] rounded-xl border-2 border-black bg-white px-2.5 py-2 text-[10px] font-bold leading-tight text-black shadow-lg"
               >
+                <span className="absolute -left-2 top-3 h-0 w-0 border-y-[6px] border-r-[8px] border-y-transparent border-r-white" />
                 {bossQuip}
               </motion.div>
             )}
@@ -1796,11 +2235,11 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             {floatingDmg && (
               <motion.div
                 key={floatingDmg.key}
-                initial={{ opacity: 0, y: 6, scale: 0.8 }}
-                animate={{ opacity: 1, y: -26, scale: 1.15 }}
-                exit={{ opacity: 0, y: -38 }}
-                transition={{ duration: 0.45 }}
-                className="pointer-events-none absolute -top-2 font-black text-base drop-shadow-[0_2px_0_#000]"
+                initial={{ opacity: 0, y: 6, scale: 0.85 }}
+                animate={{ opacity: 1, y: -28, scale: 1.2 }}
+                exit={{ opacity: 0, y: -42 }}
+                transition={{ duration: 0.5 }}
+                className="pointer-events-none absolute -top-3 text-xl font-black tracking-tight drop-shadow-[0_2px_0_#000]"
                 style={{ color: floatingDmg.color }}
               >
                 {floatingDmg.text}
@@ -1809,37 +2248,60 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
           </AnimatePresence>
         </div>
 
-        {/* Enemy HP bar */}
-        <div className="mt-1 flex items-center gap-2">
-          <div className="h-2 w-28 overflow-hidden border border-white/40 bg-zinc-800">
-            <motion.div
-              className="h-full bg-[#22C55E]"
-              animate={{ width: `${hpPct}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-          {spareProgress > 0 && (
-            <span className="text-[10px] text-yellow-300">
+        {/* Enemy HP Bar overlay on hit (or spare progress pill) */}
+        <div className="mt-1 flex h-4 items-center gap-2">
+          {showEnemyHpBar || bossHurt ? (
+            <div className="h-2.5 w-32 overflow-hidden border border-white/60 bg-zinc-900">
+              <motion.div
+                className="h-full bg-[#22C55E]"
+                animate={{ width: `${hpPct}%` }}
+                transition={{ duration: 0.25 }}
+              />
+            </div>
+          ) : spareProgress > 0 ? (
+            <span className="text-[10px] font-bold text-yellow-300">
               MERCY {Math.min(spareProgress, boss.spareTarget)}/{boss.spareTarget}
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* Mode Hint Banner during bullet hell */}
-      <div className="mb-1 flex h-4 items-center justify-between text-[10px]">
-        <span className="truncate font-bold text-cyan-300">
-          {phase === 'dodge' && hudHint ? hudHint : phase === 'fight_aim' ? 'HIT GREEN CENTER TO CRIT!' : `TURN ${turn + 1}`}
-        </span>
+      {/* Mode Hint Banner + Asgore Glint Star Queue */}
+      <div className="mb-1 flex h-5 items-center justify-between gap-2 text-[10px]">
+        <div className="flex items-center gap-1.5 truncate font-bold text-cyan-300">
+          {glintQueue.length > 0 && phase === 'dodge' ? (
+            <span className="flex items-center gap-1">
+              SEQUENCE:
+              {glintQueue.map((c, idx) => (
+                <span
+                  key={idx}
+                  className="inline-block h-2.5 w-2.5 rotate-45 border border-white"
+                  style={{ backgroundColor: c === 'cyan' ? '#22D3EE' : '#FB923C' }}
+                />
+              ))}
+            </span>
+          ) : (
+            <span>
+              {phase === 'dodge' && hudHint
+                ? hudHint
+                : phase === 'fight_aim'
+                  ? 'HIT GREEN BULLSEYE FOR MAX CRIT!'
+                  : `TURN ${turn + 1}`}
+            </span>
+          )}
+        </div>
         {phase === 'dodge' && (
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-white/15">
+          <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-white/15">
             <div className="h-full bg-white transition-all duration-75" style={{ width: `${dodgeProgress * 100}%` }} />
           </div>
         )}
       </div>
 
-      {/* Classic Crisp White Battle Box */}
-      <div className="relative mx-auto flex h-[170px] w-full max-w-[340px] items-center justify-center overflow-hidden border-[3px] border-white bg-black">
+      {/* Dynamic Resizing Crisp White Battle Box */}
+      <div
+        className="relative mx-auto flex h-[175px] w-full items-center justify-center overflow-hidden border-[4px] border-white bg-black transition-[max-width] duration-200"
+        style={{ maxWidth: isShieldArena ? '224px' : '370px' }}
+      >
         {phase === 'menu' && (
           <div className="h-full w-full p-3 text-xs leading-relaxed text-white">
             <p>{displayedText}</p>
@@ -1932,7 +2394,7 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             className="flex h-full w-full flex-col justify-between p-3 text-left text-xs leading-relaxed text-white"
           >
             <span>{displayedText}</span>
-            <span className="self-end animate-pulse text-[11px] font-bold text-yellow-300">
+            <span className="animate-pulse self-end text-[11px] font-bold text-yellow-300">
               [Enter / Tap to continue ▶]
             </span>
           </button>
@@ -1944,16 +2406,17 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
             onClick={() => resolveFightStrike()}
             className="relative flex h-full w-full flex-col items-center justify-center bg-black p-3"
           >
-            {/* Undertale Eye Target Background */}
-            <div className="relative h-24 w-full overflow-hidden rounded-full border-2 border-white/40 bg-gradient-to-r from-red-600/45 via-emerald-500/50 to-red-600/45">
-              <div className="absolute inset-y-0 left-1/2 w-8 -translate-x-1/2 border-x-2 border-yellow-300 bg-emerald-400/40" />
+            {/* Undertale Oval Accuracy Target */}
+            <div className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-[999px] border-2 border-white/45 bg-gradient-to-r from-red-600/40 via-emerald-500/45 to-red-600/40">
+              <div className="h-full w-20 border-x border-amber-300/40 bg-amber-400/15" />
+              <div className="absolute inset-y-0 left-1/2 w-8 -translate-x-1/2 border-x-2 border-yellow-300 bg-emerald-400/50" />
               <div
-                className="absolute inset-y-0 w-2 -translate-x-1/2 bg-white shadow-[0_0_10px_#fff]"
+                className="absolute inset-y-0 w-2.5 -translate-x-1/2 border border-black bg-white shadow-[0_0_12px_#fff]"
                 style={{ left: `${aimPos * 100}%` }}
               />
             </div>
             <span className="mt-2 text-[11px] font-bold text-yellow-300">
-              {phase === 'fight_aim' ? '[SPACE / TAP NOW TO STRIKE!]' : 'STRIKING...'}
+              {phase === 'fight_aim' ? '[SPACE / TAP TO STRIKE!]' : 'STRIKING...'}
             </span>
           </button>
         )}
@@ -2048,16 +2511,20 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
         </div>
       )}
 
-      {/* Player HP Strip */}
+      {/* Player HP / Karma Bar Strip */}
       <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
         <span>YOU</span>
         <span>LV 19</span>
         <span className="text-[10px] text-yellow-300">HP</span>
-        <div className="h-3.5 w-24 overflow-hidden border border-white/30 bg-red-600">
-          <div className="h-full bg-[#FFE600] transition-all duration-150" style={{ width: `${playerHpPct}%` }} />
+        <div className="flex h-3.5 w-28 overflow-hidden border border-white/30 bg-red-600">
+          <div className="h-full bg-[#FFE600] transition-all duration-100" style={{ width: `${yellowPct}%` }} />
+          {boss.hasKarma && karma > 0 && (
+            <div className="h-full bg-[#D946EF] transition-all duration-100" style={{ width: `${krPct}%` }} />
+          )}
         </div>
-        <span>
-          {playerHp} / {PLAYER_MAX_HP}
+        {boss.hasKarma && <span className="text-[11px] font-black text-[#E879F9]">KR</span>}
+        <span className={karma > 0 ? 'text-[#E879F9]' : 'text-white'}>
+          {playerHp} / {boss.playerMaxHp}
         </span>
       </div>
 
@@ -2079,9 +2546,9 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
                 triggerMenuAction(action);
               }}
               onMouseEnter={() => setMenuIndex(idx)}
-              className={`flex items-center justify-center gap-1 border-2 py-1.5 text-[11px] font-black tracking-wide transition ${
+              className={`relative flex items-center justify-center gap-1 overflow-hidden border-2 py-1.5 text-[11px] font-black tracking-wide transition ${
                 lockedMercy
-                  ? 'border-zinc-700 text-zinc-600'
+                  ? 'border-zinc-700 bg-zinc-950 text-zinc-600'
                   : active
                     ? 'border-[#FFE600] bg-[#FFE600]/15 text-[#FFE600]'
                     : spareHighlight
@@ -2090,11 +2557,16 @@ export const SoulBattleGame: React.FC<{ share: Share }> = ({ share }) => {
               } disabled:opacity-60`}
             >
               <span>{active ? '♥' : icon}</span>
-              <span>{action}</span>
+              <span className={lockedMercy ? 'line-through' : ''}>{action}</span>
+              {lockedMercy && (
+                <svg viewBox="0 0 100 30" className="pointer-events-none absolute inset-0 h-full w-full">
+                  <line x1="12" y1="2" x2="88" y2="28" stroke="#EF4444" strokeWidth="2" opacity="0.6" />
+                </svg>
+              )}
             </button>
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 };

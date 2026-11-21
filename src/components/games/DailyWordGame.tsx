@@ -1,44 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, RotateCcw, Share2, Sparkles } from 'lucide-react';
+import {
+  Flame,
+  RotateCcw,
+  Share2,
+  Infinity as InfinityIcon,
+  Timer,
+  Calendar,
+  ShieldAlert,
+  Play,
+  SkipForward,
+} from 'lucide-react';
+import { CRYPTLE_ANSWER_WORDS, isValidEnglishWord } from './cryptleDictionary';
 
 type Share = (text: string) => void;
 type LetterState = 'correct' | 'present' | 'absent';
 type GameStatus = 'playing' | 'won' | 'lost';
+type CryptleMode = 'daily' | 'infinite' | 'blitz';
+type BlitzDuration = 60 | 180 | 300 | 600;
+type BlitzPhase = 'ready' | 'running' | 'ended';
 
-const STORAGE_KEY = 'skellytalk_cryptle_v1';
+const DAILY_STORAGE_KEY = 'skellytalk_cryptle_v1';
+const MODES_STORAGE_KEY = 'skellytalk_cryptle_modes_v1';
 
-const RAW_DAILY_WORDS = [
-  'SKULL', 'BONES', 'GHOST', 'CRYPT', 'FLAME', 'PRISM', 'SPARK', 'CRISP', 'BRAVE', 'CLOUD',
-  'DREAM', 'FROST', 'GLIDE', 'HEART', 'LIGHT', 'MAGIC', 'NIGHT', 'OCEAN', 'PEARL', 'QUEST',
-  'RIVER', 'SHINE', 'STORM', 'TIGER', 'VIVID', 'WORLD', 'ETHER', 'PIXEL', 'LUCID', 'ORBIT',
-  'SOLAR', 'LUNAR', 'COMET', 'PULSE', 'BLAZE', 'CHILL', 'DRIFT', 'EMBER', 'FAITH', 'GLEAM',
-  'HAVEN', 'IVORY', 'JOLLY', 'KARMA', 'LEMON', 'MIRTH', 'NOBLE', 'OASIS', 'PLUME', 'QUART',
-  'REALM', 'SCENT', 'THORN', 'ULTRA', 'VAULT', 'WHIRL', 'XENON', 'YACHT', 'ZESTY', 'AMBER',
-  'BLOOM', 'CROWN', 'DUSKY', 'ELITE', 'FABLE', 'GLORY', 'HONEY', 'INDEX', 'JOKER', 'KNIGHT',
-  'LATCH', 'MANGO', 'NEXUS', 'OPERA', 'PANDA', 'QUILL', 'RADAR', 'SABLE', 'TEMPO', 'UNIFY',
-  'VAPOR', 'WALTZ', 'YIELD', 'ZEBRA', 'ACORN', 'BADGE', 'CEDAR', 'DELTA', 'EAGLE', 'FJORD',
-  'GRACE', 'HASTE', 'IGLOO', 'JAUNT', 'KAYAK', 'LILAC', 'MAPLE', 'NINJA', 'OLIVE', 'PILOT',
-  'QUILT', 'ROBIN', 'SAUCE', 'TORCH', 'URBAN', 'VEXED', 'WHEAT', 'YOUTH', 'ZONED', 'ANGEL',
-  'BEACH', 'CHARM', 'DANCE', 'ENVOY', 'FLUTE', 'GRAPE', 'HUMOR', 'INLET', 'JELLY', 'KOALA',
-  'LOVER', 'MOCHA', 'NERVE', 'ONION', 'PIANO', 'QUIRK', 'ROAST', 'SHARK', 'TRAIL', 'USHER',
-  'VALVE', 'WHALE', 'YODEL', 'ZINGY', 'ALERT', 'BLINK', 'CANDY', 'DAISY', 'EARTH', 'FERNS',
-  'GIANT', 'HOVER', 'IRONY', 'JAZZY', 'KIOSK', 'LLAMA', 'MEDAL', 'NORTH', 'OTTER', 'PLAZA',
-  'QUOTA', 'RELIC', 'SCALE', 'TITAN', 'UMBRA', 'VERGE', 'WINDY', 'YEARN', 'ZIPPY', 'APPLE',
-  'BISON', 'CRANE', 'DONUT', 'ELFIN', 'FLOCK', 'GLOBE', 'HERON', 'IMAGE', 'JEWEL', 'KNEEL',
-  'LOTUS', 'MELON', 'NOVEL', 'ORCHID', 'PEACH', 'RALLY', 'SONIC', 'TULIP', 'UNITY', 'VIPER',
-  'WITCH', 'ACUTE', 'BLUSH', 'CLOVER', 'DODGE', 'EQUIP', 'FOCUS', 'GRIND', 'HYPER', 'IVORY',
-  'JUMBO', 'KNACK', 'LYRIC', 'MIRAGE', 'NYMPH', 'OMEGA', 'PHANT', 'QUICK', 'ROGUE', 'SIREN',
-  'SWIFT', 'TREND', 'UPSET', 'VALOR', 'WRECK', 'SYNTH', 'CRYPT', 'AUDIO', 'SLATE', 'RAISE',
-  'STARE', 'LEAST', 'RATIO', 'TONIC', 'CROWD', 'SPINE', 'GRAVE', 'SHADE', 'CLOAK', 'HAUNT',
-  'MUMMY', 'WRAITH', 'SPIRIT', 'BRAIN', 'TOOTH', 'NOISE', 'CHEER', 'GLINT', 'SHARD', 'CROWN',
-  'FORGE', 'BLAST', 'FROTH', 'MELLOW', 'CHIME', 'BRISK', 'MISTY', 'GLOWS', 'SWIRL', 'BLOOD',
+const BLITZ_DURATIONS: { sec: BlitzDuration; label: string }[] = [
+  { sec: 60, label: '1m' },
+  { sec: 180, label: '3m' },
+  { sec: 300, label: '5m' },
+  { sec: 600, label: '10m' },
 ];
-
-const DAILY_WORDS = Array.from(
-  new Set(RAW_DAILY_WORDS.map((w) => w.trim().toUpperCase()).filter((w) => /^[A-Z]{5}$/.test(w))),
-);
-const DAILY_WORD_SET = new Set(DAILY_WORDS);
 
 interface CryptleSave {
   dateKey: string;
@@ -49,6 +39,11 @@ interface CryptleSave {
   played: number;
   wins: number;
   lastWinDate: string | null;
+}
+
+interface CryptleModesSave {
+  infiniteBest: number;
+  blitzBest: Record<BlitzDuration, number>;
 }
 
 const formatDateKey = (d: Date): string => {
@@ -76,8 +71,8 @@ const hashDateKey = (key: string): number => {
 };
 
 export const getDailyCryptleWord = (dateKey: string): string => {
-  const idx = hashDateKey(`cryptle:${dateKey}`) % DAILY_WORDS.length;
-  return DAILY_WORDS[idx];
+  const idx = hashDateKey(`cryptle:${dateKey}`) % CRYPTLE_ANSWER_WORDS.length;
+  return CRYPTLE_ANSWER_WORDS[idx];
 };
 
 export const getCryptlePuzzleNumber = (dateKey: string): number => {
@@ -89,7 +84,7 @@ export const getCryptlePuzzleNumber = (dateKey: string): number => {
 
 export const hasCompletedDailyCryptleToday = (): boolean => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(DAILY_STORAGE_KEY);
     if (!raw) return false;
     const saved = JSON.parse(raw) as CryptleSave;
     return saved.dateKey === getCryptleDateKey() && (saved.status === 'won' || saved.status === 'lost');
@@ -123,12 +118,42 @@ const evaluateGuess = (guess: string, target: string): LetterState[] => {
   return result;
 };
 
-const isPlausibleWord = (word: string): boolean => {
-  if (!/^[A-Z]{5}$/.test(word)) return false;
-  if (DAILY_WORD_SET.has(word)) return true;
-  if (!/[AEIOUY]/.test(word)) return false;
-  if (/(.)\1{3,}/.test(word)) return false;
-  return true;
+const validateHardMode = (guess: string, priorGuesses: string[], target: string): string | null => {
+  if (priorGuesses.length === 0) return null;
+
+  const ord = ['1st', '2nd', '3rd', '4th', '5th'];
+  const minCounts: Record<string, number> = {};
+
+  for (const prev of priorGuesses) {
+    const evals = evaluateGuess(prev, target);
+    const rowCounts: Record<string, number> = {};
+
+    for (let i = 0; i < 5; i++) {
+      if (evals[i] === 'correct' && guess[i] !== prev[i]) {
+        return `${ord[i]} letter must be ${prev[i]}`;
+      }
+      if (evals[i] === 'correct' || evals[i] === 'present') {
+        const ch = prev[i];
+        rowCounts[ch] = (rowCounts[ch] ?? 0) + 1;
+      }
+    }
+
+    for (const [ch, cnt] of Object.entries(rowCounts)) {
+      minCounts[ch] = Math.max(minCounts[ch] ?? 0, cnt);
+    }
+  }
+
+  for (const [ch, needed] of Object.entries(minCounts)) {
+    let have = 0;
+    for (let i = 0; i < guess.length; i++) {
+      if (guess[i] === ch) have++;
+    }
+    if (have < needed) {
+      return needed > 1 ? `Guess must contain ${needed}× ${ch}` : `Guess must contain ${ch}`;
+    }
+  }
+
+  return null;
 };
 
 const KEYBOARD_ROWS = [
@@ -142,7 +167,7 @@ const PRIORITY: Record<LetterState, number> = { absent: 1, present: 2, correct: 
 const loadDailySave = (today: string): CryptleSave => {
   const yesterday = getYesterdayKey();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(DAILY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as CryptleSave;
       if (parsed.dateKey === today) {
@@ -161,7 +186,7 @@ const loadDailySave = (today: string): CryptleSave => {
       };
     }
   } catch {
-    // ignore storage parse failures
+    // ignore storage parse errors
   }
   return {
     dateKey: today,
@@ -175,6 +200,30 @@ const loadDailySave = (today: string): CryptleSave => {
   };
 };
 
+const loadModesSave = (): CryptleModesSave => {
+  try {
+    const raw = localStorage.getItem(MODES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<CryptleModesSave>;
+      return {
+        infiniteBest: parsed.infiniteBest ?? 0,
+        blitzBest: {
+          60: parsed.blitzBest?.[60] ?? 0,
+          180: parsed.blitzBest?.[180] ?? 0,
+          300: parsed.blitzBest?.[300] ?? 0,
+          600: parsed.blitzBest?.[600] ?? 0,
+        },
+      };
+    }
+  } catch {
+    // ignore parse failures
+  }
+  return {
+    infiniteBest: 0,
+    blitzBest: { 60: 0, 180: 0, 300: 0, 600: 0 },
+  };
+};
+
 const getCountdownToMidnight = (): string => {
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
@@ -185,20 +234,54 @@ const getCountdownToMidnight = (): string => {
   return `${h}:${m}:${s}`;
 };
 
+const formatTimer = (totalSec: number): string => {
+  const s = Math.max(0, totalSec);
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+};
+
 export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
   const today = getCryptleDateKey();
   const puzzleNumber = getCryptlePuzzleNumber(today);
   const dailyTarget = useMemo(() => getDailyCryptleWord(today), [today]);
 
-  const [dailySave, setDailySave] = useState<CryptleSave>(() => loadDailySave(today));
-  const [practiceMode, setPracticeMode] = useState(false);
-  const [practiceTarget, setPracticeTarget] = useState<string>(() => {
-    const candidates = DAILY_WORDS.filter((w) => w !== dailyTarget);
-    return candidates[Math.floor(Math.random() * candidates.length)] ?? 'SKULL';
-  });
-  const [practiceGuesses, setPracticeGuesses] = useState<string[]>([]);
-  const [practiceStatus, setPracticeStatus] = useState<GameStatus>('playing');
+  const [mode, setMode] = useState<CryptleMode>('daily');
+  const [hardMode, setHardMode] = useState(false);
 
+  const [dailySave, setDailySave] = useState<CryptleSave>(() => loadDailySave(today));
+  const [modesSave, setModesSave] = useState<CryptleModesSave>(loadModesSave);
+
+  const recentWordsRef = useRef<string[]>([dailyTarget]);
+  const pickFreshWord = useCallback((exclude?: string) => {
+    const recent = new Set(recentWordsRef.current.slice(-30));
+    if (exclude) recent.add(exclude);
+    const pool = CRYPTLE_ANSWER_WORDS.filter((w) => !recent.has(w));
+    const source = pool.length > 0 ? pool : CRYPTLE_ANSWER_WORDS;
+    const chosen = source[Math.floor(Math.random() * source.length)] ?? 'SKULL';
+    recentWordsRef.current.push(chosen);
+    return chosen;
+  }, []);
+
+  // Infinite state
+  const [infTarget, setInfTarget] = useState<string>(() => pickFreshWord(dailyTarget));
+  const [infGuesses, setInfGuesses] = useState<string[]>([]);
+  const [infStatus, setInfStatus] = useState<GameStatus>('playing');
+  const [infStreak, setInfStreak] = useState(0);
+  const [infRoundId, setInfRoundId] = useState(1);
+
+  // Blitz (Timed Infinite) state
+  const [blitzDuration, setBlitzDuration] = useState<BlitzDuration>(300);
+  const [blitzPhase, setBlitzPhase] = useState<BlitzPhase>('ready');
+  const [blitzSecondsLeft, setBlitzSecondsLeft] = useState<number>(300);
+  const [blitzTarget, setBlitzTarget] = useState<string>(() => pickFreshWord(dailyTarget));
+  const [blitzGuesses, setBlitzGuesses] = useState<string[]>([]);
+  const [blitzStatus, setBlitzStatus] = useState<GameStatus>('playing');
+  const [blitzSolved, setBlitzSolved] = useState(0);
+  const [blitzAttempted, setBlitzAttempted] = useState(0);
+  const [blitzRoundId, setBlitzRoundId] = useState(1);
+
+  // UI & animation states
   const [currentGuess, setCurrentGuess] = useState('');
   const [shakeRow, setShakeRow] = useState<number | null>(null);
   const [flippingRow, setFlippingRow] = useState<number | null>(null);
@@ -208,20 +291,38 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
 
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const flipTimer = useRef<ReturnType<typeof setTimeout>>();
+  const advanceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const blitzPhaseRef = useRef<BlitzPhase>(blitzPhase);
+  blitzPhaseRef.current = blitzPhase;
 
-  const target = practiceMode ? practiceTarget : dailyTarget;
-  const guesses = practiceMode ? practiceGuesses : dailySave.guesses;
-  const status = practiceMode ? practiceStatus : dailySave.status;
+  const target =
+    mode === 'daily' ? dailyTarget : mode === 'infinite' ? infTarget : blitzTarget;
+  const guesses =
+    mode === 'daily' ? dailySave.guesses : mode === 'infinite' ? infGuesses : blitzGuesses;
+  const status =
+    mode === 'daily' ? dailySave.status : mode === 'infinite' ? infStatus : blitzStatus;
+  const roundKey =
+    mode === 'daily'
+      ? `daily-${dailySave.dateKey}`
+      : mode === 'infinite'
+        ? `inf-${infRoundId}`
+        : `blitz-${blitzRoundId}`;
 
   useEffect(() => {
-    if (!practiceMode) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(dailySave));
-      } catch {
-        // ignore quota errors
-      }
+    try {
+      localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify(dailySave));
+    } catch {
+      // ignore quota errors
     }
-  }, [dailySave, practiceMode]);
+  }, [dailySave]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODES_STORAGE_KEY, JSON.stringify(modesSave));
+    } catch {
+      // ignore quota errors
+    }
+  }, [modesSave]);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(getCountdownToMidnight()), 1000);
@@ -229,8 +330,25 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
       clearInterval(id);
       clearTimeout(toastTimer.current);
       clearTimeout(flipTimer.current);
+      clearTimeout(advanceTimer.current);
     };
   }, []);
+
+  // Blitz 1-second countdown interval
+  useEffect(() => {
+    if (mode !== 'blitz' || blitzPhase !== 'running') return;
+    const id = setInterval(() => {
+      setBlitzSecondsLeft((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [blitzPhase, mode]);
+
+  useEffect(() => {
+    if (mode === 'blitz' && blitzPhase === 'running' && blitzSecondsLeft <= 0) {
+      setBlitzPhase('ended');
+      clearTimeout(advanceTimer.current);
+    }
+  }, [blitzPhase, blitzSecondsLeft, mode]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -243,7 +361,90 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
     setTimeout(() => setShakeRow((prev) => (prev === rowIdx ? null : prev)), 460);
   }, []);
 
+  const nextInfiniteWord = useCallback(() => {
+    clearTimeout(flipTimer.current);
+    const next = pickFreshWord(infTarget);
+    setInfTarget(next);
+    setInfGuesses([]);
+    setInfStatus('playing');
+    setInfRoundId((n) => n + 1);
+    setCurrentGuess('');
+    setFlippingRow(null);
+    setWonRow(null);
+    setToast(null);
+  }, [infTarget, pickFreshWord]);
+
+  const startBlitzRun = useCallback(
+    (dur: BlitzDuration = blitzDuration) => {
+      clearTimeout(flipTimer.current);
+      clearTimeout(advanceTimer.current);
+      const next = pickFreshWord();
+      setBlitzDuration(dur);
+      setBlitzSecondsLeft(dur);
+      setBlitzPhase('running');
+      setBlitzTarget(next);
+      setBlitzGuesses([]);
+      setBlitzStatus('playing');
+      setBlitzSolved(0);
+      setBlitzAttempted(0);
+      setBlitzRoundId((n) => n + 1);
+      setCurrentGuess('');
+      setFlippingRow(null);
+      setWonRow(null);
+      setToast(`${dur / 60}m Blitz Started!`);
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 1200);
+    },
+    [blitzDuration, pickFreshWord],
+  );
+
+  const selectBlitzDuration = (dur: BlitzDuration) => {
+    clearTimeout(flipTimer.current);
+    clearTimeout(advanceTimer.current);
+    setBlitzDuration(dur);
+    setBlitzSecondsLeft(dur);
+    setBlitzPhase('ready');
+    setBlitzTarget(pickFreshWord());
+    setBlitzGuesses([]);
+    setBlitzStatus('playing');
+    setBlitzSolved(0);
+    setBlitzAttempted(0);
+    setBlitzRoundId((n) => n + 1);
+    setCurrentGuess('');
+    setFlippingRow(null);
+    setWonRow(null);
+    setToast(null);
+  };
+
+  const skipBlitzWord = () => {
+    if (mode !== 'blitz' || blitzPhase !== 'running') return;
+    clearTimeout(flipTimer.current);
+    clearTimeout(advanceTimer.current);
+    showToast(`Skipped (${blitzTarget}) · -15s`);
+    setBlitzSecondsLeft((s) => Math.max(0, s - 15));
+    setBlitzAttempted((a) => a + 1);
+    setBlitzTarget(pickFreshWord(blitzTarget));
+    setBlitzGuesses([]);
+    setBlitzStatus('playing');
+    setBlitzRoundId((n) => n + 1);
+    setCurrentGuess('');
+    setFlippingRow(null);
+    setWonRow(null);
+  };
+
+  const switchMode = (nextMode: CryptleMode) => {
+    if (nextMode === mode) return;
+    clearTimeout(flipTimer.current);
+    clearTimeout(advanceTimer.current);
+    setMode(nextMode);
+    setCurrentGuess('');
+    setFlippingRow(null);
+    setWonRow(null);
+    setToast(null);
+  };
+
   const submitGuess = useCallback(() => {
+    if (mode === 'blitz' && blitzPhase === 'ended') return;
     if (status !== 'playing' || flippingRow !== null) return;
 
     if (currentGuess.length < 5) {
@@ -252,10 +453,19 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
       return;
     }
 
-    if (!isPlausibleWord(currentGuess)) {
+    if (!isValidEnglishWord(currentGuess)) {
       triggerShake(guesses.length);
-      showToast('Enter a valid 5-letter word');
+      showToast('Not in word list');
       return;
+    }
+
+    if (hardMode && mode !== 'blitz') {
+      const violation = validateHardMode(currentGuess, guesses, target);
+      if (violation) {
+        triggerShake(guesses.length);
+        showToast(violation);
+        return;
+      }
     }
 
     const rowIdx = guesses.length;
@@ -266,10 +476,7 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
     setFlippingRow(rowIdx);
     setCurrentGuess('');
 
-    if (practiceMode) {
-      setPracticeGuesses(nextGuesses);
-      setPracticeStatus(nextStatus);
-    } else {
+    if (mode === 'daily') {
       setDailySave((prev) => {
         const finishedNow = prev.status === 'playing' && nextStatus !== 'playing';
         const nextPlayed = finishedNow ? prev.played + 1 : prev.played;
@@ -293,23 +500,110 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
           lastWinDate: wonNow ? today : prev.lastWinDate,
         };
       });
+    } else if (mode === 'infinite') {
+      setInfGuesses(nextGuesses);
+      setInfStatus(nextStatus);
+      if (solved) {
+        const nextStreakVal = infStreak + 1;
+        setInfStreak(nextStreakVal);
+        setModesSave((prev) => ({
+          ...prev,
+          infiniteBest: Math.max(prev.infiniteBest, nextStreakVal),
+        }));
+      } else if (nextStatus === 'lost') {
+        setInfStreak(0);
+      }
+    } else {
+      // Blitz mode
+      setBlitzGuesses(nextGuesses);
+      setBlitzStatus(nextStatus);
+      if (solved) {
+        const nextSolved = blitzSolved + 1;
+        setBlitzSolved(nextSolved);
+        setBlitzAttempted((a) => a + 1);
+        setModesSave((prev) => ({
+          ...prev,
+          blitzBest: {
+            ...prev.blitzBest,
+            [blitzDuration]: Math.max(prev.blitzBest[blitzDuration] ?? 0, nextSolved),
+          },
+        }));
+      } else if (nextStatus === 'lost') {
+        setBlitzAttempted((a) => a + 1);
+      }
     }
 
+    const revealDelay = mode === 'blitz' ? 560 : 780;
     clearTimeout(flipTimer.current);
     flipTimer.current = setTimeout(() => {
       setFlippingRow(null);
       if (solved) {
         setWonRow(rowIdx);
-        const cheers = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
-        showToast(cheers[rowIdx] ?? 'Nice!');
+        if (mode === 'blitz') {
+          showToast('+1 Word!');
+          clearTimeout(advanceTimer.current);
+          advanceTimer.current = setTimeout(() => {
+            if (blitzPhaseRef.current !== 'running') return;
+            setBlitzTarget((curT) => pickFreshWord(curT));
+            setBlitzGuesses([]);
+            setBlitzStatus('playing');
+            setBlitzRoundId((n) => n + 1);
+            setCurrentGuess('');
+            setWonRow(null);
+          }, 520);
+        } else {
+          const cheers = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
+          showToast(cheers[rowIdx] ?? 'Nice!');
+        }
       } else if (nextStatus === 'lost') {
         showToast(`Word was ${target}`);
+        if (mode === 'blitz') {
+          clearTimeout(advanceTimer.current);
+          advanceTimer.current = setTimeout(() => {
+            if (blitzPhaseRef.current !== 'running') return;
+            setBlitzTarget((curT) => pickFreshWord(curT));
+            setBlitzGuesses([]);
+            setBlitzStatus('playing');
+            setBlitzRoundId((n) => n + 1);
+            setCurrentGuess('');
+            setWonRow(null);
+          }, 850);
+        }
       }
-    }, 820);
-  }, [currentGuess, flippingRow, guesses, practiceMode, showToast, status, target, today, triggerShake]);
+    }, revealDelay);
+  }, [
+    blitzDuration,
+    blitzPhase,
+    blitzSolved,
+    currentGuess,
+    flippingRow,
+    guesses,
+    hardMode,
+    infStreak,
+    mode,
+    pickFreshWord,
+    showToast,
+    status,
+    target,
+    today,
+    triggerShake,
+  ]);
 
   const handleKey = useCallback(
     (key: string) => {
+      if (mode === 'blitz' && blitzPhase === 'ended') return;
+      if (mode === 'infinite' && status !== 'playing' && key === 'ENTER' && flippingRow === null) {
+        nextInfiniteWord();
+        return;
+      }
+      if (mode === 'blitz' && blitzPhase === 'ready' && (/^[A-Z]$/.test(key) || key === 'ENTER')) {
+        // Start Blitz immediately on first keystroke!
+        setBlitzPhase('running');
+        if (/^[A-Z]$/.test(key)) {
+          setCurrentGuess(key);
+        }
+        return;
+      }
       if (status !== 'playing' || flippingRow !== null) return;
       if (key === 'ENTER') {
         submitGuess();
@@ -323,7 +617,7 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
         setCurrentGuess((g) => g + key);
       }
     },
-    [currentGuess.length, flippingRow, status, submitGuess],
+    [blitzPhase, currentGuess.length, flippingRow, mode, nextInfiniteWord, status, submitGuess],
   );
 
   useEffect(() => {
@@ -348,7 +642,6 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
   const keyStates = useMemo(() => {
     const map: Record<string, LetterState> = {};
     guesses.forEach((g, rIdx) => {
-      // Wait visually until current row finishes flipping
       if (flippingRow === rIdx) return;
       const evals = evaluatedRows[rIdx];
       for (let i = 0; i < 5; i++) {
@@ -362,84 +655,190 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
     return map;
   }, [evaluatedRows, flippingRow, guesses]);
 
-  const startNewPractice = () => {
-    const candidates = DAILY_WORDS.filter((w) => w !== practiceTarget && w !== dailyTarget);
-    const next = candidates[Math.floor(Math.random() * candidates.length)] ?? 'GHOST';
-    setPracticeMode(true);
-    setPracticeTarget(next);
-    setPracticeGuesses([]);
-    setPracticeStatus('playing');
-    setCurrentGuess('');
-    setWonRow(null);
-    setFlippingRow(null);
-    setToast(null);
-  };
-
   const handleShare = () => {
+    if (mode === 'blitz') {
+      const durLabel = BLITZ_DURATIONS.find((d) => d.sec === blitzDuration)?.label ?? `${blitzDuration / 60}m`;
+      share(`⏱️ Cryptle Blitz (${durLabel}) — Solved ${blitzSolved} word${blitzSolved === 1 ? '' : 's'}!`);
+      return;
+    }
     const lines = evaluatedRows.map((row) =>
       row.map((s) => (s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛')).join(''),
     );
-    const header = practiceMode
-      ? `🦴 Cryptle (Practice) — ${status === 'won' ? `${guesses.length}/6` : 'X/6'}`
-      : `🦴 Cryptle #${puzzleNumber} — ${status === 'won' ? `${guesses.length}/6` : 'X/6'}${
-          dailySave.streak > 1 ? ` · 🔥${dailySave.streak}` : ''
-        }`;
+    const header =
+      mode === 'infinite'
+        ? `♾️ Cryptle Infinite — Streak 🔥${infStreak} (${status === 'won' ? `${guesses.length}/6` : 'X/6'})`
+        : `🦴 Cryptle #${puzzleNumber} — ${status === 'won' ? `${guesses.length}/6` : 'X/6'}${
+            dailySave.streak > 1 ? ` · 🔥${dailySave.streak}` : ''
+          }`;
     share(`${header}\n${lines.join('\n')}`);
   };
 
   const winRate = dailySave.played > 0 ? Math.round((dailySave.wins / dailySave.played) * 100) : 0;
+  const blitzBestForDur = modesSave.blitzBest[blitzDuration] ?? 0;
+  const blitzUrgent = mode === 'blitz' && blitzPhase === 'running' && blitzSecondsLeft <= 15;
 
   return (
     <div className="relative flex flex-col items-center select-none">
-      {/* Header bar */}
-      <div className="mb-2.5 flex w-full items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">
-            {practiceMode ? 'Practice Word' : `Cryptle #${puzzleNumber}`}
-          </span>
-          {dailySave.streak > 0 && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-300">
-              <Flame className="h-3 w-3" /> {dailySave.streak}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {practiceMode ? (
-            <>
+      {/* Mode selector tabs */}
+      <div className="mb-2 grid w-full grid-cols-3 gap-1 rounded-2xl bg-black/10 p-1 text-[11px] font-bold">
+        {[
+          { id: 'daily' as const, label: 'Daily', icon: <Calendar className="h-3 w-3" /> },
+          { id: 'infinite' as const, label: 'Infinite', icon: <InfinityIcon className="h-3 w-3" /> },
+          { id: 'blitz' as const, label: 'Timed Blitz', icon: <Timer className="h-3 w-3" /> },
+        ].map((tab) => {
+          const active = mode === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => switchMode(tab.id)}
+              className={`flex items-center justify-center gap-1 rounded-xl py-1.5 transition ${
+                active
+                  ? 'bg-[#22C55E] text-white shadow-sm'
+                  : 'opacity-75 hover:bg-emerald-500/15 hover:opacity-100'
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Mode info & controls bar */}
+      <div className="mb-1.5 flex w-full flex-wrap items-center justify-between gap-1.5 text-xs">
+        {mode === 'daily' && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">
+                Cryptle #{puzzleNumber}
+              </span>
+              {dailySave.streak > 0 && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-300">
+                  <Flame className="h-3 w-3" /> {dailySave.streak}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setHardMode((h) => !h)}
+              title="Revealed hints must be used in subsequent guesses"
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold transition ${
+                hardMode ? 'bg-rose-500 text-white' : 'bg-emerald-500/15 opacity-75 hover:opacity-100'
+              }`}
+            >
+              <ShieldAlert className="h-3 w-3" /> Hard
+            </button>
+          </>
+        )}
+
+        {mode === 'infinite' && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-2.5 py-0.5 font-bold text-amber-700 dark:text-amber-300">
+                <Flame className="h-3 w-3" /> Streak {infStreak}
+              </span>
+              <span className="rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-semibold opacity-75">
+                Best {modesSave.infiniteBest}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={startNewPractice}
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 font-semibold hover:bg-emerald-500/25"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setHardMode((h) => !h)}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition ${
+                  hardMode ? 'bg-rose-500 text-white' : 'bg-emerald-500/15 opacity-75 hover:opacity-100'
+                }`}
+              >
+                <ShieldAlert className="h-3 w-3" /> Hard
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={nextInfiniteWord}
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold hover:bg-emerald-500/25"
               >
                 <RotateCcw className="h-3 w-3" /> New
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPracticeMode(false);
-                  setCurrentGuess('');
-                  setWonRow(null);
-                  setToast(null);
-                }}
-                className="rounded-full bg-emerald-500/15 px-2.5 py-1 font-semibold hover:bg-emerald-500/25"
-              >
-                Daily
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={startNewPractice}
-              className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 font-semibold hover:bg-emerald-500/25"
-            >
-              <Sparkles className="h-3 w-3" /> Practice
-            </button>
-          )}
-        </div>
+            </div>
+          </>
+        )}
+
+        {mode === 'blitz' && (
+          <div className="flex w-full flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                {BLITZ_DURATIONS.map((d) => (
+                  <button
+                    key={d.sec}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectBlitzDuration(d.sec)}
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-bold transition ${
+                      blitzDuration === d.sec
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'bg-emerald-500/15 hover:bg-emerald-500/25'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 font-bold text-emerald-700 dark:text-emerald-300">
+                  Solved: {blitzSolved}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 font-mono text-xs font-extrabold ${
+                    blitzUrgent
+                      ? 'animate-pulse bg-rose-500 text-white'
+                      : 'bg-black/15 dark:bg-white/15'
+                  }`}
+                >
+                  {formatTimer(blitzSecondsLeft)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[11px] opacity-80">
+              <span>Best: {blitzBestForDur} words · Attempted: {blitzAttempted}</span>
+              {blitzPhase === 'ready' ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => startBlitzRun(blitzDuration)}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-2.5 py-0.5 font-bold text-white"
+                >
+                  <Play className="h-3 w-3" /> Start
+                </button>
+              ) : blitzPhase === 'running' ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={skipBlitzWord}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 font-bold hover:bg-amber-500/30"
+                >
+                  <SkipForward className="h-3 w-3" /> Skip (-15s)
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => startBlitzRun(blitzDuration)}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-2.5 py-0.5 font-bold text-white"
+                >
+                  <RotateCcw className="h-3 w-3" /> Retry
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating toast */}
-      <div className="relative h-6 w-full flex items-center justify-center mb-1">
+      <div className="relative mb-1 flex h-6 w-full items-center justify-center">
         <AnimatePresence>
           {toast && (
             <motion.div
@@ -456,132 +855,179 @@ export const DailyWordGame: React.FC<{ share: Share }> = ({ share }) => {
       </div>
 
       {/* 6x5 Board */}
-      <div className="grid gap-1.5" style={{ perspective: '700px' }}>
-        {Array.from({ length: 6 }, (_, r) => {
-          const isSubmitted = r < guesses.length;
-          const isCurrent = r === guesses.length && status === 'playing';
-          const word = isSubmitted ? guesses[r] : isCurrent ? currentGuess : '';
-          const evals = isSubmitted ? evaluatedRows[r] : null;
-          const isFlipping = flippingRow === r;
-          const isWinWave = wonRow === r;
+      <div className="relative">
+        <div className="grid gap-1.5" style={{ perspective: '700px' }}>
+          {Array.from({ length: 6 }, (_, r) => {
+            const isSubmitted = r < guesses.length;
+            const isCurrent =
+              r === guesses.length && status === 'playing' && !(mode === 'blitz' && blitzPhase === 'ended');
+            const word = isSubmitted ? guesses[r] : isCurrent ? currentGuess : '';
+            const evals = isSubmitted ? evaluatedRows[r] : null;
+            const isFlipping = flippingRow === r;
+            const isWinWave = wonRow === r;
 
-          return (
-            <motion.div
-              key={`${practiceMode ? practiceTarget : dailySave.dateKey}-${r}`}
-              className="grid grid-cols-5 gap-1.5"
-              animate={shakeRow === r ? { x: [0, -8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
-              transition={{ duration: 0.42 }}
-            >
-              {Array.from({ length: 5 }, (_, c) => {
-                const ch = word[c] ?? '';
-                const state = evals?.[c];
-                const colorCls =
-                  state === 'correct'
-                    ? 'bg-[#22C55E] border-[#22C55E] text-white shadow-sm shadow-emerald-500/30'
-                    : state === 'present'
-                      ? 'bg-amber-500 border-amber-500 text-white shadow-sm shadow-amber-500/30'
-                      : 'bg-slate-600/80 border-slate-500/70 text-white dark:bg-zinc-700 dark:border-zinc-600';
+            return (
+              <motion.div
+                key={`${roundKey}-${r}`}
+                className="grid grid-cols-5 gap-1.5"
+                animate={shakeRow === r ? { x: [0, -8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                {Array.from({ length: 5 }, (_, c) => {
+                  const ch = word[c] ?? '';
+                  const state = evals?.[c];
+                  const colorCls =
+                    state === 'correct'
+                      ? 'bg-[#22C55E] border-[#22C55E] text-white shadow-sm shadow-emerald-500/30'
+                      : state === 'present'
+                        ? 'bg-amber-500 border-amber-500 text-white shadow-sm shadow-amber-500/30'
+                        : 'bg-slate-600/80 border-slate-500/70 text-white dark:bg-zinc-700 dark:border-zinc-600';
 
-                return (
-                  <motion.div
-                    key={c}
-                    className="relative h-11 w-11 sm:h-12 sm:w-12"
-                    animate={
-                      isWinWave
-                        ? { y: [0, -10, 0] }
-                        : isCurrent && ch
-                          ? { scale: [0.86, 1.13, 1] }
-                          : { y: 0, scale: 1 }
-                    }
-                    transition={
-                      isWinWave
-                        ? { duration: 0.42, delay: c * 0.065, ease: 'easeOut' }
-                        : { duration: 0.14 }
-                    }
-                    style={{ perspective: '600px' }}
-                  >
+                  return (
                     <motion.div
-                      className="relative h-full w-full"
-                      initial={false}
-                      animate={{ rotateX: isSubmitted ? 180 : 0 }}
-                      transition={
-                        isFlipping
-                          ? { duration: 0.48, delay: c * 0.1, ease: [0.4, 0, 0.2, 1] }
-                          : { duration: 0 }
+                      key={c}
+                      className="relative h-10 w-10 sm:h-11 sm:w-11"
+                      animate={
+                        isWinWave
+                          ? { y: [0, -10, 0] }
+                          : isCurrent && ch
+                            ? { scale: [0.86, 1.13, 1] }
+                            : { y: 0, scale: 1 }
                       }
-                      style={{ transformStyle: 'preserve-3d' }}
+                      transition={
+                        isWinWave
+                          ? { duration: 0.36, delay: c * 0.055, ease: 'easeOut' }
+                          : { duration: 0.12 }
+                      }
+                      style={{ perspective: '600px' }}
                     >
-                      {/* Front face (unsubmitted / typing) */}
-                      <div
-                        className={`absolute inset-0 flex items-center justify-center rounded-lg border-2 text-lg font-extrabold tracking-wider transition-colors ${
-                          ch
-                            ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-950 dark:border-white/55 dark:text-white'
-                            : 'border-emerald-950/15 bg-black/5 dark:border-white/15 dark:bg-white/5'
-                        }`}
-                        style={{
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden',
-                        }}
+                      <motion.div
+                        className="relative h-full w-full"
+                        initial={false}
+                        animate={{ rotateX: isSubmitted ? 180 : 0 }}
+                        transition={
+                          isFlipping
+                            ? {
+                                duration: mode === 'blitz' ? 0.36 : 0.46,
+                                delay: c * (mode === 'blitz' ? 0.065 : 0.095),
+                                ease: [0.4, 0, 0.2, 1],
+                              }
+                            : { duration: 0 }
+                        }
+                        style={{ transformStyle: 'preserve-3d' }}
                       >
-                        {ch}
-                      </div>
+                        <div
+                          className={`absolute inset-0 flex items-center justify-center rounded-lg border-2 text-base font-extrabold tracking-wider transition-colors sm:text-lg ${
+                            ch
+                              ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-950 dark:border-white/55 dark:text-white'
+                              : 'border-emerald-950/15 bg-black/5 dark:border-white/15 dark:bg-white/5'
+                          }`}
+                          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                        >
+                          {ch}
+                        </div>
 
-                      {/* Back face (revealed state) */}
-                      <div
-                        className={`absolute inset-0 flex items-center justify-center rounded-lg border-2 text-lg font-extrabold tracking-wider ${colorCls}`}
-                        style={{
-                          transform: 'rotateX(180deg)',
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden',
-                        }}
-                      >
-                        {ch}
-                      </div>
+                        <div
+                          className={`absolute inset-0 flex items-center justify-center rounded-lg border-2 text-base font-extrabold tracking-wider sm:text-lg ${colorCls}`}
+                          style={{
+                            transform: 'rotateX(180deg)',
+                            backfaceVisibility: 'hidden',
+                            WebkitBackfaceVisibility: 'hidden',
+                          }}
+                        >
+                          {ch}
+                        </div>
+                      </motion.div>
                     </motion.div>
-                  </motion.div>
-                );
-              })}
+                  );
+                })}
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Blitz Time's Up Overlay */}
+        <AnimatePresence>
+          {mode === 'blitz' && blitzPhase === 'ended' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-black/75 p-4 text-center text-white backdrop-blur-sm"
+            >
+              <p className="text-base font-black text-amber-300">TIME&apos;S UP!</p>
+              <p className="mt-1 text-2xl font-extrabold text-[#22C55E]">{blitzSolved} solved</p>
+              <p className="mt-0.5 text-xs text-zinc-300">
+                Last word: <span className="font-bold text-white">{blitzTarget}</span> · Best: {blitzBestForDur}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => startBlitzRun(blitzDuration)}
+                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold hover:bg-white/25"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Play Again
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  <Share2 className="h-3.5 w-3.5" /> Share
+                </button>
+              </div>
             </motion.div>
-          );
-        })}
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Completion summary or countdown */}
+      {/* Daily & Infinite Round Completion Summary */}
       <AnimatePresence>
-        {status !== 'playing' && flippingRow === null && (
+        {mode !== 'blitz' && status !== 'playing' && flippingRow === null && (
           <motion.div
             initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8 }}
-            className="mt-3 flex w-full flex-col gap-2 rounded-2xl bg-emerald-500/10 p-2.5 text-xs"
+            className="mt-2.5 flex w-full items-center justify-between gap-2 rounded-2xl bg-emerald-500/10 p-2.5 text-xs"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="font-bold">
-                  {status === 'won' ? `Solved in ${guesses.length}/6!` : `Answer: ${target}`}
+            <div>
+              <p className="font-bold">
+                {status === 'won' ? `Solved in ${guesses.length}/6!` : `Answer: ${target}`}
+              </p>
+              {mode === 'daily' ? (
+                <p className="text-[11px] opacity-70">
+                  Played {dailySave.played} · Win {winRate}% · Best 🔥{dailySave.maxStreak} · Next {countdown}
                 </p>
-                {!practiceMode && (
-                  <p className="text-[11px] opacity-70">
-                    Played {dailySave.played} · Win {winRate}% · Best 🔥{dailySave.maxStreak} · Next in {countdown}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
+              ) : (
+                <p className="text-[11px] opacity-70">
+                  Streak 🔥{infStreak} · Best {modesSave.infiniteBest} · Press Enter for next
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {mode === 'infinite' && (
                 <button
                   type="button"
-                  onClick={handleShare}
-                  className="inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-3 py-1.5 font-semibold text-white shadow hover:brightness-105"
+                  onClick={nextInfiniteWord}
+                  className="rounded-full bg-emerald-500/20 px-3 py-1.5 font-bold hover:bg-emerald-500/30"
                 >
-                  <Share2 className="h-3 w-3" /> Share
+                  Next Word
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-3 py-1.5 font-semibold text-white shadow hover:brightness-105"
+              >
+                <Share2 className="h-3 w-3" /> Share
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* On-screen QWERTY keyboard */}
-      <div className="mt-3 flex w-full flex-col gap-1">
+      <div className="mt-2.5 flex w-full flex-col gap-1">
         {KEYBOARD_ROWS.map((row, rowIndex) => (
           <div key={rowIndex} className="flex justify-center gap-1">
             {row.map((key) => {

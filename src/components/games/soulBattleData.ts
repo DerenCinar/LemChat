@@ -22,9 +22,15 @@ export interface BossDef {
   name: string;
   title: string;
   maxHp: number;
+  playerMaxHp: number;
   atk: number;
   def: number;
   atkDamage: number;
+  hasKarma?: boolean;
+  hasRatings?: boolean;
+  voiceFreq: number;
+  voiceWave: OscillatorType;
+  stageTint: string;
   checkText: string;
   introText: string;
   statusLines: string[];
@@ -85,9 +91,14 @@ export const BOSSES: BossDef[] = [
     name: 'Sans',
     title: 'The Comedian Skeleton',
     maxHp: 1,
+    playerMaxHp: 40,
     atk: 1,
     def: 1,
     atkDamage: 2,
+    hasKarma: true,
+    voiceFreq: 135,
+    voiceWave: 'square',
+    stageTint: 'rgba(56, 189, 248, 0.14)',
     checkText: '* SANS 1 ATK 1 DEF — The easiest enemy. Can only deal 1 damage... supposedly.',
     introText: "* It's a beautiful day outside. Birds are singing, flowers are blooming...",
     statusLines: [
@@ -129,9 +140,13 @@ export const BOSSES: BossDef[] = [
     name: 'Papyrus',
     title: 'Future Royal Guardsman',
     maxHp: 110,
+    playerMaxHp: 24,
     atk: 20,
     def: 20,
     atkDamage: 3,
+    voiceFreq: 420,
+    voiceWave: 'square',
+    stageTint: 'rgba(249, 115, 22, 0.13)',
     checkText: '* PAPYRUS 20 ATK 20 DEF — He likes to say: "NYEH HEH HEH!"',
     introText: '* Papyrus blocks the way! His cape billows heroically!',
     statusLines: [
@@ -172,9 +187,13 @@ export const BOSSES: BossDef[] = [
     name: 'Undyne',
     title: 'Captain of the Royal Guard',
     maxHp: 140,
+    playerMaxHp: 24,
     atk: 50,
     def: 20,
     atkDamage: 4,
+    voiceFreq: 270,
+    voiceWave: 'sawtooth',
+    stageTint: 'rgba(34, 197, 94, 0.14)',
     checkText: '* UNDYNE 50 ATK 20 DEF — Heroine that NEVER gives up.',
     introText: '* Undyne slams a glowing spear down! Spear of Justice begins!',
     statusLines: [
@@ -215,9 +234,13 @@ export const BOSSES: BossDef[] = [
     name: 'Toriel',
     title: 'Caretaker of the Ruins',
     maxHp: 100,
+    playerMaxHp: 24,
     atk: 80,
     def: 80,
     atkDamage: 3,
+    voiceFreq: 220,
+    voiceWave: 'triangle',
+    stageTint: 'rgba(168, 85, 247, 0.14)',
     checkText: '* TORIEL 80 ATK 80 DEF — Knows best for you.',
     introText: '* Toriel blocks the exit with a heavy sigh and warm embers.',
     statusLines: [
@@ -258,9 +281,14 @@ export const BOSSES: BossDef[] = [
     name: 'Mettaton EX',
     title: 'Underground Superstar',
     maxHp: 150,
+    playerMaxHp: 24,
     atk: 47,
     def: 47,
     atkDamage: 3,
+    hasRatings: true,
+    voiceFreq: 330,
+    voiceWave: 'sawtooth',
+    stageTint: 'rgba(236, 72, 153, 0.16)',
     checkText: '* METTATON EX 47 ATK 47 DEF — Weak point is his heart-shaped core!',
     introText: '* Lights! Camera! Action! Mettaton EX bursts onto stage!',
     statusLines: [
@@ -301,9 +329,13 @@ export const BOSSES: BossDef[] = [
     name: 'Asgore',
     title: 'King of Monsters',
     maxHp: 180,
+    playerMaxHp: 28,
     atk: 80,
     def: 80,
     atkDamage: 4,
+    voiceFreq: 112,
+    voiceWave: 'sawtooth',
+    stageTint: 'rgba(239, 68, 68, 0.15)',
     checkText: '* ASGORE 80 ATK 80 DEF — A solemn king wielding a crimson trident.',
     introText: '* Asgore draws his glowing trident. Twilight fills the barrier room.',
     statusLines: [
@@ -344,9 +376,13 @@ export const BOSSES: BossDef[] = [
     name: 'Muffet',
     title: 'Spider Bake Sale Boss',
     maxHp: 125,
+    playerMaxHp: 24,
     atk: 38,
     def: 18,
     atkDamage: 3,
+    voiceFreq: 520,
+    voiceWave: 'triangle',
+    stageTint: 'rgba(192, 132, 252, 0.15)',
     checkText: '* MUFFET 38 ATK 18 DEF — If she catches you, it\'s tea time~',
     introText: '* Muffet pours purple spider cider! You\'re trapped in her parlor web!',
     statusLines: [
@@ -487,10 +523,16 @@ type SfxType =
   | 'hurt'
   | 'clang'
   | 'blaster'
+  | 'charge'
+  | 'slam'
+  | 'glint_cyan'
+  | 'glint_orange'
+  | 'ratings'
   | 'laser'
   | 'heal'
   | 'spare'
   | 'win'
+  | 'shatter'
   | 'gameover';
 
 let sharedAudioCtx: AudioContext | null = null;
@@ -507,6 +549,27 @@ const getAudioCtx = (): AudioContext | null => {
     return sharedAudioCtx;
   } catch {
     return null;
+  }
+};
+
+export const playVoiceBlip = (freq: number, wave: OscillatorType, muted: boolean): void => {
+  if (muted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = wave;
+    osc.frequency.setValueAtTime(freq + (Math.random() - 0.5) * 18, now);
+    g.gain.setValueAtTime(0.028, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.036);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.042);
+  } catch {
+    // ignore audio errors
   }
 };
 
@@ -564,6 +627,24 @@ export const playBattleSfx = (type: SfxType, muted: boolean): void => {
       case 'blaster':
         tone(160, 58, 0.34, 'sawtooth', 0.11);
         tone(310, 90, 0.28, 'square', 0.06, 0.02);
+        break;
+      case 'charge':
+        tone(220, 740, 0.32, 'triangle', 0.055);
+        break;
+      case 'slam':
+        tone(140, 42, 0.16, 'sawtooth', 0.12);
+        break;
+      case 'glint_cyan':
+        tone(760, 1180, 0.08, 'triangle', 0.07);
+        break;
+      case 'glint_orange':
+        tone(520, 860, 0.08, 'sawtooth', 0.06);
+        break;
+      case 'ratings':
+        tone(660, 990, 0.07, 'square', 0.05);
+        break;
+      case 'shatter':
+        tone(320, 95, 0.22, 'sawtooth', 0.1);
         break;
       case 'laser':
         tone(920, 480, 0.06, 'square', 0.04);

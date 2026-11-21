@@ -1227,7 +1227,7 @@ export const GamesMenu: React.FC<{
   }, []);
 
   const widthClass =
-    game === 'soulbattle' ? 'max-w-lg' : game === 'cryptle' ? 'max-w-md' : 'max-w-sm';
+    game === 'soulbattle' ? 'max-w-xl' : game === 'cryptle' ? 'max-w-md' : 'max-w-sm';
 
   return (
     <div
@@ -1323,7 +1323,7 @@ export const GamesMenu: React.FC<{
                       <div>
                         <span className="block text-xs font-extrabold">Cryptle #{cryptleNum}</span>
                         <span className="block text-[10px] opacity-70">
-                          New 5-letter mystery word every day
+                          Daily · Infinite · 1m/5m/10m Blitz
                         </span>
                       </div>
                     </div>
