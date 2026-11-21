@@ -10,12 +10,14 @@ import {
   Pencil,
   Trash2,
   Pin,
+  Forward,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
 import { InteractiveCard } from './InteractiveCard';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { Message } from '../types/chat';
+import { useT } from '../lib/i18n';
 
 const SpoilerText: React.FC<{ text: string }> = ({ text }) => {
   const [revealed, setRevealed] = useState(false);
@@ -50,6 +52,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   highlightMention,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
+  const t = useT();
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content);
   const pickerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -68,6 +71,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   const density = useChatStore((s) => s.liquidGlass.density);
   const pickerPopupId = `reaction:${message.id}`;
   const showPicker = useChatStore((s) => s.activePopupId === pickerPopupId);
+  const forwardPopupId = `forward:${message.id}`;
+  const showForward = useChatStore((s) => s.activePopupId === forwardPopupId);
+  const conversationList = useChatStore((s) => (showForward ? s.conversations : null));
+  const forwardMessage = useChatStore((s) => s.forwardMessage);
+  const [forwardedTo, setForwardedTo] = useState<string | null>(null);
   const setActivePopupId = useChatStore((s) => s.setActivePopupId);
   const togglePopup = useChatStore((s) => s.togglePopup);
   const isTailedStyle =
@@ -76,7 +84,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   const showTail = isTailedStyle && isLastInGroup;
 
   useEffect(() => {
-    if (!showPicker) return;
+    if (!showPicker && !showForward) return;
     const handlePointerDown = (event: PointerEvent) => {
       if (
         pickerContainerRef.current &&
@@ -96,7 +104,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showPicker, setActivePopupId]);
+  }, [showPicker, showForward, setActivePopupId]);
 
   const entrance =
     entranceEffect === 'instant'
@@ -191,14 +199,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
     <div
       ref={pickerContainerRef}
       className={`relative flex items-center transition-opacity ${
-        showPicker ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        showPicker || showForward ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}
     >
       <div className="glass-pill flex items-center gap-0.5 rounded-full p-0.5">
         <button
           onClick={() => setReplyingTo(message)}
           className="flex h-6 w-6 items-center justify-center rounded-full text-emerald-800 transition hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10"
-          title="Reply"
+          title={t('msg.reply')}
         >
           <Reply className="h-3.5 w-3.5" />
         </button>
@@ -210,10 +218,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               ? 'bg-[#22C55E]/20 text-[#22C55E]'
               : 'text-emerald-800 hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10'
           }`}
-          title="Add reaction"
+          title={t('msg.react')}
         >
           <SmilePlus className="h-3.5 w-3.5" />
         </button>
+
+        {!message.deletedAt && !message.interactive && (
+          <button
+            onClick={() => togglePopup(forwardPopupId)}
+            className={`flex h-6 w-6 items-center justify-center rounded-full transition ${
+              showForward
+                ? 'bg-[#22C55E]/20 text-[#22C55E]'
+                : 'text-emerald-800 hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10'
+            }`}
+            title={t('msg.forward')}
+            aria-label={t('msg.forward')}
+          >
+            <Forward className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         <button
           onClick={() => void togglePinMessage(message.id)}
@@ -222,7 +245,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               ? 'bg-[#22C55E]/25 text-[#22C55E]'
               : 'text-emerald-800 hover:bg-black/5 dark:text-emerald-200 dark:hover:bg-white/10'
           }`}
-          title={message.isPinned ? 'Unpin message' : 'Pin message'}
+          title={message.isPinned ? t('msg.unpin') : t('msg.pin')}
         >
           <Pin className="h-3.5 w-3.5" />
         </button>
@@ -236,7 +259,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               }}
               disabled={Boolean(message.deletedAt)}
               className="flex h-6 w-6 items-center justify-center rounded-full text-emerald-800 transition hover:bg-black/5 disabled:opacity-40 dark:text-emerald-200 dark:hover:bg-white/10"
-              title="Edit message"
+              title={t('msg.edit')}
             >
               <Pencil className="h-3 w-3" />
             </button>
@@ -244,7 +267,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               onClick={() => void deleteMessage(message.id)}
               disabled={Boolean(message.deletedAt)}
               className="flex h-6 w-6 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40"
-              title="Delete message"
+              title={t('msg.delete')}
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -253,6 +276,54 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
       </div>
 
       <AnimatePresence>
+        {showForward && conversationList && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 460, damping: 28 }}
+            role="menu"
+            aria-label={t('msg.forwardTo')}
+            className={`glass-panel glass-surface absolute bottom-8 z-30 w-56 rounded-2xl p-1.5 ${
+              message.isMe ? 'right-0' : 'left-0'
+            }`}
+          >
+            <LiquidGlassLayer variant="popover" interactive cornerRadius={16} />
+            <p className="relative px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/60 dark:text-emerald-200/50">
+              {t('msg.forwardTo')}
+            </p>
+            <div className="lem-scrollbar relative max-h-48 overflow-y-auto">
+              {conversationList.map((c) => (
+                <button
+                  key={c.id}
+                  role="menuitem"
+                  onClick={async () => {
+                    const ok = await forwardMessage(message.id, c.id);
+                    setForwardedTo(ok ? c.id : null);
+                    setActivePopupId(null);
+                    if (ok) window.setTimeout(() => setForwardedTo(null), 2000);
+                  }}
+                  className="flex w-full items-center truncate rounded-xl px-2 py-1.5 text-left text-xs text-emerald-950 transition hover:bg-black/5 dark:text-emerald-50 dark:hover:bg-white/10"
+                >
+                  <span className="truncate">{c.type === 'channel' ? `#${c.name}` : c.name}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+        {forwardedTo && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="status"
+            className={`glass-pill absolute bottom-8 z-30 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] text-emerald-800 dark:text-emerald-200 ${
+              message.isMe ? 'right-0' : 'left-0'
+            }`}
+          >
+            {t('msg.forwarded')}
+          </motion.span>
+        )}
         {showPicker && (
           <motion.div
             initial={{ opacity: 0, y: 6, scale: 0.92 }}
@@ -437,24 +508,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
                       onClick={() => setIsEditing(false)}
                       className="rounded-full bg-white/15 px-3 py-1 font-medium transition hover:bg-white/25"
                     >
-                      Cancel
+                      {t('msg.cancel')}
                     </button>
                     <button
                       onClick={() => void handleSaveEdit()}
                       disabled={!editText.trim()}
                       className="rounded-full bg-white px-3.5 py-1 font-semibold text-emerald-900 shadow-sm transition hover:brightness-95 disabled:opacity-50"
                     >
-                      Save
+                      {t('msg.save')}
                     </button>
                   </div>
                 </div>
               </div>
             ) : (
               message.deletedAt ? (
-                <p className="italic opacity-65">This message was deleted</p>
+                <p className="italic opacity-65">{t('msg.deleted')}</p>
               ) : bodyContent && (
                 <p
-                  className={`whitespace-pre-wrap break-words ${
+                  className={`select-text whitespace-pre-wrap break-words ${
                     /^(?:\p{Extended_Pictographic}(?:️|‍|\p{Emoji_Modifier})*){1,3}$/u.test(
                       bodyContent.trim()
                     )

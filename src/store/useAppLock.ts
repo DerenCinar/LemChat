@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { hashWith, newSalt, safeEqual, type LockKdf } from '../lib/lockHash';
 
 const STORAGE_KEY = 'skellytalk_applock_v1';
 
@@ -6,6 +7,7 @@ interface PersistedLock {
   enabled: boolean;
   salt: string;
   hash: string;
+  kdf: LockKdf;
   timeoutMinutes: number; // 0 = never auto-lock
   shortcutEnabled: boolean;
 }
@@ -14,6 +16,7 @@ const DEFAULTS: PersistedLock = {
   enabled: false,
   salt: '',
   hash: '',
+  kdf: 'legacy-sha256',
   timeoutMinutes: 5,
   shortcutEnabled: true,
 };
@@ -39,26 +42,6 @@ const save = (state: PersistedLock) => {
   }
 };
 
-const toHex = (buffer: ArrayBuffer) =>
-  Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-const hashSecret = async (secret: string, salt: string): Promise<string> => {
-  const data = new TextEncoder().encode(`${salt}:${secret}`);
-  let digest = await crypto.subtle.digest('SHA-256', data);
-  // Light key stretching so a 4-digit PIN is not trivially one hash away.
-  for (let i = 0; i < 20000; i += 1) {
-    const next = new Uint8Array(digest.byteLength + data.byteLength);
-    next.set(new Uint8Array(digest), 0);
-    next.set(data, digest.byteLength);
-    digest = await crypto.subtle.digest('SHA-256', next);
-  }
-  return toHex(digest);
-};
-
-const newSalt = () => toHex(crypto.getRandomValues(new Uint8Array(16)).buffer);
-
 export const MIN_SECRET_LENGTH = 4;
 
 interface AppLockState extends PersistedLock {
@@ -79,8 +62,8 @@ const initial = load();
 
 export const useAppLock = create<AppLockState>((set, get) => {
   const persist = () => {
-    const { enabled, salt, hash, timeoutMinutes, shortcutEnabled } = get();
-    save({ enabled, salt, hash, timeoutMinutes, shortcutEnabled });
+    const { enabled, salt, hash, kdf, timeoutMinutes, shortcutEnabled } = get();
+    save({ enabled, salt, hash, kdf, timeoutMinutes, shortcutEnabled });
   };
 
   return {
@@ -95,9 +78,16 @@ export const useAppLock = create<AppLockState>((set, get) => {
     },
 
     verify: async (secret) => {
-      const { salt, hash } = get();
+      const { salt, hash, kdf } = get();
       if (!salt || !hash) return false;
-      return (await hashSecret(secret, salt)) === hash;
+      const ok = safeEqual(await hashWith(kdf, secret, salt), hash);
+      if (ok && kdf !== 'pbkdf2') {
+        // Transparently upgrade old locks to PBKDF2 now that we know the secret.
+        const newS = newSalt();
+        set({ salt: newS, hash: await hashWith('pbkdf2', secret, newS), kdf: 'pbkdf2' });
+        persist();
+      }
+      return ok;
     },
 
     unlock: async (secret) => {
@@ -119,20 +109,20 @@ export const useAppLock = create<AppLockState>((set, get) => {
 
     enable: async (secret) => {
       const salt = newSalt();
-      const hash = await hashSecret(secret, salt);
-      set({ enabled: true, salt, hash, locked: false, failedAttempts: 0, lockoutUntil: 0 });
+      const hash = await hashWith('pbkdf2', secret, salt);
+      set({ enabled: true, salt, hash, kdf: 'pbkdf2', locked: false, failedAttempts: 0, lockoutUntil: 0 });
       persist();
     },
 
     changeSecret: async (secret) => {
       const salt = newSalt();
-      const hash = await hashSecret(secret, salt);
-      set({ salt, hash });
+      const hash = await hashWith('pbkdf2', secret, salt);
+      set({ salt, hash, kdf: 'pbkdf2' });
       persist();
     },
 
     disable: () => {
-      set({ enabled: false, salt: '', hash: '', locked: false, failedAttempts: 0, lockoutUntil: 0 });
+      set({ enabled: false, salt: '', hash: '', kdf: 'pbkdf2', locked: false, failedAttempts: 0, lockoutUntil: 0 });
       persist();
     },
 

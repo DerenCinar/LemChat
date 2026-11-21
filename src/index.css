@@ -1297,3 +1297,12 @@ html[data-large-targets="true"] [data-header-btn] {
   min-width: 40px;
   min-height: 40px;
 }
+
+/* Baseline keyboard focus indicator for buttons/links/custom controls */
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="slider"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--glass-accent, #22c55e);
+  outline-offset: 2px;
+}

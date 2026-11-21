@@ -36,6 +36,7 @@ import {
   stopRingtone,
 } from '../lib/sound';
 import { APP_LOGOS, applyAppLogo, useAppLogoId } from '../lib/appLogo';
+import { LANGUAGES, useLanguage, useT, type Language } from '../lib/i18n';
 import type {
   GlassDepth,
   NotificationRevealMode,
@@ -388,6 +389,9 @@ export const SettingsView: React.FC = () => {
   const importLiquidGlass = useChatStore((s) => s.importLiquidGlass);
   const updateSectionRef = useRef<HTMLDivElement | null>(null);
   const [appVersion, setAppVersion] = useState(packageInfo.version);
+  const t = useT();
+  const language = useLanguage((st) => st.language);
+  const setLanguage = useLanguage((st) => st.setLanguage);
   const [previewingRingtone, setPreviewingRingtone] = useState(false);
 
   useEffect(() => () => stopRingtone(), []);
@@ -1546,6 +1550,21 @@ export const SettingsView: React.FC = () => {
                   <option value="imessage-classic">Classic iMessage (Blue &amp; Gray tails)</option>
                   <option value="glass">Floating glass</option>
                   <option value="cyber">Sharp cyber-cut</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <SettingLabel label={t('settings.language')} info={t('settings.languageInfo')} />
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as Language)}
+                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 

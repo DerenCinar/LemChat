@@ -573,6 +573,8 @@ export const CallOverlay: React.FC = () => {
         {activeCall && (
           <motion.div
             ref={miniRef}
+            role="dialog"
+            aria-label="Active call"
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.92 }}

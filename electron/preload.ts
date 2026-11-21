@@ -10,12 +10,6 @@ export interface NotificationPayload {
   forceShow?: boolean;
 }
 
-export interface ServerInfo {
-  hosting: boolean;
-  port: number;
-  lanIps: string[];
-}
-
 export interface UpdateStatusPayload {
   status:
     | 'idle'
@@ -53,7 +47,6 @@ export interface LemChatAPI {
   loadState: (profileId: string) => Promise<unknown | null>;
   saveState: (profileId: string, state: unknown) => Promise<boolean>;
   clearState: (profileId: string) => Promise<boolean>;
-  getServerInfo: () => Promise<ServerInfo>;
   saveAttachment: (filename: string, dataUrl: string) => Promise<boolean>;
   openNewPeerWindow: () => Promise<void>;
   checkForUpdates: () => Promise<void>;
@@ -97,7 +90,6 @@ const api: LemChatAPI = {
   loadState: (pid) => ipcRenderer.invoke('lemchat:load-state', pid),
   saveState: (pid, state) => ipcRenderer.invoke('lemchat:save-state', pid, state),
   clearState: (pid) => ipcRenderer.invoke('lemchat:clear-state', pid),
-  getServerInfo: () => ipcRenderer.invoke('lemchat:server-info'),
   saveAttachment: (filename, dataUrl) =>
     ipcRenderer.invoke('lemchat:save-attachment', filename, dataUrl),
   openNewPeerWindow: () => ipcRenderer.invoke('lemchat:open-peer-window'),

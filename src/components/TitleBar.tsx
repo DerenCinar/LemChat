@@ -26,7 +26,7 @@ export const TitleBar: React.FC = () => {
 
   return (
     <header className="app-drag relative z-30 flex h-11 shrink-0 items-center justify-between px-3.5">
-      {/* Left: macOS traffic lights OR LemChat Brand */}
+      {/* Left: macOS traffic lights OR SkellyTalk Brand */}
       <div className="flex items-center gap-3">
         {isMac && (
           <div className="app-no-drag flex items-center gap-2 pr-2">

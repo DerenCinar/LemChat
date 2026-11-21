@@ -48,6 +48,17 @@ import type {
   LiquidGlassTheme,
   BubbleStyle,
 } from '../types/chat';
+import { getArchived, setArchived, toggleId } from '../lib/archive';
+import {
+  DELETED_MESSAGE_MARKER,
+  EDITED_MESSAGE_MARKER,
+  readDeletedCache,
+  readSentCache,
+  removeSentCacheEntry,
+  saveDeletedCacheEntry,
+  saveSentCacheEntry,
+  type DecryptedMessagePayload,
+} from '../lib/messageCache';
 
 const getContactAliasKey = (userId: string) => `lemchat_contact_aliases_${userId}`;
 
@@ -113,6 +124,13 @@ interface DbMemberRow {
   role?: MemberRole;
 }
 
+interface SendMessageOptions {
+  /** Send to this conversation instead of the active one (ignores any pending reply). */
+  conversationId?: string;
+  /** Already-uploaded attachments to include as-is (used when forwarding). */
+  forwardedAttachments?: Attachment[];
+}
+
 interface DbMessageRow {
   id: string;
   conversation_id: string;
@@ -153,6 +171,8 @@ interface ChatStore {
   authLoading: boolean;
   authError: string | null;
   workspaceLoading: boolean;
+  archivedConversationIds: string[];
+  toggleArchiveConversation: (conversationId: string) => void;
   realtimeConnected: boolean;
 
   self: SelfProfile | null;
@@ -244,8 +264,10 @@ interface ChatStore {
     uploads?: StagedUpload[],
     codeBlock?: CodeBlock,
     gif?: GifAttachment,
-    interactive?: InteractiveMetadata
+    interactive?: InteractiveMetadata,
+    opts?: SendMessageOptions
   ) => Promise<string | undefined>;
+  forwardMessage: (messageId: string, targetConversationId: string) => Promise<boolean>;
   sendCapsule: (text: string, unlockAt: Date) => Promise<void>;
   openCapsule: (messageId: string, capsule: CapsuleMetadata) => Promise<string>;
   sendPoll: (question: string, options: string[]) => Promise<void>;
@@ -257,6 +279,8 @@ interface ChatStore {
   deleteMessage: (messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
+  /** Fetches a page of older messages. Resolves true if more may remain. */
+  loadOlderMessages: (conversationId: string) => Promise<boolean>;
   createChannel: (name: string, topic: string, invitedUserIds?: string[], logoUrl?: string) => Promise<string | null>;
   inviteToGroup: (conversationId: string, userIds: string[]) => Promise<void>;
   removeMember: (conversationId: string, userId: string) => Promise<void>;
@@ -367,9 +391,30 @@ async function logCallEvent(
   });
 }
 
+function buildIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+  // Optional TURN relay (needed for calls behind symmetric NAT / strict firewalls).
+  // Configure VITE_TURN_URL (comma-separated), VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL.
+  const env = import.meta.env;
+  const turnUrl = env.VITE_TURN_URL as string | undefined;
+  if (turnUrl) {
+    servers.push({
+      urls: turnUrl.split(',').map((u) => u.trim()).filter(Boolean),
+      username: env.VITE_TURN_USERNAME as string | undefined,
+      credential: env.VITE_TURN_CREDENTIAL as string | undefined,
+    });
+  }
+  return servers;
+}
+
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  iceServers: buildIceServers(),
 };
+
+
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -402,94 +447,6 @@ function formatTimestamp(iso: string): string {
         : { hour: '2-digit', minute: '2-digit', hour12: true });
   }
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-interface DecryptedMessagePayload {
-  content: string;
-  codeBlock?: CodeBlock;
-  attachments?: Attachment[];
-  interactive?: InteractiveMetadata;
-  editedAt?: string;
-  isEdited?: boolean;
-}
-
-const DELETED_MESSAGE_MARKER = '[skellytalk:deleted]';
-const EDITED_MESSAGE_MARKER = '[skellytalk:edited]';
-
-function getSentCacheKey(userId: string): string {
-  return `skellytalk_sent_cache_${userId}`;
-}
-
-function readSentCache(userId: string): Record<string, DecryptedMessagePayload> {
-  try {
-    const raw = localStorage.getItem(getSentCacheKey(userId));
-    return raw ? (JSON.parse(raw) as Record<string, DecryptedMessagePayload>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveSentCacheEntry(
-  userId: string,
-  messageId: string,
-  payload: DecryptedMessagePayload
-): void {
-  try {
-    const cache = readSentCache(userId);
-    cache[messageId] = payload;
-    const keys = Object.keys(cache);
-    if (keys.length > 500) {
-      for (const k of keys.slice(0, keys.length - 500)) {
-        delete cache[k];
-      }
-    }
-    localStorage.setItem(getSentCacheKey(userId), JSON.stringify(cache));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-function getDeletedCacheKey(userId: string): string {
-  return `skellytalk_deleted_cache_${userId}`;
-}
-
-function readDeletedCache(
-  userId: string
-): Record<string, { conversationId: string; deletedAt: string; createdAt: string }> {
-  try {
-    const raw = localStorage.getItem(getDeletedCacheKey(userId));
-    return raw
-      ? (JSON.parse(raw) as Record<string, { conversationId: string; deletedAt: string; createdAt: string }>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveDeletedCacheEntry(
-  userId: string,
-  messageId: string,
-  conversationId: string,
-  deletedAt: string,
-  createdAt: string
-): void {
-  try {
-    const cache = readDeletedCache(userId);
-    cache[messageId] = { conversationId, deletedAt, createdAt };
-    localStorage.setItem(getDeletedCacheKey(userId), JSON.stringify(cache));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-function removeSentCacheEntry(userId: string, messageId: string): void {
-  try {
-    const cache = readSentCache(userId);
-    delete cache[messageId];
-    localStorage.setItem(getSentCacheKey(userId), JSON.stringify(cache));
-  } catch {
-    // Ignore storage quota errors
-  }
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -782,6 +739,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   authLoading: true,
   authError: null,
   workspaceLoading: false,
+  archivedConversationIds: [],
   realtimeConnected: false,
 
   self: null,
@@ -1490,7 +1448,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           supabase.from('profiles').select('*'),
           supabase.from('conversations').select('*').order('created_at', { ascending: true }),
           supabase.from('conversation_members').select('*'),
-          supabase.from('messages').select('*').order('created_at', { ascending: true }),
+          // Newest 1000 (Supabase caps rows per request; ascending order would drop the newest).
+          supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(1000),
           supabase.from('message_reactions').select('*'),
           supabase.from('message_pins').select('message_id,user_id').eq('user_id', user.id),
         ]);
@@ -1570,7 +1529,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       const messagesByConv = new Map<string, Message[]>();
-      for (const msg of (messagesRes.data ?? []) as DbMessageRow[]) {
+      for (const msg of ([...(messagesRes.data ?? [])].reverse()) as DbMessageRow[]) {
         const deletedCache = readDeletedCache(user.id);
         const deletedEntry = deletedCache[msg.id];
         if (deletedEntry) {
@@ -1750,6 +1709,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       set({
         workspaceLoading: false,
+        archivedConversationIds: getArchived(user.id),
         profiles: profileMap,
         conversations,
         activeConversationId: nextActiveId,
@@ -1874,6 +1834,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           : false,
         isPinned: false,
       };
+
+      // A new incoming message brings an archived conversation back.
+      if (!isMe && state.archivedConversationIds.includes(row.conversation_id)) {
+        const nextArchived = state.archivedConversationIds.filter((id) => id !== row.conversation_id);
+        set({ archivedConversationIds: nextArchived });
+        setArchived(user.id, nextArchived);
+      }
 
       const isViewing =
         state.activeConversationId === row.conversation_id &&
@@ -2620,17 +2587,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  sendMessage: async (content, uploads, codeBlock, gif, interactive) => {
+  sendMessage: async (content, uploads, codeBlock, gif, interactive, opts) => {
     const supabase = getSupabaseClient();
     const user = get().session?.user;
-    const convId = get().activeConversationId;
+    const convId = opts?.conversationId ?? get().activeConversationId;
     const trimmed = filterProfanity(content.trim(), get().profanityFilter);
 
     if (!supabase || !user || !convId) return undefined;
-    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif && !interactive) return undefined;
+    if (!trimmed && (!uploads || uploads.length === 0) && !codeBlock && !gif && !interactive && !opts?.forwardedAttachments?.length) return undefined;
 
     // Upload any staged files to Supabase Storage bucket 'lemchat-attachments'
-    const attachments: Attachment[] = [];
+    const attachments: Attachment[] = [...(opts?.forwardedAttachments ?? [])];
     if (uploads && uploads.length > 0) {
       for (const item of uploads) {
         const ext = item.name.split('.').pop() || 'bin';
@@ -2686,7 +2653,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         { onConflict: 'conversation_id,user_id' }
       );
 
-    const { replyingTo } = get();
+    const replyingTo = opts?.conversationId ? null : get().replyingTo;
     const finalContent = replyingTo
       ? `> ${replyingTo.senderName}: ${replyingTo.content.slice(0, 120)}\n\n${trimmed}`
       : trimmed;
@@ -2869,8 +2836,35 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
     }
 
-    set({ replyingTo: null });
+    if (!opts?.conversationId) set({ replyingTo: null });
     return insertedId;
+  },
+
+  forwardMessage: async (messageId, targetConversationId) => {
+    const source = get().conversations.find((c) => c.messages.some((m) => m.id === messageId));
+    const msg = source?.messages.find((m) => m.id === messageId);
+    if (!source || !msg || msg.deletedAt || msg.interactive) return false;
+    // Strip any reply-quote prefix so only the message body is forwarded.
+    let body = msg.content;
+    if (body.startsWith('> ')) {
+      const idx = body.indexOf('\n\n');
+      if (idx !== -1) body = body.slice(idx + 2);
+    }
+    const header = `↪ Forwarded from ${msg.senderName}`;
+    try {
+      const id = await get().sendMessage(
+        body ? `${header}:\n${body}` : header,
+        undefined,
+        msg.codeBlock,
+        undefined,
+        undefined,
+        { conversationId: targetConversationId, forwardedAttachments: msg.attachments }
+      );
+      return Boolean(id);
+    } catch (err) {
+      console.warn('[SkellyTalk] forwardMessage failed:', err);
+      return false;
+    }
   },
 
   sendCapsule: async (text, unlockAt) => {
@@ -3296,6 +3290,105 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         emoji,
       });
     }
+  },
+
+  toggleArchiveConversation: (conversationId) => {
+    const userId = get().session?.user?.id;
+    const next = toggleId(get().archivedConversationIds, conversationId);
+    set({ archivedConversationIds: next });
+    if (userId) setArchived(userId, next);
+  },
+
+  loadOlderMessages: async (conversationId) => {
+    const PAGE = 50;
+    const supabase = getSupabaseClient();
+    const user = get().session?.user;
+    if (!supabase || !user) return false;
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    if (!conv) return false;
+    const oldest = conv.messages.find((m) => m.createdAt)?.createdAt;
+    if (!oldest) return false;
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(PAGE);
+    if (error || !data) {
+      console.warn('[SkellyTalk] loadOlderMessages failed:', error);
+      return false;
+    }
+    const rows = [...(data as DbMessageRow[])].reverse();
+    if (rows.length === 0) return false;
+
+    const ids = rows.map((r) => r.id);
+    const [reactionsRes, pinsRes] = await Promise.all([
+      supabase.from('message_reactions').select('*').in('message_id', ids),
+      supabase.from('message_pins').select('message_id').eq('user_id', user.id).in('message_id', ids),
+    ]);
+    const reactionsByMsg = new Map<string, DbReactionRow[]>();
+    for (const rx of (reactionsRes.data ?? []) as DbReactionRow[]) {
+      const arr = reactionsByMsg.get(rx.message_id) ?? [];
+      arr.push(rx);
+      reactionsByMsg.set(rx.message_id, arr);
+    }
+    const pinned = new Set(((pinsRes.data ?? []) as DbMessagePinRow[]).map((p) => p.message_id));
+    const deletedCache = readDeletedCache(user.id);
+    const state = get();
+
+    const older: Message[] = [];
+    for (const row of rows) {
+      const sender = state.profiles[row.sender_id];
+      const senderName = sender ? get().getContactName(sender.id, sender.displayName) : 'Member';
+      const base = {
+        id: row.id,
+        conversationId: row.conversation_id,
+        senderId: row.sender_id,
+        senderName,
+        senderAvatar: sender?.avatarText ?? 'ST',
+        senderRole: sender?.role,
+        isMe: row.sender_id === user.id,
+        status: 'read' as const,
+        reactions: buildReactionsList(reactionsByMsg.get(row.id) ?? [], user.id),
+        isPinned: pinned.has(row.id),
+      };
+      const tomb = deletedCache[row.id];
+      if (tomb) {
+        older.push({
+          ...base,
+          content: '',
+          timestamp: formatTimestamp(tomb.deletedAt),
+          createdAt: tomb.createdAt,
+          deletedAt: tomb.deletedAt,
+        });
+        continue;
+      }
+      const decrypted = await decryptMessageRow(row, row.sender_id, user.id);
+      older.push({
+        ...base,
+        content: decrypted.content,
+        timestamp: formatTimestamp(row.created_at),
+        createdAt: row.created_at,
+        editedAt: row.edited_at ?? decrypted.editedAt,
+        deletedAt:
+          row.deleted_at ?? (row.content === DELETED_MESSAGE_MARKER ? row.created_at : undefined),
+        isEdited: Boolean(row.edited_at) || Boolean(decrypted.isEdited) || Boolean(decrypted.editedAt),
+        codeBlock: decrypted.codeBlock,
+        attachments: decrypted.attachments,
+        interactive: decrypted.interactive,
+      });
+    }
+
+    set((st) => ({
+      conversations: st.conversations.map((c) => {
+        if (c.id !== conversationId) return c;
+        const have = new Set(c.messages.map((m) => m.id));
+        return { ...c, messages: [...older.filter((m) => !have.has(m.id)), ...c.messages] };
+      }),
+    }));
+    return rows.length >= PAGE;
   },
 
   togglePinMessage: async (messageId) => {

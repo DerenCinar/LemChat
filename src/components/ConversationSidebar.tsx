@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, Pin, Hash, X, Plus } from 'lucide-react';
+import { Search, Pin, Hash, X, Plus, Archive, ArchiveRestore, ChevronDown } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { Conversation, NavTab, UserPresence } from '../types/chat';
+import { useT } from '../lib/i18n';
 
 const PRESENCE_DOT: Record<UserPresence, string> = {
   online: 'bg-[#22C55E] shadow-[0_0_8px_rgba(34,197,94,0.85)]',
@@ -21,10 +22,13 @@ interface ConversationRowProps {
   peerPresence: UserPresence;
   onSelect: (conv: Conversation) => void;
   onTogglePin: (conversationId: string) => void;
+  isArchived: boolean;
+  onToggleArchive: (conversationId: string) => void;
 }
 
 const ConversationRow: React.FC<ConversationRowProps> = React.memo(
-  ({ conv, isActive, typingSenderName, peerPresence, onSelect, onTogglePin }) => {
+  ({ conv, isActive, typingSenderName, peerPresence, onSelect, onTogglePin, isArchived, onToggleArchive }) => {
+    const t = useT();
     const msgs = conv.messages ?? [];
     const lastMessage = msgs[msgs.length - 1];
 
@@ -106,7 +110,7 @@ const ConversationRow: React.FC<ConversationRowProps> = React.memo(
                   e.stopPropagation();
                   onTogglePin(conv.id);
                 }}
-                title={conv.pinned ? 'Unpin' : 'Pin conversation'}
+                title={conv.pinned ? t('sidebar.unpin') : t('sidebar.pin')}
                 className={`rounded-md p-0.5 transition ${
                   conv.pinned
                     ? 'text-emerald-500 opacity-75 hover:opacity-100'
@@ -114,6 +118,18 @@ const ConversationRow: React.FC<ConversationRowProps> = React.memo(
                 }`}
               >
                 <Pin className="h-3 w-3" />
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleArchive(conv.id);
+                }}
+                title={isArchived ? t('sidebar.unarchive') : t('sidebar.archive')}
+                aria-label={isArchived ? t('sidebar.unarchive') : t('sidebar.archive')}
+                className="rounded-md p-0.5 text-emerald-900/40 opacity-0 transition hover:text-emerald-700 group-hover:opacity-100 dark:text-white/40 dark:hover:text-emerald-300"
+              >
+                {isArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
               </button>
 
               {conv.unreadCount > 0 && (
@@ -134,6 +150,7 @@ const ConversationRow: React.FC<ConversationRowProps> = React.memo(
 );
 
 export const ConversationSidebar: React.FC = () => {
+  const t = useT();
   const [width, setWidth] = useState(296);
   const isResizingRef = useRef(false);
 
@@ -148,6 +165,9 @@ export const ConversationSidebar: React.FC = () => {
   const selectConversation = useChatStore((s) => s.selectConversation);
   const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
   const togglePinConversation = useChatStore((s) => s.togglePinConversation);
+  const archivedIds = useChatStore((s) => s.archivedConversationIds);
+  const toggleArchiveConversation = useChatStore((s) => s.toggleArchiveConversation);
+  const [showArchived, setShowArchived] = useState(false);
   const setNewConvModalOpen = useChatStore((s) => s.setNewConvModalOpen);
 
   const startResize = (e: React.MouseEvent) => {
@@ -172,7 +192,7 @@ export const ConversationSidebar: React.FC = () => {
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  const { filtered, pinnedList, regularList } = useMemo(() => {
+  const { filtered, pinnedList, regularList, archivedList } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = conversations.filter((conv) => {
       if (activeTab === 'channels' && conv.type !== 'channel') return false;
@@ -186,12 +206,15 @@ export const ConversationSidebar: React.FC = () => {
         conv.messages.some((m) => m.content.toLowerCase().includes(q))
       );
     });
+    const archivedSet = new Set(archivedIds);
+    const active = list.filter((c) => !archivedSet.has(c.id));
     return {
-      filtered: list,
-      pinnedList: list.filter((c) => c.pinned),
-      regularList: list.filter((c) => !c.pinned),
+      filtered: active,
+      pinnedList: active.filter((c) => c.pinned),
+      regularList: active.filter((c) => !c.pinned),
+      archivedList: list.filter((c) => archivedSet.has(c.id)),
     };
-  }, [conversations, activeTab, searchQuery]);
+  }, [conversations, activeTab, searchQuery, archivedIds]);
 
   const handleSelectRow = useCallback(
     (conv: Conversation) => {
@@ -214,10 +237,10 @@ export const ConversationSidebar: React.FC = () => {
 
   const headerLabel =
     activeTab === 'channels'
-      ? 'Groups'
+      ? t('nav.groups')
       : activeTab === 'mentions'
-        ? 'Mentions'
-        : 'Messages';
+        ? t('nav.mentions')
+        : t('sidebar.messages');
 
   const renderItem = (conv: Conversation) => {
     const peerPresence: UserPresence =
@@ -232,6 +255,8 @@ export const ConversationSidebar: React.FC = () => {
         key={conv.id}
         conv={conv}
         isActive={conv.id === activeConversationId && activeTab !== 'settings'}
+        isArchived={archivedIds.includes(conv.id)}
+        onToggleArchive={toggleArchiveConversation}
         activeTab={activeTab}
         typingSenderName={typingConversations[conv.id]?.senderName}
         peerPresence={peerPresence}
@@ -294,7 +319,7 @@ export const ConversationSidebar: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search SkellyTalk..."
+            placeholder={t('sidebar.search')}
             className="w-full bg-transparent text-xs text-emerald-950 placeholder-emerald-800/45 outline-none dark:text-white dark:placeholder-emerald-100/40"
           />
           <AnimatePresence>
@@ -321,7 +346,7 @@ export const ConversationSidebar: React.FC = () => {
           <div>
             <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/45">
               <Pin className="h-2.5 w-2.5" />
-              <span>Pinned</span>
+              <span>{t('sidebar.pinned')}</span>
             </div>
             <div className="space-y-1">{pinnedList.map(renderItem)}</div>
           </div>
@@ -329,7 +354,7 @@ export const ConversationSidebar: React.FC = () => {
 
         <div>
           <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 dark:text-emerald-200/45">
-            {pinnedList.length > 0 ? 'All Conversations' : 'Conversations'}
+            {pinnedList.length > 0 ? t('sidebar.allConversations') : t('sidebar.conversations')}
           </div>
           <div className="space-y-1">
             {regularList.map(renderItem)}
@@ -344,15 +369,31 @@ export const ConversationSidebar: React.FC = () => {
                   {searchQuery ? <Search className="h-4 w-4 text-emerald-600" /> : <Plus className="h-4 w-4 text-emerald-600" />}
                 </div>
                 <p className="text-xs font-semibold text-emerald-950 dark:text-white">
-                  {searchQuery ? 'No matches found' : 'No conversations yet'}
+                  {searchQuery ? t('sidebar.noMatches') : t('sidebar.noConversations')}
                 </p>
                 <p className="mt-1 max-w-44 text-[11px] leading-relaxed text-emerald-800/55 dark:text-emerald-200/50">
-                  {searchQuery ? 'Try a different name or keyword.' : 'Create a group or start a direct message.'}
+                  {searchQuery ? t('sidebar.tryDifferent') : t('sidebar.createHint')}
                 </p>
               </motion.div>
             )}
           </div>
         </div>
+
+        {archivedList.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              aria-expanded={showArchived}
+              className="mb-1.5 flex w-full items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-800/55 hover:text-emerald-800 dark:text-emerald-200/45 dark:hover:text-emerald-200"
+            >
+              <Archive className="h-2.5 w-2.5" />
+              <span>{t('sidebar.archived')} ({archivedList.length})</span>
+              <ChevronDown className={`h-3 w-3 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
+            </button>
+            {showArchived && <div className="space-y-1">{archivedList.map(renderItem)}</div>}
+          </div>
+        )}
       </div>
 
       <div

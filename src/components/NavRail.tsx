@@ -12,6 +12,7 @@ import { useChatStore } from '../store/useChatStore';
 import { UserAvatar } from './UserAvatar';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { NavTab, SelfPresence } from '../types/chat';
+import { useT } from '../lib/i18n';
 
 const STATUS_CONFIG: Record<
   SelfPresence,
@@ -35,6 +36,7 @@ const STATUS_CONFIG: Record<
 };
 
 export const NavRail: React.FC = () => {
+  const t = useT();
   const statusContainerRef = useRef<HTMLDivElement | null>(null);
 
   const self = useChatStore((s) => s.self);
@@ -91,10 +93,10 @@ export const NavRail: React.FC = () => {
     icon: React.FC<{ className?: string }>;
     badge?: number;
   }> = [
-    { id: 'chats', label: 'Chats', icon: MessageSquare, badge: dmUnread + channelUnread },
-    { id: 'channels', label: 'Groups', icon: Hash, badge: channelUnread },
-    { id: 'mentions', label: 'Mentions', icon: AtSign, badge: mentionCount },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'chats', label: t('nav.chats'), icon: MessageSquare, badge: dmUnread + channelUnread },
+    { id: 'channels', label: t('nav.groups'), icon: Hash, badge: channelUnread },
+    { id: 'mentions', label: t('nav.mentions'), icon: AtSign, badge: mentionCount },
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];
 
   const currentStatus = self?.status ?? 'online';

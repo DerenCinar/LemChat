@@ -21,6 +21,7 @@ import {
   Download,
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { downloadConversation } from '../lib/exportChat';
 import { MessageBubble } from './MessageBubble';
 import { CallLogRow } from './InteractiveCard';
 import { FloatingComposer } from './FloatingComposer';
@@ -28,6 +29,7 @@ import { UserAvatar } from './UserAvatar';
 import { FriendshipStatsPanel } from './FriendshipStats';
 import { LiquidGlassLayer } from './LiquidGlassLayer';
 import type { UserPresence } from '../types/chat';
+import { useT } from '../lib/i18n';
 
 const STATUS_LABEL: Record<UserPresence, string> = {
   online: 'Active now',
@@ -53,9 +55,14 @@ const formatLastSeen = (iso: string): string => {
 };
 
 export const ChatArea: React.FC = () => {
+  const t = useT();
   const feedRef = useRef<HTMLDivElement | null>(null);
   const feedEndRef = useRef<HTMLDivElement | null>(null);
   const wasNearBottomRef = useRef(true);
+  const prependingRef = useRef(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [exhaustedConvs, setExhaustedConvs] = useState<Set<string>>(() => new Set());
+  const loadOlderMessages = useChatStore((s) => s.loadOlderMessages);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
@@ -97,7 +104,7 @@ export const ChatArea: React.FC = () => {
   const setPendingMentionMessageId = useChatStore((s) => s.setPendingMentionMessageId);
 
   useEffect(() => {
-    if (pendingMentionMessageId) return;
+    if (pendingMentionMessageId || prependingRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       if (feedRef.current) {
         feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -108,6 +115,30 @@ export const ChatArea: React.FC = () => {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeConversationId, activeConv?.messages.length, pendingMentionMessageId, workspaceLoading]);
+
+  const handleLoadOlder = async () => {
+    const convId = activeConv?.id;
+    const feed = feedRef.current;
+    if (!convId || !feed || loadingOlder) return;
+    setLoadingOlder(true);
+    prependingRef.current = true;
+    const prevHeight = feed.scrollHeight;
+    const prevTop = feed.scrollTop;
+    try {
+      const more = await loadOlderMessages(convId);
+      if (!more) {
+        setExhaustedConvs((prev) => new Set(prev).add(convId));
+      }
+    } finally {
+      window.setTimeout(() => {
+        // Keep the viewport anchored on what the user was reading.
+        const f = feedRef.current;
+        if (f) f.scrollTop = prevTop + (f.scrollHeight - prevHeight);
+        prependingRef.current = false;
+        setLoadingOlder(false);
+      }, 60);
+    }
+  };
 
   // Opening a chat: jump to the bottom, and keep doing so briefly while
   // images/animations settle and change the feed height.
@@ -126,7 +157,7 @@ export const ChatArea: React.FC = () => {
   }, [activeConversationId, workspaceLoading]);
 
   useEffect(() => {
-    if (pendingMentionMessageId) return;
+    if (pendingMentionMessageId || prependingRef.current) return;
     if (wasNearBottomRef.current) {
       feedEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
       setShowScrollToBottom(false);
@@ -413,7 +444,7 @@ export const ChatArea: React.FC = () => {
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
               onClick={toggleInChatSearch}
-              title="Search in conversation"
+              title={t('chat.search')}
               className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
                 isInChatSearchOpen
                   ? 'border-[#22C55E]/60 bg-[#22C55E]/20 text-emerald-700 dark:text-emerald-300'
@@ -427,8 +458,20 @@ export const ChatArea: React.FC = () => {
               data-header-btn
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
+              onClick={() => downloadConversation(activeConv)}
+              title={t('chat.export')}
+              aria-label={t('chat.export')}
+              className="glass-pill flex h-8 w-8 items-center justify-center rounded-full text-emerald-800/75 transition hover:text-emerald-950 dark:text-emerald-100/75 dark:hover:text-white"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </motion.button>
+
+            <motion.button
+              data-header-btn
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               onClick={() => void startCall(activeConv.id, 'audio')}
-              title="Start Voice Call"
+              title={t('chat.voiceCall')}
               className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
                 activeCall?.conversationId === activeConv.id &&
                 activeCall.mode === 'audio'
@@ -444,7 +487,7 @@ export const ChatArea: React.FC = () => {
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
               onClick={() => void startCall(activeConv.id, 'video')}
-              title="Start Video Call"
+              title={t('chat.videoCall')}
               className={`glass-pill flex h-8 w-8 items-center justify-center rounded-full transition ${
                 activeCall?.conversationId === activeConv.id &&
                 activeCall.mode === 'video'
@@ -614,11 +657,25 @@ export const ChatArea: React.FC = () => {
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="space-y-3"
           >
+            {!inChatSearchQuery &&
+              activeConv.messages.length >= 20 &&
+              !exhaustedConvs.has(activeConv.id) && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadOlder()}
+                    disabled={loadingOlder}
+                    className="glass-pill rounded-full px-3.5 py-1.5 text-xs text-emerald-800/80 transition hover:text-emerald-950 disabled:opacity-60 dark:text-emerald-200/80 dark:hover:text-white"
+                  >
+                    {loadingOlder ? t('chat.loading') : t('chat.loadOlder')}
+                  </button>
+                </div>
+              )}
             {visibleMessages.length === 0 ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
                 <span className="glass-pill rounded-full px-3.5 py-1.5 text-xs text-emerald-800/70 dark:text-emerald-200/65">
                   {inChatSearchQuery
-                    ? 'No messages match your search.'
+                    ? t('chat.noMatch')
                     : `This is the start of ${
                         activeConv.type === 'channel'
                           ? `#${activeConv.name}`
@@ -729,6 +786,7 @@ export const ChatArea: React.FC = () => {
         </AnimatePresence>
 
         <FloatingComposer
+          key={activeConv.id}
           conversationId={activeConv.id}
           placeholder={
             activeConv.type === 'channel'

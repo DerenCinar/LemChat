@@ -16,7 +16,6 @@ import fs from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { createBadgeOverlayIcon, createLemChatIcon } from './icon';
-import { getLocalLanIPs, startRelayServer, stopRelayServer } from './server';
 import {
   clearPersistedState,
   loadPersistedState,
@@ -41,7 +40,6 @@ let currentStatus: UserPresence = 'online';
 let isQuitting = false;
 let isApplyingUpdate = false;
 let peerWindowCounter = 1;
-let serverStatus = { hosting: false, port: 4120 };
 let latestUpdateStatus: UpdateStatusPayload = { status: 'idle' };
 let startupUpdateCheckPending = true;
 let startupUpdateDownloadPending = false;
@@ -414,13 +412,6 @@ function registerIpcHandlers() {
     return clearPersistedState(profileId);
   });
 
-  ipcMain.handle('lemchat:server-info', () => {
-    return {
-      ...serverStatus,
-      lanIps: getLocalLanIPs(),
-    };
-  });
-
   ipcMain.handle(
     'lemchat:save-attachment',
     async (event, filename: string, dataUrl: string) => {
@@ -612,31 +603,83 @@ if (gotSingleInstanceLock) {
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setIcon(getAppIcon());
     }
-    session.defaultSession.setPermissionRequestHandler(
-      (_webContents, permission, callback) => {
-        const allowed = ['media', 'mediaKeySystem', 'notifications', 'display-capture'];
-        callback(allowed.includes(permission));
+    // Windows load in the persistent partition, so the handlers must be
+    // installed there (defaultSession handlers never applied to them).
+    const appSessions = [
+      session.fromPartition('persist:skellytalk'),
+      session.defaultSession,
+    ];
+    const allowedPermissions = new Set([
+      'media',
+      'mediaKeySystem',
+      'notifications',
+      'display-capture',
+      'clipboard-sanitized-write',
+    ]);
+    const isTrustedOrigin = (url: string) => {
+      try {
+        const u = new URL(url);
+        if (u.protocol === 'file:') return true;
+        if (isDev && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return true;
+        return false;
+      } catch {
+        return false;
       }
-    );
+    };
 
-    session.defaultSession.setDisplayMediaRequestHandler(
-      async (_request, callback) => {
+    for (const ses of appSessions) {
+      ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        const origin = details?.requestingUrl || webContents.getURL();
+        callback(allowedPermissions.has(permission) && isTrustedOrigin(origin));
+      });
+      ses.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+        const origin = requestingOrigin || webContents?.getURL() || '';
+        return allowedPermissions.has(permission) && isTrustedOrigin(origin);
+      });
+
+      ses.setDisplayMediaRequestHandler(async (request, callback) => {
         try {
+          if (!isTrustedOrigin(request.securityOrigin)) {
+            callback({});
+            return;
+          }
           const sources = await desktopCapturer.getSources({
             types: ['screen', 'window'],
+            thumbnailSize: { width: 0, height: 0 },
           });
-          if (sources.length > 0) {
-            callback({ video: sources[0], audio: 'loopback' });
-          } else {
+          if (sources.length === 0) {
             callback({});
+            return;
           }
+          // Let the user pick what to share (first 8 sources + cancel).
+          const shown = sources.slice(0, 8);
+          const parent = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+          const options = {
+            type: 'question' as const,
+            title: 'Share your screen',
+            message: 'Choose what to share',
+            buttons: [...shown.map((s) => s.name.slice(0, 60)), 'Cancel'],
+            cancelId: shown.length,
+            defaultId: 0,
+            noLink: true,
+          };
+          const { response } = parent
+            ? await dialog.showMessageBox(parent, options)
+            : await dialog.showMessageBox(options);
+          if (response >= shown.length) {
+            callback({});
+            return;
+          }
+          callback({
+            video: shown[response],
+            ...(process.platform === 'win32' ? { audio: 'loopback' as const } : {}),
+          });
         } catch {
           callback({});
         }
-      }
-    );
+      });
+    }
 
-    serverStatus = await startRelayServer(4120);
     registerIpcHandlers();
     setupAutoUpdater();
     createTray();
@@ -653,7 +696,6 @@ if (gotSingleInstanceLock) {
 
   app.on('before-quit', () => {
     isQuitting = true;
-    stopRelayServer();
   });
 
   app.on('window-all-closed', () => {

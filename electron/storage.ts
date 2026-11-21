@@ -14,7 +14,7 @@ export function loadPersistedState(profileId: string): unknown | null {
     const raw = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
-    console.error('[LemChat Storage] Failed to load state:', err);
+    console.error('[SkellyTalk Storage] Failed to load state:', err);
     return null;
   }
 }
@@ -26,10 +26,13 @@ export function savePersistedState(profileId: string, state: unknown): boolean {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf-8');
+    // Atomic write: write to a temp file then rename, so a crash can't corrupt state.
+    const tmpPath = `${filePath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(state), 'utf-8');
+    fs.renameSync(tmpPath, filePath);
     return true;
   } catch (err) {
-    console.error('[LemChat Storage] Failed to save state:', err);
+    console.error('[SkellyTalk Storage] Failed to save state:', err);
     return false;
   }
 }
@@ -42,7 +45,7 @@ export function clearPersistedState(profileId: string): boolean {
     }
     return true;
   } catch (err) {
-    console.error('[LemChat Storage] Failed to clear state:', err);
+    console.error('[SkellyTalk Storage] Failed to clear state:', err);
     return false;
   }
 }

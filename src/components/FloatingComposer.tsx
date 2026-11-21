@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Paperclip, Smile, Send, X, FileText, Code2, Reply, Film, Mic, Video, Square, BarChart3, Gamepad2, Plus, Hourglass, ChevronUp, Sticker as StickerIcon, Trash2, SlidersHorizontal } from 'lucide-react';
+import { getDraft, setDraft } from '../lib/drafts';
 import { useChatStore } from '../store/useChatStore';
 import { useStickerPacks, stickerToFile, type Sticker } from '../store/useStickerPacks';
 import { StickerCropper } from './StickerCropper';
@@ -129,7 +130,7 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
   conversationId,
   placeholder,
 }) => {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => getDraft(conversationId));
   const [jumboEmoji, setJumboEmoji] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
   const [activePackId, setActivePackId] = useState<string | null>(null);
@@ -252,6 +253,11 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
       setSendError(error instanceof Error ? error.message : 'The message could not be sent.');
     }
   };
+
+  // Per-conversation drafts (the composer is keyed by conversation, so state starts fresh).
+  useEffect(() => {
+    setDraft(conversationId, text);
+  }, [text, conversationId]);
 
   useEffect(() => {
     if (useChatStore.getState().activePopupId?.startsWith('composer:')) {
