@@ -76,7 +76,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    assetsInlineLimit: 102400,
+    assetsInlineLimit: 307200,
     cssCodeSplit: false,
     rollupOptions: {
       output: {

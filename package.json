@@ -34,6 +34,7 @@
         "to": "assets",
         "filter": [
           "skellytalk*.png",
+          "logo-*.png",
           "skellytalk.ico"
         ]
       }
