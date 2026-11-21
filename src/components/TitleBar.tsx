@@ -25,7 +25,7 @@ export const TitleBar: React.FC = () => {
   }, []);
 
   return (
-    <header className="app-drag relative z-30 flex h-10 shrink-0 items-center justify-between px-3.5">
+    <header className="app-drag relative z-30 flex h-14 shrink-0 items-center justify-between px-3.5">
       {/* Left: macOS traffic lights OR LemChat Brand */}
       <div className="flex items-center gap-3">
         {isMac && (
@@ -58,9 +58,9 @@ export const TitleBar: React.FC = () => {
           <img
             src={skellytalkLogo}
             alt="SkellyTalk logo"
-            className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(16,185,129,0.4)]"
+            className="h-9 w-9 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(16,185,129,0.4)]"
           />
-          <span className="text-xs font-semibold tracking-wide text-emerald-950/90 dark:text-emerald-50/95">
+          <span className="text-base font-semibold tracking-wide text-emerald-950/90 dark:text-emerald-50/95">
             SkellyTalk
           </span>
         </div>
@@ -72,10 +72,10 @@ export const TitleBar: React.FC = () => {
           onClick={() => window.location.reload()}
           title="Reload"
           aria-label="Reload"
-          className="glass-pill relative flex h-7 w-7 items-center justify-center rounded-full text-emerald-900/70 transition hover:scale-105 hover:text-[#22C55E] dark:text-white/70"
+          className="glass-pill relative flex h-10 w-10 items-center justify-center rounded-full text-emerald-900/70 transition hover:scale-105 hover:text-[#22C55E] dark:text-white/70"
         >
           <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
-          <RotateCw className="h-3.5 w-3.5" />
+          <RotateCw className="h-5 w-5" />
         </button>
 
         {session && (
@@ -91,7 +91,7 @@ export const TitleBar: React.FC = () => {
                   ? 'Notifications On (click to mute, right-click to test)'
                   : 'Notifications Muted (click to enable)'
               }
-              className={`glass-pill relative flex h-7 w-7 items-center justify-center rounded-full transition hover:scale-105 ${
+              className={`glass-pill relative flex h-10 w-10 items-center justify-center rounded-full transition hover:scale-105 ${
                 notificationsEnabled
                   ? 'text-[#22C55E]'
                   : 'text-emerald-900/45 dark:text-white/40'
@@ -99,9 +99,9 @@ export const TitleBar: React.FC = () => {
             >
               <LiquidGlassLayer variant="pill" interactive cornerRadius={999} />
               {notificationsEnabled ? (
-                <Bell className="h-3.5 w-3.5" />
+                <Bell className="h-5 w-5" />
               ) : (
-                <BellOff className="h-3.5 w-3.5" />
+                <BellOff className="h-5 w-5" />
               )}
             </button>
 
@@ -112,7 +112,7 @@ export const TitleBar: React.FC = () => {
                   realtimeConnected ? 'text-[#22C55E]' : 'animate-pulse text-amber-400'
                 }`}
               />
-              <span>{realtimeConnected ? 'Supabase Live' : 'Connecting...'}</span>
+              <span>{realtimeConnected ? 'Connected' : 'Connecting...'}</span>
             </div>
           </>
         )}
@@ -122,27 +122,27 @@ export const TitleBar: React.FC = () => {
             <button
               onClick={() => window.lemchat?.windowMinimize()}
               aria-label="Minimize"
-              className="flex h-7 w-8 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-black/5 hover:text-emerald-950 dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"
+              className="flex h-10 w-12 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-black/5 hover:text-emerald-950 dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"
             >
-              <Minus className="h-3.5 w-3.5" />
+              <Minus className="h-5 w-5" />
             </button>
             <button
               onClick={() => window.lemchat?.windowMaximize()}
               aria-label="Maximize"
-              className="flex h-7 w-8 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-black/5 hover:text-emerald-950 dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"
+              className="flex h-10 w-12 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-black/5 hover:text-emerald-950 dark:text-white/70 dark:hover:bg-white/10 dark:hover:text-white"
             >
               {isMaximized ? (
-                <Copy className="h-3 w-3" />
+                <Copy className="h-4 w-4" />
               ) : (
-                <Square className="h-3 w-3" />
+                <Square className="h-4 w-4" />
               )}
             </button>
             <button
               onClick={() => window.lemchat?.windowClose()}
               aria-label="Close"
-              className="flex h-7 w-8 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-red-500/80 hover:text-white dark:text-white/70 dark:hover:bg-red-500/80 dark:hover:text-white"
+              className="flex h-10 w-12 items-center justify-center rounded-lg text-emerald-950/70 transition hover:bg-red-500/80 hover:text-white dark:text-white/70 dark:hover:bg-red-500/80 dark:hover:text-white"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         )}
