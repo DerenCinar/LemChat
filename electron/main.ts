@@ -177,6 +177,60 @@ function refreshPlatformIcons() {
   }
 }
 
+interface ShareSourceInfo {
+  id: string;
+  name: string;
+  kind: 'screen' | 'window';
+  thumbnail: string;
+  appIcon: string | null;
+}
+
+async function listShareSources(): Promise<ShareSourceInfo[]> {
+  const sources = await desktopCapturer.getSources({
+    types: ['screen', 'window'],
+    thumbnailSize: { width: 480, height: 270 },
+    fetchWindowIcons: true,
+  });
+  return sources
+    .filter((src) => !src.thumbnail.isEmpty())
+    .map((src) => ({
+      id: src.id,
+      name: src.name,
+      kind: src.id.startsWith('screen:') ? ('screen' as const) : ('window' as const),
+      thumbnail: `data:image/jpeg;base64,${src.thumbnail.toJPEG(65).toString('base64')}`,
+      appIcon: src.appIcon && !src.appIcon.isEmpty() ? src.appIcon.toDataURL() : null,
+    }));
+}
+
+let pendingShare: {
+  webContentsId: number;
+  resolve: (choice: { id: string; audio: boolean } | null) => void;
+} | null = null;
+
+/** Asks the renderer to show the custom screen-share picker and waits for the choice. */
+function requestShareChoice(win: BrowserWindow): Promise<{ id: string; audio: boolean } | null> {
+  return new Promise((resolve) => {
+    pendingShare?.resolve(null);
+    const timer = setTimeout(() => finish(null), 120_000);
+    const finish = (choice: { id: string; audio: boolean } | null) => {
+      clearTimeout(timer);
+      if (pendingShare?.resolve === finish) pendingShare = null;
+      if (!win.isDestroyed()) win.webContents.send('lemchat:screen-share-close');
+      resolve(choice);
+    };
+    pendingShare = { webContentsId: win.webContents.id, resolve: finish };
+    void listShareSources()
+      .then((sources) => {
+        if (win.isDestroyed()) return finish(null);
+        win.webContents.send('lemchat:screen-share-request', {
+          sources,
+          audioAvailable: process.platform === 'win32',
+        });
+      })
+      .catch(() => finish(null));
+  });
+}
+
 function createWindow(profileId = 'default'): BrowserWindow {
   const appIcon = getAppIcon();
   const isWin = process.platform === 'win32';
@@ -407,6 +461,17 @@ function registerIpcHandlers() {
       return savePersistedState(profileId, state);
     }
   );
+
+  ipcMain.handle('lemchat:screen-share-sources', async (event) => {
+    if (!pendingShare || pendingShare.webContentsId !== event.sender.id) return [];
+    return listShareSources();
+  });
+
+  ipcMain.on('lemchat:screen-share-pick', (event, choice: { id: string; audio: boolean } | null) => {
+    if (!pendingShare || pendingShare.webContentsId !== event.sender.id) return;
+    if (choice && (typeof choice.id !== 'string' || typeof choice.audio !== 'boolean')) return;
+    pendingShare.resolve(choice);
+  });
 
   ipcMain.handle('lemchat:clear-state', (_event, profileId: string) => {
     return clearPersistedState(profileId);
@@ -643,36 +708,28 @@ if (gotSingleInstanceLock) {
             callback({});
             return;
           }
+          const parent = BrowserWindow.getFocusedWindow() ?? mainWindow;
+          if (!parent || parent.isDestroyed()) {
+            callback({});
+            return;
+          }
+          const choice = await requestShareChoice(parent);
+          if (!choice) {
+            callback({});
+            return;
+          }
           const sources = await desktopCapturer.getSources({
             types: ['screen', 'window'],
             thumbnailSize: { width: 0, height: 0 },
           });
-          if (sources.length === 0) {
-            callback({});
-            return;
-          }
-          // Let the user pick what to share (first 8 sources + cancel).
-          const shown = sources.slice(0, 8);
-          const parent = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
-          const options = {
-            type: 'question' as const,
-            title: 'Share your screen',
-            message: 'Choose what to share',
-            buttons: [...shown.map((s) => s.name.slice(0, 60)), 'Cancel'],
-            cancelId: shown.length,
-            defaultId: 0,
-            noLink: true,
-          };
-          const { response } = parent
-            ? await dialog.showMessageBox(parent, options)
-            : await dialog.showMessageBox(options);
-          if (response >= shown.length) {
+          const picked = sources.find((src) => src.id === choice.id);
+          if (!picked) {
             callback({});
             return;
           }
           callback({
-            video: shown[response],
-            ...(process.platform === 'win32' ? { audio: 'loopback' as const } : {}),
+            video: picked,
+            ...(choice.audio && process.platform === 'win32' ? { audio: 'loopback' as const } : {}),
           });
         } catch {
           callback({});

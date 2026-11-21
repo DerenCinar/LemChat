@@ -14,6 +14,7 @@ import { NewConversationModal } from './components/NewConversationModal';
 import { CallOverlay } from './components/CallOverlay';
 import { ProfileModal } from './components/ProfileModal';
 import { AttachmentViewer } from './components/AttachmentViewer';
+import { ScreenSharePicker } from './components/ScreenSharePicker';
 import { AppLockScreen } from './components/AppLockScreen';
 import { LiquidGlassLayer } from './components/LiquidGlassLayer';
 import { isAndroidNative } from './lib/updater';
@@ -111,6 +112,7 @@ export const App: React.FC = () => {
         <CallOverlay />
         <ProfileModal />
         <AttachmentViewer />
+        <ScreenSharePicker />
         <AppLockScreen />
 
         <AnimatePresence>

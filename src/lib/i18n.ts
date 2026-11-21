@@ -53,6 +53,18 @@ const en = {
   'error.title': 'Something went wrong',
   'error.body': 'SkellyTalk hit an unexpected error. Your messages are safe — reload to continue.',
   'error.reload': 'Reload app',
+  'share.title': 'Share your screen',
+  'share.subtitle': 'Choose a screen or window to share',
+  'share.screens': 'Screens',
+  'share.windows': 'Windows',
+  'share.audio': 'Also share computer audio',
+  'share.start': 'Share',
+  'share.cancel': 'Cancel',
+  'share.empty': 'Nothing to share here',
+  'share.preview': 'Live preview',
+  'msg.forwardedFrom': 'Forwarded from',
+  'settings.languageSection': 'Language',
+  'settings.languageSectionDesc': 'Choose the language of menus and labels',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -101,6 +113,18 @@ const es: Dict = {
   'error.title': 'Algo salió mal',
   'error.body': 'SkellyTalk encontró un error inesperado. Tus mensajes están a salvo: recarga para continuar.',
   'error.reload': 'Recargar app',
+  'share.title': 'Compartir pantalla',
+  'share.subtitle': 'Elige una pantalla o ventana para compartir',
+  'share.screens': 'Pantallas',
+  'share.windows': 'Ventanas',
+  'share.audio': 'Compartir también el audio del equipo',
+  'share.start': 'Compartir',
+  'share.cancel': 'Cancelar',
+  'share.empty': 'No hay nada que compartir aquí',
+  'share.preview': 'Vista previa en vivo',
+  'msg.forwardedFrom': 'Reenviado de',
+  'settings.languageSection': 'Idioma',
+  'settings.languageSectionDesc': 'Elige el idioma de menús y etiquetas',
 };
 
 const fr: Dict = {
@@ -146,6 +170,18 @@ const fr: Dict = {
   'error.title': 'Une erreur est survenue',
   'error.body': 'SkellyTalk a rencontré une erreur inattendue. Vos messages sont en sécurité — rechargez pour continuer.',
   'error.reload': "Recharger l'app",
+  'share.title': 'Partager votre écran',
+  'share.subtitle': 'Choisissez un écran ou une fenêtre à partager',
+  'share.screens': 'Écrans',
+  'share.windows': 'Fenêtres',
+  'share.audio': "Partager aussi le son de l'ordinateur",
+  'share.start': 'Partager',
+  'share.cancel': 'Annuler',
+  'share.empty': 'Rien à partager ici',
+  'share.preview': 'Aperçu en direct',
+  'msg.forwardedFrom': 'Transféré de',
+  'settings.languageSection': 'Langue',
+  'settings.languageSectionDesc': 'Choisissez la langue des menus et libellés',
 };
 
 const de: Dict = {
@@ -191,6 +227,18 @@ const de: Dict = {
   'error.title': 'Etwas ist schiefgelaufen',
   'error.body': 'SkellyTalk ist auf einen unerwarteten Fehler gestoßen. Deine Nachrichten sind sicher — lade neu, um fortzufahren.',
   'error.reload': 'App neu laden',
+  'share.title': 'Bildschirm teilen',
+  'share.subtitle': 'Wähle einen Bildschirm oder ein Fenster zum Teilen',
+  'share.screens': 'Bildschirme',
+  'share.windows': 'Fenster',
+  'share.audio': 'Auch Computer-Audio teilen',
+  'share.start': 'Teilen',
+  'share.cancel': 'Abbrechen',
+  'share.empty': 'Hier gibt es nichts zu teilen',
+  'share.preview': 'Live-Vorschau',
+  'msg.forwardedFrom': 'Weitergeleitet von',
+  'settings.languageSection': 'Sprache',
+  'settings.languageSectionDesc': 'Wähle die Sprache von Menüs und Beschriftungen',
 };
 
 const pt: Dict = {
@@ -236,6 +284,18 @@ const pt: Dict = {
   'error.title': 'Algo deu errado',
   'error.body': 'O SkellyTalk encontrou um erro inesperado. Suas mensagens estão seguras — recarregue para continuar.',
   'error.reload': 'Recarregar app',
+  'share.title': 'Compartilhar tela',
+  'share.subtitle': 'Escolha uma tela ou janela para compartilhar',
+  'share.screens': 'Telas',
+  'share.windows': 'Janelas',
+  'share.audio': 'Compartilhar também o áudio do computador',
+  'share.start': 'Compartilhar',
+  'share.cancel': 'Cancelar',
+  'share.empty': 'Nada para compartilhar aqui',
+  'share.preview': 'Pré-visualização ao vivo',
+  'msg.forwardedFrom': 'Encaminhada de',
+  'settings.languageSection': 'Idioma',
+  'settings.languageSectionDesc': 'Escolha o idioma de menus e rótulos',
 };
 
 export const DICTIONARIES: Record<Language, Dict> = { en, es, fr, de, pt };

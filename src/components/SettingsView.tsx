@@ -32,7 +32,7 @@ import {
   stopRingtone,
 } from '../lib/sound';
 import { APP_LOGOS, applyAppLogo, useAppLogoId } from '../lib/appLogo';
-import { LANGUAGES, useLanguage, useT, type Language } from '../lib/i18n';
+import { LANGUAGES, useLanguage, useT } from '../lib/i18n';
 import type {
   GlassDepth,
   NotificationRevealMode,
@@ -282,6 +282,31 @@ export const SettingsView: React.FC = () => {
             </button>
           </div>
         )}
+
+        <SettingsSection
+          title={t('settings.languageSection')}
+          description={t('settings.languageSectionDesc')}
+          defaultOpen
+        >
+          <div role="radiogroup" aria-label={t('settings.language')} className="flex flex-wrap gap-2">
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                role="radio"
+                aria-checked={language === l.id}
+                onClick={() => setLanguage(l.id)}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                  language === l.id
+                    ? 'bg-[#22C55E]/20 text-emerald-700 ring-1 ring-[#22C55E]/60 dark:text-emerald-300'
+                    : 'glass-pill text-emerald-900/80 hover:brightness-110 dark:text-emerald-100/80'
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </SettingsSection>
 
         {self && (
           <SettingsSection
@@ -1243,21 +1268,6 @@ export const SettingsView: React.FC = () => {
                   <option value="imessage-classic">Classic iMessage (Blue &amp; Gray tails)</option>
                   <option value="glass">Floating glass</option>
                   <option value="cyber">Sharp cyber-cut</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <SettingLabel label={t('settings.language')} info={t('settings.languageInfo')} />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as Language)}
-                  className="chat-font-select glass-pill w-full rounded-xl px-3 py-2 text-xs"
-                >
-                  {LANGUAGES.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.label}
-                    </option>
-                  ))}
                 </select>
               </div>
 

@@ -195,6 +195,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
     }
   }
 
+  // Parse forwarded prefix (first line: "↪ Forwarded from Name:", then the body)
+  let forwardedFrom: string | null = null;
+  const forwardMatch = /^↪ Forwarded from ([^\n]*?):?(?:\n|$)/.exec(message.content);
+  if (forwardMatch) {
+    forwardedFrom = forwardMatch[1] || null;
+    bodyContent = message.content.slice(forwardMatch[0].length);
+  }
+
   const actionToolbar = (
     <div
       ref={pickerContainerRef}
@@ -468,6 +476,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               </div>
             )}
 
+            {forwardedFrom && (
+              <div
+                className={`mb-2 flex items-center gap-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11.5px] ${
+                  message.isMe
+                    ? 'border-white/60 bg-black/15 text-white/90'
+                    : 'border-[#22C55E] bg-black/5 text-emerald-900/80 dark:bg-white/5 dark:text-emerald-100/80'
+                }`}
+              >
+                <Forward className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                <span className="min-w-0 truncate">
+                  <span className="opacity-75">{t('msg.forwardedFrom')} </span>
+                  <span className="font-semibold">{forwardedFrom}</span>
+                </span>
+              </div>
+            )}
             {quoteLine && (
               <div
                 className={`mb-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11.5px] ${

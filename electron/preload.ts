@@ -25,6 +25,19 @@ export interface UpdateStatusPayload {
   message?: string;
 }
 
+export interface ShareSourceInfo {
+  id: string;
+  name: string;
+  kind: 'screen' | 'window';
+  thumbnail: string;
+  appIcon: string | null;
+}
+
+export interface ShareRequestPayload {
+  sources: ShareSourceInfo[];
+  audioAvailable: boolean;
+}
+
 export interface LemChatAPI {
   platform: NodeJS.Platform;
   profileId: string;
@@ -57,12 +70,28 @@ export interface LemChatAPI {
   onStatusChangedFromTray: (callback: (status: UserPresence) => void) => () => void;
   onWindowFocusChange: (callback: (isFocused: boolean) => void) => () => void;
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
+  onScreenShareRequest: (callback: (payload: ShareRequestPayload) => void) => () => void;
+  onScreenShareClose: (callback: () => void) => () => void;
+  refreshScreenShareSources: () => Promise<ShareSourceInfo[]>;
+  pickScreenShare: (choice: { id: string; audio: boolean } | null) => void;
 }
 
 const profileArg = process.argv.find((a) => a.startsWith('--lemchat-profile='));
 const profileId = profileArg ? profileArg.split('=')[1] : 'default';
 
 const api: LemChatAPI = {
+  onScreenShareRequest: (callback) => {
+    const handler = (_e: Electron.IpcRendererEvent, payload: ShareRequestPayload) => callback(payload);
+    ipcRenderer.on('lemchat:screen-share-request', handler);
+    return () => ipcRenderer.removeListener('lemchat:screen-share-request', handler);
+  },
+  onScreenShareClose: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('lemchat:screen-share-close', handler);
+    return () => ipcRenderer.removeListener('lemchat:screen-share-close', handler);
+  },
+  refreshScreenShareSources: () => ipcRenderer.invoke('lemchat:screen-share-sources'),
+  pickScreenShare: (choice) => ipcRenderer.send('lemchat:screen-share-pick', choice),
   platform: process.platform,
   profileId,
   getAppVersion: () => ipcRenderer.invoke('lemchat:get-app-version'),

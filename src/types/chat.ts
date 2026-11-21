@@ -321,6 +321,19 @@ export interface NotificationPayload {
   forceShow?: boolean;
 }
 
+export interface ShareSourceInfo {
+  id: string;
+  name: string;
+  kind: 'screen' | 'window';
+  thumbnail: string;
+  appIcon: string | null;
+}
+
+export interface ShareRequestPayload {
+  sources: ShareSourceInfo[];
+  audioAvailable: boolean;
+}
+
 export interface LemChatAPI {
   platform: NodeJS.Platform;
   getAppVersion?: () => Promise<string>;
@@ -347,6 +360,10 @@ export interface LemChatAPI {
   onStatusChangedFromTray: (callback: (status: SelfPresence) => void) => () => void;
   onWindowFocusChange: (callback: (isFocused: boolean) => void) => () => void;
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
+  onScreenShareRequest?: (callback: (payload: ShareRequestPayload) => void) => () => void;
+  onScreenShareClose?: (callback: () => void) => () => void;
+  refreshScreenShareSources?: () => Promise<ShareSourceInfo[]>;
+  pickScreenShare?: (choice: { id: string; audio: boolean } | null) => void;
 }
 
 declare global {
