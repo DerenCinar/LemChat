@@ -60,7 +60,7 @@ export const TitleBar: React.FC = () => {
             alt="SkellyTalk logo"
             className="h-8 w-8 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(16,185,129,0.4)]"
           />
-          <span className="text-xl font-semibold tracking-wide text-emerald-950/90 dark:text-emerald-50/95">
+          <span className="font-brand text-xl font-bold tracking-wider text-emerald-950/90 dark:text-emerald-50/95">
             SkellyTalk
           </span>
         </div>

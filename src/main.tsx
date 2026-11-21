@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import '@fontsource/chakra-petch/600.css';
+import '@fontsource/chakra-petch/700.css';
 import './index.css';
 
 // Only attach the web manifest over HTTP(S); ChromeOS file:// blocks manifest fetches via CORS.

@@ -15,6 +15,7 @@ export default {
         },
       },
       fontFamily: {
+        brand: ['"Chakra Petch"', '"Segoe UI"', 'sans-serif'],
         sans: [
           '-apple-system',
           'BlinkMacSystemFont',
