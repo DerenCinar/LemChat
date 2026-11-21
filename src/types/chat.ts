@@ -181,7 +181,16 @@ export interface CapsuleMetadata {
   data: string;
 }
 
-export type InteractiveMetadata = PollMetadata | GameMetadata | CapsuleMetadata;
+/** System-style call event posted into the chat (missed / declined / ended). */
+export interface CallLogMetadata {
+  kind: 'call';
+  mode: 'audio' | 'video';
+  outcome: 'missed' | 'declined' | 'ended';
+  callerId: string;
+  durationSec?: number;
+}
+
+export type InteractiveMetadata = PollMetadata | GameMetadata | CapsuleMetadata | CallLogMetadata;
 
 export interface Message {
   id: string;

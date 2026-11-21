@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { MessageBubble } from './MessageBubble';
+import { CallLogRow } from './InteractiveCard';
 import { FloatingComposer } from './FloatingComposer';
 import { UserAvatar } from './UserAvatar';
 import { FriendshipStatsPanel } from './FriendshipStats';
@@ -653,13 +654,17 @@ export const ChatArea: React.FC = () => {
                         <span className="unread-divider-label">New messages</span>
                       </div>
                     )}
-                    <MessageBubble
-                      message={msg}
-                      showHeader={showHeader}
-                      isLastInGroup={isLastInGroup}
-                      highlightQuery={inChatSearchQuery}
-                      highlightMention={pendingMentionMessageId === msg.id}
-                    />
+                    {msg.interactive?.kind === 'call' ? (
+                      <CallLogRow message={msg} call={msg.interactive} />
+                    ) : (
+                      <MessageBubble
+                        message={msg}
+                        showHeader={showHeader}
+                        isLastInGroup={isLastInGroup}
+                        highlightQuery={inChatSearchQuery}
+                        highlightMention={pendingMentionMessageId === msg.id}
+                      />
+                    )}
                   </React.Fragment>
                 );
               })

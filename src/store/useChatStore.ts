@@ -27,6 +27,7 @@ import type {
   GifAttachment,
   InteractiveMetadata,
   CapsuleMetadata,
+  CallLogMetadata,
   IncomingCallState,
   GameMetadata,
   Message,
@@ -283,6 +284,84 @@ let fetchQueued = false;
 let initializedSignalUserId: string | null = null;
 const pendingIceByCall = new Map<string, RTCIceCandidateInit[]>();
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Calls this client started; only the caller posts the call-log message. */
+const outgoingCallIds = new Set<string>();
+const loggedCallIds = new Set<string>();
+
+function formatCallDuration(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** Posts a "missed / declined / ended" call event into the conversation (caller side only). */
+async function logCallEvent(
+  call: { callId: string; conversationId: string; mode: CallMode; startedAt: number | null },
+  outcome: 'missed' | 'declined' | 'ended'
+): Promise<void> {
+  if (!outgoingCallIds.has(call.callId) || loggedCallIds.has(call.callId)) return;
+  loggedCallIds.add(call.callId);
+  const supabase = getSupabaseClient();
+  const userId = useChatStore.getState().session?.user?.id;
+  if (!supabase || !userId) return;
+
+  const durationSec =
+    outcome === 'ended' && call.startedAt
+      ? Math.max(0, Math.round((Date.now() - call.startedAt) / 1000))
+      : undefined;
+  const meta: CallLogMetadata = {
+    kind: 'call',
+    mode: call.mode,
+    outcome,
+    callerId: userId,
+    ...(durationSec !== undefined ? { durationSec } : {}),
+  };
+  const label = call.mode === 'video' ? 'video call' : 'voice call';
+  const content =
+    outcome === 'missed'
+      ? `📞 Missed ${label}`
+      : outcome === 'declined'
+        ? `📞 ${label[0].toUpperCase()}${label.slice(1)} declined`
+        : `📞 ${label[0].toUpperCase()}${label.slice(1)} ended${
+            durationSec !== undefined ? ` · ${formatCallDuration(durationSec)}` : ''
+          }`;
+
+  const { data: row, error } = await supabase
+    .from('messages')
+    .insert({ conversation_id: call.conversationId, sender_id: userId, content, metadata: meta })
+    .select('id')
+    .maybeSingle();
+  if (error || !row?.id) {
+    console.warn('[SkellyTalk] Failed to log call event:', error?.message);
+    return;
+  }
+  const state = useChatStore.getState();
+  const sender = state.self;
+  const nowIso = new Date().toISOString();
+  const msg: Message = {
+    id: row.id as string,
+    conversationId: call.conversationId,
+    senderId: userId,
+    senderName: sender?.name ?? 'You',
+    senderAvatar: sender?.avatar ?? 'ST',
+    content,
+    timestamp: formatTimestamp(nowIso),
+    createdAt: nowIso,
+    isMe: true,
+    status: 'sent',
+    reactions: [],
+    interactive: meta,
+  };
+  useChatStore.setState({
+    conversations: state.conversations.map((c) =>
+      c.id === call.conversationId && !c.messages.some((m) => m.id === msg.id)
+        ? { ...c, messages: [...c.messages, msg] }
+        : c
+    ),
+  });
+}
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -2276,8 +2355,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           stopRingtone();
           set({ incomingCall: null });
         }
-        if (get().activeCall?.callId === data.callId) {
+        const activeNow = get().activeCall;
+        if (activeNow?.callId === data.callId) {
           stopRingtone();
+          // Peer hung up while we were still ringing = they declined.
+          if (activeNow.status === 'ringing') void logCallEvent(activeNow, 'declined');
           get().endCall();
         }
       })
@@ -3527,6 +3609,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!self || !conv) return;
 
     const callId = `call-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    outgoingCallIds.add(callId);
     let localStream: MediaStream | null = null;
     let mediaWarning: string | undefined;
 
@@ -3778,6 +3861,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     stopRingtone();
     const active = get().activeCall;
     const self = get().self;
+    if (active) {
+      void logCallEvent(active, active.status === 'connected' ? 'ended' : 'missed');
+    }
     if (active && self && callsChannel) {
       void callsChannel.send({
         type: 'broadcast',

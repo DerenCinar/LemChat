@@ -1,11 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { BarChart3, Gamepad2, Lock, Maximize2, Unlock, X } from 'lucide-react';
+import { BarChart3, Gamepad2, Lock, Maximize2, Phone, PhoneMissed, Unlock, Video, X } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
 import { GRID_GAMES, reversiMoves, type GridGameId } from '../lib/gridGames';
 import { DUEL_GAMES, type DuelGameId } from '../lib/duelGames';
 import { DuelBoard } from './DuelBoards';
-import type { CapsuleMetadata, GameMetadata, Message, PollMetadata } from '../types/chat';
+import type { CallLogMetadata, CapsuleMetadata, GameMetadata, Message, PollMetadata } from '../types/chat';
 
 const PollCard: React.FC<{ message: Message; poll: PollMetadata }> = ({ message, poll }) => {
   const votePoll = useChatStore((s) => s.votePoll);
@@ -321,9 +321,54 @@ const CapsuleCard: React.FC<{ message: Message; capsule: CapsuleMetadata }> = ({
   );
 };
 
+const fmtDuration = (sec: number) => {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+};
+
+/** Centered system-style row for missed / declined / ended calls. */
+export const CallLogRow: React.FC<{ message: Message; call: CallLogMetadata }> = ({
+  message,
+  call,
+}) => {
+  const selfId = useChatStore((s) => s.self?.id);
+  const iAmCaller = call.callerId === selfId;
+  const kind = call.mode === 'video' ? 'video call' : 'voice call';
+  const Icon = call.mode === 'video' ? Video : call.outcome === 'missed' && !iAmCaller ? PhoneMissed : Phone;
+
+  let text: string;
+  let tone = 'text-emerald-700 dark:text-emerald-300';
+  if (call.outcome === 'ended') {
+    text = `${call.mode === 'video' ? 'Video' : 'Voice'} call ended${
+      call.durationSec != null ? ` · ${fmtDuration(call.durationSec)}` : ''
+    }`;
+  } else if (call.outcome === 'declined') {
+    text = iAmCaller ? `${kind[0].toUpperCase()}${kind.slice(1)} declined` : `You declined a ${kind}`;
+    tone = 'text-amber-700 dark:text-amber-300';
+  } else {
+    text = iAmCaller ? `No answer · ${kind}` : `Missed ${kind}`;
+    tone = iAmCaller ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400';
+  }
+
+  return (
+    <div className="flex w-full justify-center py-1.5" data-call-log>
+      <div
+        className={`glass-panel flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold ${tone}`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        <span>{text}</span>
+        <span className="font-normal opacity-60">{message.timestamp}</span>
+      </div>
+    </div>
+  );
+};
+
 export const InteractiveCard: React.FC<{ message: Message }> = ({ message }) => {
   const data = message.interactive;
   if (!data) return null;
+  if (data.kind === 'call') return <CallLogRow message={message} call={data} />;
   if (data.kind === 'poll') return <PollCard message={message} poll={data} />;
   if (data.kind === 'capsule') return <CapsuleCard message={message} capsule={data} />;
   return <GameCard message={message} game={data} />;
