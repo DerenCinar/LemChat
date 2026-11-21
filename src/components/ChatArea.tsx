@@ -718,7 +718,7 @@ export const ChatArea: React.FC = () => {
                 wasNearBottomRef.current = true;
                 setShowScrollToBottom(false);
               }}
-              className="glass-panel glass-surface absolute bottom-[78px] right-5 z-20 flex h-10 w-10 items-center justify-center rounded-full text-emerald-950 shadow-lem-glow-sm transition hover:scale-105 dark:text-white"
+              className="glass-panel glass-pill glass-bare absolute bottom-[78px] right-5 z-20 flex h-10 w-10 items-center justify-center rounded-full text-emerald-950 transition hover:scale-105 dark:text-white"
               title="Scroll to bottom"
               aria-label="Scroll to bottom"
             >
