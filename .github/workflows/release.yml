@@ -23,10 +23,9 @@ jobs:
       - name: Compute release version from run number
         id: pkg
         run: |
-          BASE_VER=$(node -p "require('./package.json').version")
-          MAJOR=$(echo "$BASE_VER" | cut -d. -f1)
-          MINOR=$(echo "$BASE_VER" | cut -d. -f2)
-          NEW_VER="${MAJOR}.${MINOR}.${{ github.run_number }}"
+          # Run 101 -> 2.0.1; minor and patch are single digits, major is unbounded.
+          V=$(( ${{ github.run_number }} + 100 ))
+          NEW_VER="$(( V / 100 )).$(( (V / 10) % 10 )).$(( V % 10 ))"
           echo "version=${NEW_VER}" >> "$GITHUB_OUTPUT"
 
   release-windows:
