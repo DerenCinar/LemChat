@@ -17,6 +17,13 @@ describe('filterProfanity', () => {
     expect(filterProfanity('damn it', 'strict')).toBe('**** it');
     expect(filterProfanity('Scunthorpe classic', 'strict')).toBe('Scunthorpe classic');
   });
+  it('catches plurals, compounds and leetspeak', () => {
+    expect(filterProfanity('dicks and cocks', 'strict')).toBe('**** and ****');
+    expect(filterProfanity('dickhead', 'strict')).toBe('****');
+    expect(filterProfanity('penis', 'strict')).toBe('****');
+    expect(filterProfanity('sh1t d!ck', 'strict')).toBe('**** ****');
+    expect(filterProfanity('a pen is here, cockpit', 'strict')).toBe('a pen is here, cockpit');
+  });
   it('mild keeps the first letter', () => {
     expect(filterProfanity('shit', 'mild')).toBe('s***');
   });

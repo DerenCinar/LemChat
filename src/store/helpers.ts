@@ -1,13 +1,22 @@
 import type { Conversation, LiquidGlassTheme, ProfanityFilter, Reaction } from '../types/chat';
 
-const PROFANITY_WORDS = ['fuck', 'shit', 'bitch', 'asshole', 'bastard', 'damn', 'cunt', 'dick'];
+const PROFANITY_WORDS = [
+  'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'damn', 'cunt', 'dick', 'cock', 'penis',
+  'pussy', 'vagina', 'whore', 'slut', 'piss', 'twat', 'wank', 'bollocks', 'prick', 'dildo',
+  'tits', 'boobs', 'nigg', 'fag',
+];
+// Common character substitutions used to dodge filters (f*ck, sh1t, d!ck ...)
+const LEET: Record<string, string> = { a: '[a@4]', e: '[e3]', i: '[i1!|]', o: '[o0]', s: '[s$5]', u: '[uv*]', c: '[ck]', k: '[kc]' };
+const SUFFIX = '(?:s|es|ed|er|ers|ing|in|y|head|heads|face|hole|holes|wad|bag)?';
+const buildPattern = (word: string) =>
+  new RegExp(`\\b${[...word].map((ch) => `${LEET[ch] ?? ch}+`).join('')}${SUFFIX}\\b`, 'gi');
 export const filterProfanity = (text: string, mode: ProfanityFilter) => {
   if (mode === 'off') return text;
-  const words = PROFANITY_WORDS;
-  return words.reduce((result, word) => {
-    const pattern = new RegExp(`\\b${word}\\b`, 'gi');
-    const replacement = mode === 'strict' ? '****' : `${word[0]}${'*'.repeat(Math.max(2, word.length - 1))}`;
-    return result.replace(pattern, replacement);
+  return PROFANITY_WORDS.reduce((result, word) => {
+    const pattern = buildPattern(word);
+    return result.replace(pattern, (match) =>
+      mode === 'strict' ? '****' : `${match[0]}${'*'.repeat(Math.max(2, match.length - 1))}`
+    );
   }, text);
 };
 

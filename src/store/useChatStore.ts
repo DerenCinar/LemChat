@@ -2974,7 +2974,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   editMessage: async (messageId, content) => {
     const supabase = getSupabaseClient();
     const user = get().session?.user;
-    const trimmed = content.trim();
+    const trimmed = filterProfanity(content.trim(), get().profanityFilter);
     if (!supabase || !user || !trimmed) return;
 
     const conv = get().conversations.find((conversation) =>
