@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import packageInfo from '../../package.json';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
+import { startSettingsSync, stopSettingsSync } from '../lib/settingsSync';
+import { applyAppLogo, getSavedAppLogo } from '../lib/appLogo';
 import { GRID_GAMES, applyMove, emptyBoard, type GridGameId } from '../lib/gridGames';
 import { DUEL_GAMES, initialDuel, type DuelGameId, type GamePatch } from '../lib/duelGames';
 import {
@@ -215,6 +217,8 @@ interface ChatStore {
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotifyWhenFocused: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
+  /** Re-read synced preferences from localStorage and apply them to the live UI. */
+  rehydrateSyncedSettings: () => void;
   sendTestNotification: () => Promise<void>;
   setUpdateStatus: (payload: UpdateStatusPayload) => void;
   checkForUpdates: () => Promise<void>;
@@ -622,20 +626,20 @@ function buildReactionsList(
   }));
 }
 
-const savedThemeValue = localStorage.getItem('skellytalk_theme');
-const savedTheme: ThemeMode =
-  savedThemeValue === 'dark' ||
-  savedThemeValue === 'light' ||
-  savedThemeValue === 'mono' ||
-  savedThemeValue === 'mono-dark' ||
-  savedThemeValue === 'ocean' ||
-  savedThemeValue === 'sunset' ||
-  savedThemeValue === 'rose' ||
-  savedThemeValue === 'aurora' ||
-  savedThemeValue === 'ice' ||
-  savedThemeValue === 'amethyst'
-    ? savedThemeValue
+const parseTheme = (value: string | null): ThemeMode =>
+  value === 'dark' ||
+  value === 'light' ||
+  value === 'mono' ||
+  value === 'mono-dark' ||
+  value === 'ocean' ||
+  value === 'sunset' ||
+  value === 'rose' ||
+  value === 'aurora' ||
+  value === 'ice' ||
+  value === 'amethyst'
+    ? value
     : 'dark';
+const savedTheme: ThemeMode = parseTheme(localStorage.getItem('skellytalk_theme'));
 if (savedTheme === 'dark' || savedTheme === 'mono-dark' || savedTheme === 'ocean' || savedTheme === 'sunset' || savedTheme === 'rose' || savedTheme === 'aurora' || savedTheme === 'ice' || savedTheme === 'amethyst') {
   document.documentElement.classList.add('dark');
 } else {
@@ -981,6 +985,50 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ soundEnabled });
   },
 
+  rehydrateSyncedSettings: () => {
+    const theme = parseTheme(localStorage.getItem('skellytalk_theme'));
+    const chatFont = (localStorage.getItem('skellytalk_font') as ChatFont) || 'system';
+    const chatFontSize = (localStorage.getItem('skellytalk_font_size') as ChatFontSize) || 'medium';
+    const liquidGlass = readLiquidGlass();
+
+    // Re-run the setters' DOM side effects. Their localStorage writes are
+    // no-ops here because the stored values already match.
+    get().setTheme(theme);
+    document.documentElement.dataset.chatFont = chatFont;
+    document.documentElement.dataset.chatFontSize = chatFontSize;
+    applyLiquidGlass(liquidGlass);
+    applyAppLogo(getSavedAppLogo(), false);
+
+    set({
+      chatFont,
+      chatFontSize,
+      liquidGlass,
+      profanityFilter: (localStorage.getItem('skellytalk_profanity') as ProfanityFilter) || 'off',
+      notificationsEnabled: localStorage.getItem('lemchat_notif_enabled') !== 'false',
+      notifyWhenFocused: localStorage.getItem('lemchat_notif_focused') !== 'false',
+      soundEnabled: localStorage.getItem('lemchat_sound_enabled') !== 'false',
+    });
+
+    // Contact nicknames may have changed on another device.
+    const selfId = get().session?.user?.id;
+    if (selfId) {
+      const aliases = readContactAliases(selfId);
+      set((state) => ({
+        conversations: state.conversations.map((conversation) =>
+          conversation.type === 'dm' && conversation.peerUserId
+            ? {
+                ...conversation,
+                name:
+                  aliases[conversation.peerUserId]?.trim() ||
+                  state.profiles[conversation.peerUserId]?.displayName ||
+                  conversation.name,
+              }
+            : conversation
+        ),
+      }));
+    }
+  },
+
   setUpdateStatus: (updateStatus) => {
     const previous = get().updateStatus;
     set({ updateStatus });
@@ -1266,6 +1314,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ session: data.session, authLoading: false });
 
     if (data.session) {
+      void startSettingsSync(data.session.user.id, () => get().rehydrateSyncedSettings());
       await get().fetchWorkspaceData();
       get().subscribeRealtime();
     }
@@ -1275,9 +1324,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ session: nextSession });
 
       if (nextSession && nextSession.user.id !== prevUserId) {
+        void startSettingsSync(nextSession.user.id, () => get().rehydrateSyncedSettings());
         await get().fetchWorkspaceData();
         get().subscribeRealtime();
       } else if (!nextSession) {
+        stopSettingsSync();
         get().cleanupRealtime();
         set({
           self: null,
@@ -1373,6 +1424,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   signOut: async () => {
     const supabase = getSupabaseClient();
+    stopSettingsSync();
     get().cleanupRealtime();
     initializedSignalUserId = null;
     if (supabase) {

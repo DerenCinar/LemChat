@@ -553,16 +553,17 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
       </AnimatePresence>
 
       {showQuickReplies && !recordingMode && !pendingRecording && (
-        <div className="lem-scrollbar mb-1.5 flex gap-1.5 overflow-x-auto pb-0.5" aria-label="Quick replies">
+        <div className="lem-scrollbar -mx-1 mb-0.5 flex gap-2 overflow-x-auto bg-transparent px-1 py-1.5" aria-label="Quick replies">
           {quickReplies.map((reply, i) => (
             <button
               key={`${i}-${reply}`}
               type="button"
               disabled={sending}
               onClick={() => void sendQuickReply(reply)}
-              className="glass-pill shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium text-emerald-900 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-50"
+              className="glass-panel glass-pill relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[11px] font-medium text-emerald-900 shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition active:scale-95 disabled:opacity-50 dark:text-emerald-50"
             >
-              {reply}
+              <LiquidGlassLayer variant="pill" interactive />
+              <span className="relative">{reply}</span>
             </button>
           ))}
         </div>
