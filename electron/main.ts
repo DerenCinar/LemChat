@@ -62,7 +62,7 @@ const APP_LOGO_FILES: Record<string, string> = {
   red: 'logo-red.png',
   teal: 'logo-teal.png',
 };
-let appLogoChoice = 'default';
+let appLogoChoice = 'gradient';
 const appLogoPrefPath = () => path.join(app.getPath('userData'), 'app-logo.txt');
 function loadAppLogoChoice() {
   try {

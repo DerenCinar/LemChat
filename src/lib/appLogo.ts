@@ -6,9 +6,11 @@ import tealLogo from '../assets/logo-teal.png';
 
 export type AppLogoId = 'default' | 'gradient' | 'red' | 'teal';
 
+export const DEFAULT_APP_LOGO: AppLogoId = 'gradient';
+
 export const APP_LOGOS: { id: AppLogoId; label: string; description: string; src: string; file?: string }[] = [
-  { id: 'default', label: 'Classic', description: 'Adapts to light / dark system theme', src: classicLogo },
-  { id: 'gradient', label: 'Skull Bubbles', description: 'Gradient chat bubbles with skull', src: gradientLogo, file: 'assets/logo-gradient.png' },
+  { id: 'default', label: 'Classic', description: 'Previous logo', src: classicLogo },
+  { id: 'gradient', label: 'Skull Bubbles', description: 'Main logo · gradient chat bubbles with skull', src: gradientLogo, file: 'assets/logo-gradient.png' },
   { id: 'red', label: 'Stamp · Light', description: 'Light version of the original stamp', src: redLogo, file: 'assets/logo-red.png' },
   { id: 'teal', label: 'Stamp · Dark', description: 'The original stamp logo', src: tealLogo, file: 'assets/logo-teal.png' },
 ];
@@ -25,7 +27,7 @@ export const getSavedAppLogo = (): AppLogoId => {
   } catch {
     /* ignore */
   }
-  return 'default';
+  return DEFAULT_APP_LOGO;
 };
 
 const setFavicons = (id: AppLogoId) => {
