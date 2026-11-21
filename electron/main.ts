@@ -7,6 +7,7 @@ import {
   Menu,
   Notification,
   session,
+  shell,
   Tray,
   nativeImage,
   nativeTheme,
@@ -14,6 +15,7 @@ import {
 } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
 import { autoUpdater } from 'electron-updater';
 import { createBadgeOverlayIcon, createLemChatIcon } from './icon';
 import {
@@ -164,8 +166,60 @@ function createTray() {
   rebuildTrayMenu();
 }
 
+/** Wraps a single PNG-encoded image in an .ico container (Vista+ supports PNG entries). */
+function pngToIco(png: Buffer, size: number): Buffer {
+  const header = Buffer.alloc(22);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(1, 4); // image count
+  header[6] = size >= 256 ? 0 : size; // width
+  header[7] = size >= 256 ? 0 : size; // height
+  header.writeUInt16LE(1, 10); // planes
+  header.writeUInt16LE(32, 12); // bits per pixel
+  header.writeUInt32LE(png.length, 14);
+  header.writeUInt32LE(22, 18); // data offset
+  return Buffer.concat([header, png]);
+}
+
+/**
+ * Rewrites this app's pinned taskbar shortcut so the pinned icon follows the chosen logo.
+ * Only touches .lnk files whose target is this app's own executable. Windows-only, packaged builds only.
+ */
+function syncPinnedTaskbarIcon(icon: NativeImage) {
+  if (process.platform !== 'win32' || !app.isPackaged || !process.env.APPDATA) return;
+  try {
+    const icoPath = path.join(app.getPath('userData'), `taskbar-icon-${appLogoChoice}${appLogoChoice === 'default' ? (nativeTheme.shouldUseDarkColors ? '-dark' : '-light') : ''}.ico`);
+    const resized = icon.resize({ width: 256, height: 256, quality: 'best' });
+    fs.writeFileSync(icoPath, pngToIco(resized.toPNG(), 256));
+
+    const pinDir = path.join(process.env.APPDATA, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+    if (!fs.existsSync(pinDir)) return;
+    const exe = path.resolve(process.execPath).toLowerCase();
+    let changed = false;
+    for (const name of fs.readdirSync(pinDir)) {
+      if (!name.toLowerCase().endsWith('.lnk')) continue;
+      const lnk = path.join(pinDir, name);
+      try {
+        const details = shell.readShortcutLink(lnk);
+        if (path.resolve(details.target).toLowerCase() !== exe) continue;
+        if (details.icon?.toLowerCase() === icoPath.toLowerCase()) continue;
+        if (shell.writeShortcutLink(lnk, 'update', { ...details, icon: icoPath, iconIndex: 0 })) changed = true;
+      } catch {
+        /* unreadable or locked shortcut: skip */
+      }
+    }
+    if (changed) {
+      // Ask Explorer to drop its cached icons so the new pin icon shows up.
+      execFile('ie4uinit.exe', ['-show'], { windowsHide: true }, () => undefined);
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
 function refreshPlatformIcons() {
   const icon = getAppIcon();
+  syncPinnedTaskbarIcon(icon);
   for (const win of allWindows) {
     if (!win.isDestroyed()) {
       win.setIcon(icon);
@@ -664,6 +718,7 @@ if (gotSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     loadAppLogoChoice();
+    syncPinnedTaskbarIcon(getAppIcon());
     nativeTheme.on('updated', refreshPlatformIcons);
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setIcon(getAppIcon());
