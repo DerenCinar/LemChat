@@ -1,6 +1,12 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import LiquidGlass from 'liquid-glass-react';
 import { useChatStore } from '../store/useChatStore';
+import {
+  acquireGlassFilter,
+  observeSize,
+  observeVisibility,
+  quantizeDimension,
+  releaseGlassFilter,
+} from '../lib/liquidGlassEngine';
 
 export type LiquidGlassVariant =
   | 'panel'
@@ -21,8 +27,12 @@ export interface LiquidGlassLayerProps {
   className?: string;
 }
 
-const ZERO_POS = { x: 0, y: 0 };
-const MINIMAL_VARIANTS = new Set<LiquidGlassVariant>(['popover', 'modal', 'toast', 'surface']);
+const MINIMAL_VARIANTS = new Set<LiquidGlassVariant>([
+  'popover',
+  'modal',
+  'toast',
+  'surface',
+]);
 const BALANCED_VARIANTS = new Set<LiquidGlassVariant>([
   'popover',
   'modal',
@@ -32,78 +42,37 @@ const BALANCED_VARIANTS = new Set<LiquidGlassVariant>([
   'pill',
   'panel',
 ]);
-const LAYER_HOST_STYLE: React.CSSProperties = { borderRadius: 'inherit', zIndex: -1 };
-const LIQUID_GLASS_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  pointerEvents: 'none',
-};
-const SPACER_STYLE: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  pointerEvents: 'none',
+const LAYER_HOST_STYLE: React.CSSProperties = {
+  borderRadius: 'inherit',
+  zIndex: -1,
 };
 
-const syncSvgFilter = (anchor: HTMLDivElement | null, host: HTMLElement | null) => {
-  if (!anchor || !host) return;
-  let rawW = host.clientWidth || host.offsetWidth;
-  let rawH = host.clientHeight || host.offsetHeight;
-  if (rawW === 0 || rawH === 0) {
-    const rect = host.getBoundingClientRect();
-    rawW = rect.width;
-    rawH = rect.height;
-  }
-  if (rawW < 12 || rawH < 12) return;
-  const w = Math.max(1, Math.round(rawW));
-  const h = Math.max(1, Math.round(rawH));
-
-  const svg = anchor.querySelector('svg');
-  if (svg) {
-    svg.setAttribute('width', String(w));
-    svg.setAttribute('height', String(h));
-  }
-  const filterEl = anchor.querySelector('filter');
-  if (filterEl) {
-    filterEl.setAttribute('x', '-4%');
-    filterEl.setAttribute('y', '-4%');
-    filterEl.setAttribute('width', '108%');
-    filterEl.setAttribute('height', '108%');
-  }
-  const feImg = anchor.querySelector('feImage, #feimage');
-  if (feImg) {
-    feImg.setAttribute('x', '-2');
-    feImg.setAttribute('y', '-2');
-    feImg.setAttribute('width', String(w + 4));
-    feImg.setAttribute('height', String(h + 4));
-  }
-};
-
-interface MeasuredSize {
-  width: number;
-  height: number;
-  radius: number;
-}
+const IS_FIREFOX =
+  typeof navigator !== 'undefined' &&
+  navigator.userAgent.toLowerCase().includes('firefox');
 
 const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
   variant = 'surface',
   interactive = false,
-  cornerRadius,
   className = '',
 }) => {
   const anchorRef = useRef<HTMLDivElement | null>(null);
-  const resizeTimerRef = useRef<number | null>(null);
 
-  const theme = useChatStore((s) => s.theme);
   const blur = useChatStore((s) => s.liquidGlass.blur);
   const realGlassMode = useChatStore((s) => s.liquidGlass.realGlassMode);
   const refractionScale = useChatStore((s) => s.liquidGlass.refractionScale);
-  const aberrationIntensity = useChatStore((s) => s.liquidGlass.aberrationIntensity);
+  const aberrationIntensity = useChatStore(
+    (s) => s.liquidGlass.aberrationIntensity
+  );
   const glassSaturation = useChatStore((s) => s.liquidGlass.glassSaturation);
   const reduceMotion = useChatStore((s) => s.liquidGlass.reduceMotion);
 
-  const [size, setSize] = useState<MeasuredSize>({ width: 0, height: 0, radius: 20 });
+  const [size, setSize] = useState<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
   const [isVisible, setIsVisible] = useState(true);
+  const [filterId, setFilterId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const host = anchorRef.current?.parentElement;
@@ -124,137 +93,32 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
     if (!host) return;
 
     host.setAttribute('data-real-glass-host', variant);
-    const isShaderEligible = realGlassMode === 'shader' && variant !== 'panel';
 
-    const measure = (): MeasuredSize => {
-      // offsetWidth/offsetHeight ignores active CSS transform scales during modal/popover entrance springs
-      let width = Math.round(host.offsetWidth);
-      let height = Math.round(host.offsetHeight);
-      if (width === 0 || height === 0) {
-        const rect = host.getBoundingClientRect();
-        width = Math.round(rect.width);
-        height = Math.round(rect.height);
+    let lastBucketW = 0;
+    let lastBucketH = 0;
+    const updateSize = (rawW: number, rawH: number) => {
+      if (rawW < 12 || rawH < 12) return;
+      const bw = quantizeDimension(rawW);
+      const bh = quantizeDimension(rawH);
+      if (bw !== lastBucketW || bh !== lastBucketH) {
+        lastBucketW = bw;
+        lastBucketH = bh;
+        setSize({ width: rawW, height: rawH });
       }
-      const computed = window.getComputedStyle(host);
-      const parsedRadius = parseFloat(computed.borderTopLeftRadius);
-      return {
-        width,
-        height,
-        radius: Number.isFinite(parsedRadius) ? Math.round(parsedRadius) : 20,
-      };
     };
 
-    const initial = measure();
-    let lastCommitted = initial;
-    let lastSyncedW = initial.width;
-    let lastSyncedH = initial.height;
-    let syncRafId: number | null = null;
-    if (initial.width > 0 && initial.height > 0) {
-      setSize(initial);
-    }
+    updateSize(host.offsetWidth, host.offsetHeight);
 
-    let io: IntersectionObserver | null = null;
-    if (typeof IntersectionObserver !== 'undefined') {
-      io = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          if (entry) setIsVisible(entry.isIntersecting);
-        },
-        { rootMargin: '140px' }
-      );
-      io.observe(host);
-    }
-
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => {
-        const next = measure();
-        const hadValidSize = lastCommitted.width >= 12 && lastCommitted.height >= 12;
-
-        if (
-          next.width >= 12 &&
-          next.height >= 12 &&
-          (Math.abs(next.width - lastSyncedW) >= 1 || Math.abs(next.height - lastSyncedH) >= 1)
-        ) {
-          lastSyncedW = next.width;
-          lastSyncedH = next.height;
-          if (syncRafId === null) {
-            syncRafId = window.requestAnimationFrame(() => {
-              syncRafId = null;
-              syncSvgFilter(anchor, host);
-            });
-          }
-        }
-
-        if (!hadValidSize) {
-          if (next.width >= 12 && next.height >= 12) {
-            lastCommitted = next;
-            setSize(next);
-          }
-          return;
-        }
-
-        if (!isShaderEligible) {
-          return;
-        }
-
-        if (
-          Math.abs(next.width - lastCommitted.width) < 96 &&
-          Math.abs(next.height - lastCommitted.height) < 96 &&
-          next.radius === lastCommitted.radius
-        ) {
-          return;
-        }
-
-        if (resizeTimerRef.current !== null) {
-          window.clearTimeout(resizeTimerRef.current);
-        }
-        resizeTimerRef.current = window.setTimeout(() => {
-          resizeTimerRef.current = null;
-          const settled = measure();
-          if (
-            settled.width > 0 &&
-            settled.height > 0 &&
-            (Math.abs(settled.width - lastCommitted.width) >= 96 ||
-              Math.abs(settled.height - lastCommitted.height) >= 96 ||
-              settled.radius !== lastCommitted.radius)
-          ) {
-            lastCommitted = settled;
-            setSize(settled);
-          }
-        }, 250);
-      });
-      ro.observe(host);
-    }
+    const stopVis = observeVisibility(host, setIsVisible);
+    const stopSize = observeSize(host, updateSize);
 
     return () => {
       host.removeAttribute('data-real-glass-host');
-      io?.disconnect();
-      ro?.disconnect();
-      if (syncRafId !== null) {
-        window.cancelAnimationFrame(syncRafId);
-        syncRafId = null;
-      }
-      if (resizeTimerRef.current !== null) {
-        window.clearTimeout(resizeTimerRef.current);
-        resizeTimerRef.current = null;
-      }
+      stopVis();
+      stopSize();
     };
-  }, [variant, realGlassMode]);
+  }, [variant]);
 
-  const effectiveMode =
-    realGlassMode === 'shader' && (variant === 'panel' || Math.max(size.width, size.height) > 360)
-      ? 'standard'
-      : realGlassMode;
-
-  const isLightTheme = theme === 'light' || theme === 'mono';
-  const rawBlur = Math.min(1, Math.max(0, blur / 96));
-  const effectiveBlur =
-    variant === 'panel'
-      ? Math.min(0.32, rawBlur)
-      : variant === 'rail'
-        ? Math.min(0.45, rawBlur)
-        : rawBlur;
   const sizeFactor =
     size.width > 0 && size.height > 0
       ? Math.min(1, Math.min(size.width, size.height) / 56)
@@ -268,27 +132,53 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
   const effectiveDisplacement = Math.round(
     refractionScale * variantMultiplier * Math.max(0.3, sizeFactor)
   );
-  const maxAllowedRadius =
-    size.width > 0 && size.height > 0
-      ? Math.floor(Math.min(size.width, size.height) / 2)
-      : 24;
-  const effectiveRadius = Math.max(
-    0,
-    Math.min(cornerRadius ?? size.radius, maxAllowedRadius)
-  );
-  const glassKey =
-    effectiveMode === 'shader'
-      ? `shader-${Math.round(size.width / 256)}x${Math.round(size.height / 256)}`
-      : effectiveMode;
 
   useLayoutEffect(() => {
-    if (!isVisible || size.width < 12 || size.height < 12) return;
-    const anchor = anchorRef.current;
-    const host = anchor?.parentElement ?? null;
-    syncSvgFilter(anchor, host);
-    const rafId = window.requestAnimationFrame(() => syncSvgFilter(anchor, host));
-    return () => window.cancelAnimationFrame(rafId);
-  }, [isVisible, size.width, size.height, effectiveMode, effectiveDisplacement, aberrationIntensity]);
+    if (IS_FIREFOX || !isVisible || size.width < 12 || size.height < 12) {
+      setFilterId(null);
+      return;
+    }
+
+    const acquired = acquireGlassFilter({
+      mode: realGlassMode,
+      variant,
+      width: size.width,
+      height: size.height,
+      displacementScale: effectiveDisplacement,
+      aberrationIntensity,
+    });
+
+    if (!acquired) {
+      setFilterId(null);
+      return;
+    }
+
+    setFilterId(acquired.id);
+    return () => {
+      releaseGlassFilter(acquired.key);
+    };
+  }, [
+    isVisible,
+    size.width,
+    size.height,
+    realGlassMode,
+    variant,
+    effectiveDisplacement,
+    aberrationIntensity,
+  ]);
+
+  // Cap Gaussian blur smoothly so large panels & scrollable bubbles compose at 60+ FPS
+  const isLargeOrScrolling =
+    variant === 'panel' || variant === 'rail' || variant === 'bubble';
+  const effectiveBlurPx = isLargeOrScrolling
+    ? Math.max(3, Math.min(18, Math.round(blur * 0.45)))
+    : Math.max(4, Math.min(22, Math.round(blur * 0.65)));
+
+  const warpStyle: React.CSSProperties = {
+    backdropFilter: `blur(${effectiveBlurPx}px) saturate(${glassSaturation}%)`,
+    WebkitBackdropFilter: `blur(${effectiveBlurPx}px) saturate(${glassSaturation}%)`,
+    filter: filterId ? `url(#${filterId})` : undefined,
+  };
 
   return (
     <div
@@ -299,23 +189,10 @@ const LiquidGlassLayerInnerComponent: React.FC<LiquidGlassLayerProps> = ({
       style={LAYER_HOST_STYLE}
     >
       {isVisible && size.width >= 12 && size.height >= 12 && (
-        <LiquidGlass
-          key={glassKey}
-          displacementScale={effectiveDisplacement}
-          blurAmount={effectiveBlur}
-          saturation={glassSaturation}
-          aberrationIntensity={aberrationIntensity}
-          elasticity={0}
-          cornerRadius={effectiveRadius}
-          overLight={isLightTheme}
-          mode={effectiveMode}
-          padding="0px"
-          globalMousePos={ZERO_POS}
-          mouseOffset={ZERO_POS}
-          style={LIQUID_GLASS_STYLE}
-        >
-          <div style={SPACER_STYLE} />
-        </LiquidGlass>
+        <>
+          <span className="lg-warp" style={warpStyle} />
+          <span className="lg-rim" />
+        </>
       )}
     </div>
   );
@@ -325,9 +202,15 @@ const LiquidGlassLayerInner = React.memo(LiquidGlassLayerInnerComponent);
 
 export const LiquidGlassLayer: React.FC<LiquidGlassLayerProps> = React.memo(
   ({ disabled = false, alwaysRender = false, ...props }) => {
-    const useRealLiquidGlass = useChatStore((s) => s.liquidGlass.useRealLiquidGlass);
-    const reduceTransparency = useChatStore((s) => s.liquidGlass.reduceTransparency);
-    const realGlassQuality = useChatStore((s) => s.liquidGlass.realGlassQuality);
+    const useRealLiquidGlass = useChatStore(
+      (s) => s.liquidGlass.useRealLiquidGlass
+    );
+    const reduceTransparency = useChatStore(
+      (s) => s.liquidGlass.reduceTransparency
+    );
+    const realGlassQuality = useChatStore(
+      (s) => s.liquidGlass.realGlassQuality
+    );
 
     if (!useRealLiquidGlass || reduceTransparency || disabled) {
       return null;

@@ -916,7 +916,7 @@ html[data-glass-depth="floating"] .glass-rail {
     inset 0 1.5px 0 rgba(255, 255, 255, calc(0.16 + var(--glass-specular, 0.55) * 0.28)) !important;
 }
 
-/* Real Liquid Glass Engine (rdev/liquid-glass-react) */
+/* Real Liquid Glass Engine (Cached Procedural Optical Refraction) */
 :where([data-real-glass-host]) {
   position: relative;
   z-index: 0;
@@ -926,53 +926,54 @@ html[data-glass-depth="floating"] .glass-rail {
   inset: 0 !important;
   overflow: hidden !important;
   border-radius: inherit !important;
+  contain: layout style paint;
   transform: translateZ(0);
 }
 .rdev-lg-layer,
 .rdev-lg-layer * {
   transition: none !important;
 }
-.rdev-lg-layer > div,
-.rdev-lg-layer > span,
-.rdev-lg-layer .glass,
-.rdev-lg-layer .glass__warp {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
-  border-radius: inherit !important;
+.rdev-lg-layer .lg-warp,
+.rdev-lg-layer .lg-rim {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
 }
-.rdev-lg-layer > div.bg-black {
-  display: none !important;
+.rdev-lg-layer .lg-warp {
+  will-change: backdrop-filter;
 }
-.rdev-lg-layer .glass {
-  box-shadow: none !important;
-}
-.rdev-lg-layer > span:last-of-type {
-  display: none !important;
-}
-.rdev-lg-layer > span {
-  mix-blend-mode: normal !important;
-  opacity: calc(0.32 + var(--glass-specular, 0.55) * 0.48) !important;
-  padding: 1.5px !important;
+.rdev-lg-layer .lg-rim {
+  opacity: calc(0.32 + var(--glass-specular, 0.55) * 0.48);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, calc(0.26 + var(--glass-specular, 0.55) * 0.38)) !important;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    inset 0 1.5px 0 rgba(255, 255, 255, calc(0.28 + var(--glass-specular, 0.55) * 0.42)),
+    inset 0 -1px 0 rgba(255, 255, 255, calc(0.08 + var(--glass-aberration, 2) * 0.02));
 }
-html:not(.dark) .rdev-lg-layer > span {
-  opacity: calc(0.38 + var(--glass-specular, 0.55) * 0.45) !important;
+html:not(.dark) .rdev-lg-layer .lg-rim {
+  opacity: calc(0.38 + var(--glass-specular, 0.55) * 0.45);
   box-shadow:
     inset 0 0 0 1px rgba(15, 42, 28, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, calc(0.48 + var(--glass-specular, 0.55) * 0.38)) !important;
+    inset 0 1.5px 0 rgba(255, 255, 255, calc(0.5 + var(--glass-specular, 0.55) * 0.4));
 }
-[data-real-glass-host][data-glass-interactive="true"]:hover > .rdev-lg-layer > span {
-  opacity: calc(0.5 + var(--glass-specular, 0.55) * 0.45) !important;
+html.mono .rdev-lg-layer .lg-rim {
+  box-shadow:
+    inset 0 0 0 1px rgba(24, 24, 27, 0.14),
+    inset 0 1.5px 0 rgba(255, 255, 255, calc(0.55 + var(--glass-specular, 0.55) * 0.35));
 }
-.rdev-lg-layer svg {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  pointer-events: none;
+html.mono-dark .rdev-lg-layer .lg-rim {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1.5px 0 rgba(255, 255, 255, calc(0.22 + var(--glass-specular, 0.55) * 0.34));
+}
+[data-real-glass-host][data-glass-interactive="true"]:hover > .rdev-lg-layer .lg-rim {
+  opacity: calc(0.54 + var(--glass-specular, 0.55) * 0.42);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--glass-accent) 42%, rgba(255, 255, 255, 0.36)),
+    inset 0 1.5px 0 rgba(255, 255, 255, calc(0.4 + var(--glass-specular, 0.55) * 0.45));
 }
 
 /* Pause continuous background mesh animation in real glass mode to keep Chromium SVG backdrop cache warm */
@@ -1068,14 +1069,10 @@ html[data-real-liquid-glass="true"] textarea.glass-pill {
     0 2px 12px -4px color-mix(in srgb, var(--glass-accent) 28%, transparent);
 }
 
-/* Readable popovers (voice filter, time capsule, poll): denser tint + frosted blur so text stays legible */
+/* Readable popovers (voice filter, time capsule, poll): denser tint + frosted blur in CSS mode */
 .glass-readable {
   backdrop-filter: blur(22px) saturate(1.3);
   -webkit-backdrop-filter: blur(22px) saturate(1.3);
-}
-html[data-real-liquid-glass="true"] [data-real-glass-host].glass-surface.glass-readable {
-  backdrop-filter: blur(22px) saturate(1.3) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.3) !important;
 }
 html[data-real-liquid-glass="true"].dark [data-real-glass-host].glass-surface.glass-readable,
 html.dark .glass-surface.glass-readable {

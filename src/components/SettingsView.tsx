@@ -1004,18 +1004,18 @@ export const SettingsView: React.FC = () => {
               </button>
             </div>
 
-            {/* Real Liquid Glass Engine (rdev/liquid-glass-react) */}
+            {/* Real Liquid Glass Engine */}
             <div className="glass-pill relative space-y-3 rounded-2xl border border-[#22C55E]/25 p-3.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#22C55E]" />
                     <span className="text-xs font-bold text-emerald-950 dark:text-white">
-                      Real Liquid Glass Engine (liquid-glass-react)
+                      Real Liquid Glass Engine
                     </span>
                   </div>
                   <p className="mt-0.5 text-[11px] text-emerald-800/70 dark:text-emerald-200/65">
-                    Uses live SVG backdrop refraction, chromatic edge aberration, and elastic pointer physics across glass surfaces. Best in Chromium / Desktop app.
+                    Uses shared GPU SVG backdrop refraction, chromatic edge dispersion, and frosted depth across glass surfaces. Best in Chromium / Desktop app.
                   </p>
                 </div>
                 <button
@@ -1060,7 +1060,7 @@ export const SettingsView: React.FC = () => {
                     <div className="space-y-1.5">
                       <SettingLabel
                         label="Refraction mode"
-                        info="Selects the optical displacement map style used by liquid-glass-react: standard, polar, prominent, or custom shader."
+                        info="Selects the optical displacement map profile used by Real Liquid Glass: standard, polar, prominent, or custom shader."
                       />
                       <div className="grid grid-cols-4 gap-1.5">
                         {(['standard', 'polar', 'prominent', 'shader'] as RealGlassMode[]).map(

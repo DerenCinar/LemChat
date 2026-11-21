@@ -96,7 +96,13 @@ export const App: React.FC = () => {
 
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
-      <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden md:rounded-[14px] md:border md:border-white/15">
+      <div
+        className={`relative flex h-[100dvh] w-screen flex-col overflow-hidden ${
+          window.lemchat?.platform === 'win32'
+            ? ''
+            : 'md:rounded-[14px] md:border md:border-white/15'
+        }`}
+      >
         <MeshBackground />
         <BackgroundEffects />
         <TitleBar />

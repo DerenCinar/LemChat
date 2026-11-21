@@ -33,6 +33,7 @@ const spawn = (kind: 'leaves' | 'snow' | 'rain', w: number, h: number, anywhere:
 export const BackgroundEffects: React.FC = React.memo(() => {
   const effect = useChatStore((s) => s.liquidGlass.backgroundEffect);
   const reduceMotion = useChatStore((s) => s.liquidGlass.reduceMotion);
+  const useRealLiquidGlass = useChatStore((s) => s.liquidGlass.useRealLiquidGlass);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export const BackgroundEffects: React.FC = React.memo(() => {
     if (!canvas || !effect || effect === 'none' || reduceMotion) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = useRealLiquidGlass ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     let w = 0;
     let h = 0;
     const resize = () => {
@@ -57,10 +58,13 @@ export const BackgroundEffects: React.FC = React.memo(() => {
     const parts: Particle[] = Array.from({ length: count }, () => spawn(effect, w, h, true));
     let raf = 0;
     let t = 0;
+    let lastFrame = 0;
 
-    const frame = () => {
+    const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;
+      if (useRealLiquidGlass && now - lastFrame < 32) return;
+      lastFrame = now;
       t += 0.016;
       ctx.clearRect(0, 0, w, h);
       for (let i = 0; i < parts.length; i++) {
@@ -100,14 +104,14 @@ export const BackgroundEffects: React.FC = React.memo(() => {
         if (p.y > h + 30 || p.x < -60 || p.x > w + 60) parts[i] = spawn(effect, w, h, false);
       }
     };
-    frame();
+    raf = requestAnimationFrame(frame);
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
       ctx.clearRect(0, 0, w, h);
     };
-  }, [effect, reduceMotion]);
+  }, [effect, reduceMotion, useRealLiquidGlass]);
 
   if (!effect || effect === 'none' || reduceMotion) return null;
   return <canvas ref={canvasRef} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-full w-full" />;

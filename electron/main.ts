@@ -181,17 +181,18 @@ function refreshPlatformIcons() {
 
 function createWindow(profileId = 'default'): BrowserWindow {
   const appIcon = getAppIcon();
+  const isWin = process.platform === 'win32';
 
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
     height: 820,
     minWidth: 940,
     minHeight: 620,
-    transparent: true,
+    transparent: !isWin,
     frame: false,
     hasShadow: true,
     icon: appIcon,
-    backgroundColor: '#00000000',
+    backgroundColor: isWin ? '#090F0C' : '#00000000',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -206,8 +207,6 @@ function createWindow(profileId = 'default'): BrowserWindow {
   if (process.platform === 'darwin') {
     windowOptions.vibrancy = 'under-window';
     windowOptions.visualEffectState = 'active';
-  } else if (process.platform === 'win32') {
-    windowOptions.backgroundMaterial = 'acrylic';
   }
 
   const win = new BrowserWindow(windowOptions);
@@ -592,6 +591,9 @@ function setupAutoUpdater() {
 }
 
 if (gotSingleInstanceLock) {
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+
   app.on('second-instance', () => {
     const target =
       mainWindow && !mainWindow.isDestroyed()
