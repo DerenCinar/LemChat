@@ -161,7 +161,7 @@ export interface PollMetadata {
 
 export interface GameMetadata {
   kind: 'game';
-  game: 'tic-tac-toe';
+  game: 'tic-tac-toe' | 'mega-tic-tac-toe' | 'connect-four' | 'connect-five' | 'gomoku' | 'reversi';
   board: Array<'X' | 'O' | null>;
   xPlayerId: string;
   oPlayerId?: string;

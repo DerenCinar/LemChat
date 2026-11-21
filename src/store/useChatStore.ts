@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import packageInfo from '../../package.json';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase';
+import { GRID_GAMES, applyMove, emptyBoard, type GridGameId } from '../lib/gridGames';
 import {
   checkGitHubLatestRelease,
   downloadAndInstallAndroidApk,
@@ -241,7 +242,7 @@ interface ChatStore {
   sendCapsule: (text: string, unlockAt: Date) => Promise<void>;
   openCapsule: (messageId: string, capsule: CapsuleMetadata) => Promise<string>;
   sendPoll: (question: string, options: string[]) => Promise<void>;
-  sendGame: () => Promise<void>;
+  sendGame: (gameId?: GridGameId) => Promise<void>;
   votePoll: (messageId: string, optionId: string) => void;
   makeGameMove: (messageId: string, position: number) => void;
   editMessage: (messageId: string, content: string) => Promise<void>;
@@ -2809,17 +2810,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await get().sendMessage(`📊 Poll: ${q}`, undefined, undefined, undefined, interactive);
   },
 
-  sendGame: async () => {
+  sendGame: async (gameId = 'tic-tac-toe') => {
     const self = get().self;
     if (!self) return;
+    const cfg = GRID_GAMES[gameId];
     const interactive: InteractiveMetadata = {
       kind: 'game',
-      game: 'tic-tac-toe',
-      board: Array(9).fill(null),
+      game: gameId,
+      board: emptyBoard(cfg),
       xPlayerId: self.id,
       currentTurn: 'X',
     };
-    await get().sendMessage('🎮 Tic-Tac-Toe — join and play!', undefined, undefined, undefined, interactive);
+    await get().sendMessage(`🎮 ${cfg.name} — join and play!`, undefined, undefined, undefined, interactive);
   },
 
   votePoll: (messageId, optionId) => {
@@ -2851,7 +2853,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const msg = get().conversations.flatMap((c) => c.messages).find((m) => m.id === messageId);
     if (!msg || msg.interactive?.kind !== 'game') return;
     const game = msg.interactive;
-    if (game.winner || game.board[position]) return;
+    const cfg = GRID_GAMES[game.game] ?? GRID_GAMES['tic-tac-toe'];
+    if (game.winner) return;
     const mark = game.currentTurn;
     const expected = mark === 'X' ? game.xPlayerId : game.oPlayerId;
     let oPlayerId = game.oPlayerId;
@@ -2861,18 +2864,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (user.id === game.xPlayerId) return;
       oPlayerId = user.id;
     }
-    const board = game.board.slice();
-    board[position] = mark;
-    const winner = tttWinner(board);
+    const result = applyMove(cfg, game.board, position, mark);
+    if (!result) return;
     applyInteractive(messageId, {
       ...game,
-      board,
+      board: result.board,
       oPlayerId,
-      currentTurn: mark === 'X' ? 'O' : 'X',
-      winner: winner ?? undefined,
+      currentTurn: result.next,
+      winner: result.winner,
     });
     void supabase
-      .rpc('game_move', { p_message_id: messageId, p_position: position })
+      .rpc(game.game === 'tic-tac-toe' ? 'game_move' : game.game === 'reversi' ? 'reversi_move' : 'grid_game_move', {
+        p_message_id: messageId,
+        p_position: position,
+      })
       .then(({ error }) => {
         if (error) {
           console.error('Game move failed:', error);
@@ -3953,14 +3958,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 }));
-
-function tttWinner(board: Array<'X' | 'O' | null>): 'X' | 'O' | 'draw' | null {
-  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  for (const [a, b, c] of lines) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
-  }
-  return board.every(Boolean) ? 'draw' : null;
-}
 
 function applyInteractive(messageId: string, interactive: InteractiveMetadata) {
   useChatStore.setState((state) => ({

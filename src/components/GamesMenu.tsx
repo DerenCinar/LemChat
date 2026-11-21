@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Flame, CheckCircle2 } from 'lucide-react';
+import { X, Sparkles, Flame, CheckCircle2, ChevronDown } from 'lucide-react';
+import { GRID_GAMES, type GridGameId } from '../lib/gridGames';
 import {
   DailyWordGame,
   getCryptleDateKey,
@@ -1201,12 +1202,33 @@ const QUICK_SENDS: { label: string; make: () => string }[] = [
   },
 ];
 
+const Section: React.FC<{
+  title: string;
+  count?: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}> = ({ title, count, open, onToggle, children }) => (
+  <div className="rounded-2xl bg-emerald-500/5">
+    <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between px-3 py-2.5 text-left">
+      <span className="text-xs font-bold">
+        {title}
+        {count !== undefined && <span className="ml-1.5 font-normal opacity-50">{count}</span>}
+      </span>
+      <ChevronDown className={`h-4 w-4 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`} />
+    </button>
+    {open && <div className="px-3 pb-3">{children}</div>}
+  </div>
+);
+
 export const GamesMenu: React.FC<{
   onClose: () => void;
-  onTicTacToe: () => void;
+  onStartGame: (id: GridGameId) => void;
   onShare: (text: string) => void;
-}> = ({ onClose, onTicTacToe, onShare }) => {
+}> = ({ onClose, onStartGame, onShare }) => {
   const [game, setGame] = useState<GameId | null>(null);
+  const [section, setSection] = useState<'duel' | 'quick' | 'solo' | null>('duel');
+  const toggle = (s: 'duel' | 'quick' | 'solo') => setSection((cur) => (cur === s ? null : s));
   const share: Share = (t) => {
     onShare(t);
     onClose();
@@ -1275,7 +1297,7 @@ export const GamesMenu: React.FC<{
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.16 }}
-              className="space-y-3"
+              className="space-y-2"
             >
               {/* Daily featured games */}
               <div>
@@ -1332,27 +1354,35 @@ export const GamesMenu: React.FC<{
                 </div>
               </div>
 
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-60">
-                  Play with your chat
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onTicTacToe();
-                    onClose();
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-left hover:bg-emerald-500/20"
-                >
-                  <span className="text-xl">❌⭕</span>
-                  <span className="text-sm font-semibold">
-                    Tic-Tac-Toe
-                    <span className="block text-[11px] font-normal opacity-60">
-                      Challenge someone in this chat
-                    </span>
-                  </span>
-                </button>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+              <Section
+                title="⚔️ Two-player (in this chat)"
+                count={Object.keys(GRID_GAMES).length}
+                open={section === 'duel'}
+                onToggle={() => toggle('duel')}
+              >
+                <div className="space-y-2">
+                  {Object.values(GRID_GAMES).map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        onStartGame(g.id);
+                        onClose();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-left hover:bg-emerald-500/20"
+                    >
+                      <span className="text-xl">{g.emoji}</span>
+                      <span className="text-sm font-semibold">
+                        {g.name}
+                        <span className="block text-[11px] font-normal opacity-60">{g.hint}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="🎲 Quick sends" count={QUICK_SENDS.length} open={section === 'quick'} onToggle={() => toggle('quick')}>
+                <div className="flex flex-wrap gap-1.5">
                   {QUICK_SENDS.map((q) => (
                     <button
                       key={q.label}
@@ -1364,12 +1394,9 @@ export const GamesMenu: React.FC<{
                     </button>
                   ))}
                 </div>
-              </div>
+              </Section>
 
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-60">
-                  Play solo — share your score
-                </p>
+              <Section title="🕹️ Solo — share your score" count={CLASSIC_GAMES.length} open={section === 'solo'} onToggle={() => toggle('solo')}>
                 <div className="grid grid-cols-2 gap-2">
                   {CLASSIC_GAMES.map((g) => (
                     <motion.button
@@ -1386,7 +1413,7 @@ export const GamesMenu: React.FC<{
                     </motion.button>
                   ))}
                 </div>
-              </div>
+              </Section>
             </motion.div>
           ) : (
             <motion.div

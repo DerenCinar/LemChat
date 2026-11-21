@@ -1,6 +1,8 @@
 import React from 'react';
-import { BarChart3, Gamepad2, Lock, Unlock } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { BarChart3, Gamepad2, Lock, Maximize2, Unlock, X } from 'lucide-react';
 import { useChatStore } from '../store/useChatStore';
+import { GRID_GAMES, reversiMoves } from '../lib/gridGames';
 import type { CapsuleMetadata, GameMetadata, Message, PollMetadata } from '../types/chat';
 
 const PollCard: React.FC<{ message: Message; poll: PollMetadata }> = ({ message, poll }) => {
@@ -93,37 +95,131 @@ const GameCard: React.FC<{ message: Message; game: GameMetadata }> = ({ message,
     status = 'Waiting for an opponent to move...';
   else status = `${game.currentTurn === 'X' ? name(game.xPlayerId) : name(game.oPlayerId)}'s turn`;
 
+  const cfg = GRID_GAMES[game.game] ?? GRID_GAMES['tic-tac-toe'];
+  const [symX, symO] = cfg.symbols;
+  const [expanded, setExpanded] = React.useState(false);
+  const turnMark = game.currentTurn;
+  const legal = React.useMemo(
+    () => (cfg.kind === 'reversi' && myTurn ? new Set(reversiMoves(game.board, turnMark)) : null),
+    [cfg.kind, myTurn, game.board, turnMark]
+  );
+  const small =
+    cfg.cols <= 3 ? 'h-12 w-12 text-xl' : cfg.cols <= 5 ? 'h-9 w-9 text-lg' : cfg.cols <= 7 ? 'h-8 w-8 text-lg' : 'h-7 w-7 text-sm';
+
+  const renderBoard = (big: boolean) => (
+    <div
+      className="grid gap-1"
+      style={
+        big
+          ? {
+              gridTemplateColumns: `repeat(${cfg.cols}, minmax(0, 1fr))`,
+              width: `min(92vw, calc(68vh * ${cfg.cols} / ${cfg.rows}))`,
+              maxWidth: '640px',
+            }
+          : { gridTemplateColumns: `repeat(${cfg.cols}, auto)` }
+      }
+    >
+      {game.board.map((cell, i) => {
+        const col = i % cfg.cols;
+        const playable =
+          myTurn &&
+          (cfg.gravity ? game.board[col] === null : cfg.kind === 'reversi' ? Boolean(legal?.has(i)) : !cell);
+        const sym = cell === 'X' ? symX : cell === 'O' ? symO : '';
+        return (
+          <button
+            key={i}
+            type="button"
+            disabled={!playable}
+            onClick={() => makeGameMove(message.id, cfg.gravity ? col : i)}
+            className={`flex ${big ? 'aspect-square w-full text-[min(7vw,2.6rem)]' : small} items-center justify-center rounded-lg border font-bold transition ${
+              cell
+                ? cfg.id === 'tic-tac-toe' || cfg.id === 'mega-tic-tac-toe'
+                  ? cell === 'X'
+                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300'
+                    : 'border-sky-400/50 bg-sky-500/15 text-sky-300'
+                  : 'border-white/10 bg-white/5'
+                : playable
+                  ? 'border-white/25 hover:border-emerald-400/60 hover:bg-emerald-500/10'
+                  : 'border-white/10 opacity-60'
+            } ${cfg.kind === 'reversi' && playable ? 'bg-emerald-400/10' : ''}`}
+          >
+            {sym}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const counts =
+    cfg.kind === 'reversi'
+      ? ` · ${game.board.filter((c) => c === 'X').length}–${game.board.filter((c) => c === 'O').length}`
+      : '';
+  const info = (
+    <>
+      <p className="mt-2 text-xs font-medium">
+        {status}
+        {counts}
+      </p>
+      <p className="text-[10px] opacity-60">
+        {symX}: {name(game.xPlayerId)} · {symO}: {name(game.oPlayerId)}
+      </p>
+    </>
+  );
+
+  React.useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded]);
+
   return (
     <div className="glass-card mt-1 w-fit rounded-xl p-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide opacity-70">
         <Gamepad2 className="h-3.5 w-3.5" />
-        <span>Tic-Tac-Toe</span>
+        <span>{cfg.name}</span>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label="Open game larger"
+          title="Open larger"
+          className="ml-auto rounded-md p-1 hover:bg-white/15"
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+        </button>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        {game.board.map((cell, i) => (
-          <button
-            key={i}
-            type="button"
-            disabled={Boolean(cell) || !myTurn}
-            onClick={() => makeGameMove(message.id, i)}
-            className={`flex h-12 w-12 items-center justify-center rounded-lg border text-xl font-bold transition ${
-              cell
-                ? cell === 'X'
-                  ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300'
-                  : 'border-sky-400/50 bg-sky-500/15 text-sky-300'
-                : myTurn
-                  ? 'border-white/20 hover:border-emerald-400/60 hover:bg-emerald-500/10'
-                  : 'border-white/10 opacity-60'
-            }`}
+      {renderBoard(false)}
+      {info}
+      {expanded &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            onClick={() => setExpanded(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={cfg.name}
           >
-            {cell}
-          </button>
-        ))}
-      </div>
-      <p className="mt-2 text-xs font-medium">{status}</p>
-      <p className="text-[10px] opacity-60">
-        X: {name(game.xPlayerId)} · O: {name(game.oPlayerId)}
-      </p>
+            <div
+              className="glass-panel glass-surface glass-readable max-h-full overflow-y-auto rounded-3xl p-5 text-emerald-950 dark:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between gap-6">
+                <span className="text-sm font-bold">{cfg.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  aria-label="Close"
+                  className="rounded-full p-1.5 hover:bg-emerald-500/15"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {renderBoard(true)}
+              <div className="text-sm">{info}</div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

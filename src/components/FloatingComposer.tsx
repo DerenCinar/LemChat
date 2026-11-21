@@ -521,9 +521,9 @@ export const FloatingComposer: React.FC<FloatingComposerProps> = React.memo(({
       {gamesOpen && (
         <GamesMenu
           onClose={() => setGamesOpen(false)}
-          onTicTacToe={() => {
+          onStartGame={(id) => {
             setSendError(null);
-            sendGame().catch((err: unknown) =>
+            sendGame(id).catch((err: unknown) =>
               setSendError(err instanceof Error ? err.message : 'Could not start game.')
             );
           }}
